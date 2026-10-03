@@ -50,6 +50,50 @@ let
       "port ${port} is claimed by ${lib.concatMapStringsSep ", " (c: "${c.server} (${c.what})") cs}"
     ) dupes;
 
+  # ── Secret leakage ─────────────────────────────────────────────────────────
+  # The Nix-rendered base `.ini` and SandboxVars are `pkgs.writeText` store
+  # paths: mode 444, world-readable, greppable by any local user. So a secret
+  # placed in `settings` or `sandbox` is a plaintext file in /nix/store, not a
+  # secret.
+  #
+  # Checked against the RESOLVED settings (modpack defaults included), because a
+  # secret can arrive either way, and against `sandbox` for the same reason.
+  #
+  # This is the user-facing control; `pz.renderIniLines` independently filters the
+  # same keys, so a bare module import that skipped this assertion still cannot
+  # write one.
+  secretLeaks = lib.concatMap (
+    srv:
+    let
+      inIni = lib.filter (k: builtins.elem k pz.secretIniKeys) (builtins.attrNames srv.settings);
+      inSandbox = lib.filter (k: builtins.elem k pz.secretIniKeys) (builtins.attrNames srv.sandbox);
+    in
+    map (k: "${srv.name}: ${k} is set in settings") inIni
+    ++ map (k: "${srv.name}: ${k} is set in sandbox") inSandbox
+  ) (lib.attrValues resolved);
+
+  # ── Map resolution ─────────────────────────────────────────────────────────
+  # `map = null` means "derive Map= from the installed mods", which needs a base
+  # map to anchor the list — and needs detection actually enabled, or the value
+  # would silently never be computed.
+  badMapConfigs = lib.concatMap (
+    srv:
+    lib.optional (srv.autoMaps && (!srv.mapOrder.enable || srv.baseMap == ""))
+      "${srv.name}: map is null (auto-detect) but mapOrder.enable is false and baseMap is empty, so Map= would never be set"
+  ) (lib.attrValues resolved);
+
+  # ── Beta branch coherence ──────────────────────────────────────────────────
+  # The shared install unit applies ONE branch, so servers on the same install
+  # disagreeing about it means one of them silently gets the wrong build.
+  betaBranches = lib.unique (map (srv: srv.betaBranch) (lib.attrValues resolved));
+  # null rather than [] when the branches agree: `lib.optional` yields an empty
+  # LIST, and interpolating that into a message is a type error.
+  betaMismatch =
+    if builtins.length betaBranches > 1 then
+      lib.concatStringsSep ", " (map (b: if b == null then "(stable)" else b) betaBranches)
+    else
+      null;
+
   # ── Web console upstreams ──────────────────────────────────────────────────
   # Plain data, no coupling to any particular reverse-proxy module. Consumers map
   # this into their own upstream option — see README 'Reverse proxy'.
@@ -118,6 +162,46 @@ in
             services.project-zomboid-servers: every enabled server must select
             exactly one console backend (systemd-socket or tmux). Both or
             neither leaves the console unreachable, or the server unstoppable.
+          '';
+        }
+
+        {
+          assertion = secretLeaks == [ ];
+          message = ''
+            services.project-zomboid-servers: a secret is set in `settings` or
+            `sandbox`, which would publish it.
+            ${lib.concatStringsSep "\n" (map (leak: "  - ${leak}") secretLeaks)}
+
+            The rendered `.ini` and SandboxVars are Nix store paths: mode 444 and
+            readable by every local user, so anything in them is not a secret.
+            Route each of these through a file instead —
+            `secretFiles.<Key> = /run/secrets/...` (or `passwordFile` for the
+            join password). `passwordFile`, `adminAccount.passwordFile` and
+            `web.passwordFile` all take the same shape.
+          '';
+        }
+
+        {
+          assertion = badMapConfigs == [ ];
+          message = ''
+            services.project-zomboid-servers: inconsistent map configuration.
+            ${lib.concatStringsSep "\n" (map (b: "  - ${b}") badMapConfigs)}
+
+            Either give the server an explicit `map`, or leave `map` null and keep
+            `mapOrder.enable = true` with a non-empty `baseMap` so `Map=` can be
+            derived from the installed mods.
+          '';
+        }
+
+        {
+          assertion = betaMismatch == null;
+          message = ''
+            services.project-zomboid-servers: servers disagree on `betaBranch`.
+              found: ${lib.optionalString (betaMismatch != null) betaMismatch}
+
+            The dedicated server is installed ONCE per `serverDir`, so a single
+            branch applies to every server on it. Set `betaBranch` on all of them,
+            or on none.
           '';
         }
 

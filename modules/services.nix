@@ -68,6 +68,15 @@ let
     unique (concatMap (srv: srv.workshopItems) (lib.attrValues resolved))
   );
 
+  # One install serves one branch, so the shared install unit takes the first
+  # server's choice. config.nix asserts that they all agree, so "first" is never
+  # "arbitrary" — it just has to be deterministic.
+  installBetaBranch =
+    let
+      branches = unique (map (srv: srv.betaBranch) (lib.attrValues resolved));
+    in
+    if branches == [ ] then null else lib.head branches;
+
   # The Workshop symlinking and the console FIFO path now live in
   # lib/prepare.nix (shared with the standalone runner) and below respectively.
 
@@ -81,6 +90,7 @@ let
     serverAppId = cfg.package.serverAppId or "380870";
     steamAppId = cfg.package.steamAppId or "108600";
     workshopItems = allWorkshopItems;
+    betaBranch = installBetaBranch;
   };
 
   # ── Per-server start-prep ──────────────────────────────────────────────────
@@ -111,11 +121,33 @@ let
       # Both backends exec the launcher wrapper with these set. Declared in the
       # unit's Environment too, so ExecStartPre and the web shim see the same
       # values.
-      exportEnv = lib.concatStringsSep "\n" [
-        "export HOME=\"${cfg.dataDir}/${name}\""
-        "export PZ_SERVER_DIR=\"${cfg.serverDir}\""
-        "export PZ_JVM_OPTS=\"${srv.jvmOpts}\""
-      ];
+      # Parenthesised on purpose. In Nix, `f a [ ... ] ++ b` parses as
+      # `f a ([ ... ] ++ b)` — `++` binds TIGHTER than function application — so
+      # the concatenation would happen on the LIST and concatStringsSep would
+      # then be handed a string, failing with "expected a list but found a
+      # string". Passing the concatenated list as one argument is the only
+      # unambiguous spelling.
+      exportEnv = lib.concatStringsSep "\n" (
+        [
+          "export HOME=\"${cfg.dataDir}/${name}\""
+          "export PZ_SERVER_DIR=\"${cfg.serverDir}\""
+          "export PZ_JVM_OPTS=\"${srv.jvmOpts}\""
+        ]
+        ++ lib.optional (srv.adminAccount != null) ''
+          export PZ_ADMIN_USERNAME=${lib.escapeShellArg srv.adminAccount.username}
+          export PZ_ADMIN_PASSWORD_FILE=${lib.escapeShellArg srv.adminAccount.passwordFile}
+        ''
+      );
+
+      # `extraArgs` is static Nix data (unlike the admin password), so it is
+      # shell-escaped straight into the command line. Shell-escaped rather than
+      # interpolated raw: a flag containing a space or a quote must survive, and
+      # this string lands in a store script.
+      extraArgs = lib.concatMapStringsSep " " lib.escapeShellArg srv.extraArgs;
+
+      # Both backends exec the launcher with these set. Declared in the
+      # unit's Environment too, so ExecStartPre and the web shim see the same
+      # values.
     in
     if ms.tmux.enable then
       let
@@ -136,7 +168,7 @@ let
             name = "${unit}-start";
             text = ''
               ${exportEnv}
-              exec ${tmuxCmd} new-session -d ${lib.getExe cfg.package} "${srv.serverName}"
+              exec ${tmuxCmd} new-session -d ${lib.getExe cfg.package} "${srv.serverName}" ${extraArgs}
             '';
           }
         );
@@ -179,7 +211,7 @@ let
             name = "${unit}-start";
             text = ''
               ${exportEnv}
-              exec ${lib.getExe cfg.package} "${srv.serverName}"
+              exec ${lib.getExe cfg.package} "${srv.serverName}" ${extraArgs}
             '';
           }
         );
@@ -267,7 +299,17 @@ let
           "PZ_SERVER_DIR=${cfg.serverDir}"
           "PZ_SERVER_NAME=${srv.serverName}"
           "PZ_JVM_OPTS=${srv.jvmOpts}"
-        ];
+        ]
+        # The admin login. Only the USERNAME and the secret's PATH — never the
+        # password itself, which the launcher reads from the file at start. A
+        # path in a world-readable unit file discloses nothing; a value would
+        # undo the whole point of secretFiles.
+        # `optional`, not `optionalAttrs`: systemd.serviceConfig.Environment is a
+        # list of strings, so this has to extend the list rather than an attrset.
+        ++ lib.optional (srv.adminAccount != null) "PZ_ADMIN_USERNAME=${srv.adminAccount.username}"
+        ++ lib.optional (
+          srv.adminAccount != null
+        ) "PZ_ADMIN_PASSWORD_FILE=${srv.adminAccount.passwordFile}";
 
         # Hardening, chosen to stay compatible with steam-run's bwrap user
         # namespace: PrivateUsers/PrivateDevices break the FHS shim, and the

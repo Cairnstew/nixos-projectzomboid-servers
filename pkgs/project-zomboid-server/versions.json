@@ -2,6 +2,9 @@
   "_comment": [
     "Non-rotating identifiers for the Project Zomboid dedicated server.",
     "Everything here is stable; nothing in this file needs re-pinning per build.",
+    "defaultRconPort is 27016, NOT PZ's own 27015: 27015 is Minecraft's default",
+    "and this module is meant to sit alongside a Minecraft server. RCON is off by",
+    "default (0) anyway, so the value only matters once you enable it.",
     "Deliberately absent: Steam depot manifestId + content hash. Those rotate on",
     "every PZ build and cannot be committed honestly by hand — they belong in a",
     "generated manifest produced by a fetcher (nix-community/steam-fetcher's",
@@ -14,6 +17,7 @@
   "serverAppId": "380870",
   "defaultPort": 16261,
   "defaultUdpPort": 16262,
-  "defaultRconPort": 27015,
+  "defaultRconPort": 27016,
+  "defaultBaseMap": "Muldraugh, KY",
   "defaultMaxPlayers": 32
 }

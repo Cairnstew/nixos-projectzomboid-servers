@@ -91,6 +91,8 @@ let
     }
   );
 
+  # ── Reusable submodules ─────────────────────────────────────────────────────
+
   # A Steam Workshop item. Just the numeric id; the title is cosmetic and only
   # exists so a human reading the catalogue knows what they are looking at.
   workshopMod = types.submodule {
@@ -113,6 +115,144 @@ let
     };
   };
 
+  # One `SpawnPoints()` entry. `pos` is world coordinates, NOT a tile reference
+  # and NOT an enum.
+  spawnPoint = types.submodule {
+    options = {
+      pos = mkOption {
+        type = types.listOf types.int;
+        default = [
+          0
+          0
+          0
+        ];
+        example = [
+          12067
+          6801
+          0
+        ];
+        description = ''
+          World <literal>[ x y z ]</literal> to add as a spawn point.
+
+          Note this is a coordinate triple. PZ's own <literal>SpawnPoint=</literal>
+          ini key is <emphasis>also</emphasis> a coordinate triple
+          (<literal>SpawnPoint=0,0,0</literal> is the world origin) — it is not a
+          preset or an index, and no small integer has a special meaning.
+        '';
+      };
+      profession = mkOption {
+        type = types.str;
+        default = "unemployed";
+        example = "engineer";
+        description = "Profession this point spawns into. Points are grouped by this key.";
+      };
+    };
+  };
+
+  spawnRegion = types.submodule {
+    options = {
+      name = mkOption {
+        type = types.str;
+        example = "Mod Spawn";
+        description = "Region name as PZ shows it.";
+      };
+      file = mkOption {
+        type = types.str;
+        example = "media/maps/ModName/spawnpoints.lua";
+        description = ''
+          Path to the region's <literal>spawnpoints.lua</literal>, relative to the
+          install directory — the same form PZ's own generated file uses.
+        '';
+      };
+    };
+  };
+
+  # Deterministic map resolution. See `map` and scripts/pz_maps.py.
+  mapOrder = types.submodule {
+    options = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Derive <literal>Map=</literal> from the maps the installed mods actually
+          ship. On by default, and forced off when <option>map</option> is set to
+          an explicit value (which then wins outright).
+        '';
+      };
+      priority = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [
+          "2705410157"
+        ];
+        description = ''
+          Mod ids that win duplicate-map collisions and order first, in the order
+          listed. Ids not listed sort after all of these.
+
+          This is the knob that makes map ordering <emphasis>deterministic</emphasis>
+          rather than dependent on download order: two mods shipping the same map
+          name otherwise resolve by whichever mod the loader reaches first.
+        '';
+      };
+      strict = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Refuse to start when any two mods ship the same map name, instead of
+          picking a winner and reporting it. Use in CI, or once you have confirmed
+          a pack has no collisions.
+        '';
+      };
+      dedupe = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Rename duplicate map folders out of the way
+          (<literal>*.pz-duplicate</literal>) so only the winner loads.
+
+          Off by default because it WRITES to the shared Steam install, which every
+          server on that install reads. Renaming rather than deleting keeps it
+          recoverable — move the folder back to undo.
+        '';
+      };
+    };
+  };
+
+  # Secrets, as Key -> path. Values are read at start and never stored in Nix.
+  secretFiles = types.attrsOf (types.nullOr types.path);
+
+  # The Build 42 admin account, which has no ini key of its own.
+  adminAccount = types.submodule {
+    options = {
+      username = mkOption {
+        type = types.str;
+        example = "seanc";
+        description = ''
+          Steam account name to create or update as a server admin.
+
+          Build 42 has no ini key for this: the admin account is a row in
+          <literal>Zomboid/db/&lt;servername&gt;.db</literal>, and the only
+          supported way to write it is the <literal>-adminusername</literal> /
+          <literal>-adminpassword</literal> command-line pair. This option passes
+          them.
+
+          <emphasis>Known limitation:</emphasis> a process argument is visible in
+          <literal>ps</literal> for the lifetime of the server. PZ offers no
+          alternative, and every other deployment has the same exposure — but the
+          password is at least read from a file rather than baked into the unit, so
+          it never reaches <literal>systemctl cat</literal> or the Nix store.
+        '';
+      };
+      passwordFile = mkOption {
+        type = types.path;
+        description = ''
+          File holding the admin password (e.g. an agenix secret). Read at start.
+          Required — there is deliberately no way to give the password inline.
+        '';
+      };
+    };
+  };
+
   # A `.ini` / SandboxVars value. Kept open (oneOf) so any PZ setting can be set
   # without this module enumerating PZ's ~200 keys.
   iniSetting = types.oneOf [
@@ -123,7 +263,8 @@ let
   ];
   settings = types.attrsOf iniSetting;
 
-  # Comma-separated username list (whitelist / admins).
+  # Comma-separated username list (whitelist / admins). Build 41 only — see
+  # `compatibility.build41`.
   nameList = types.listOf types.str;
 in
 {
@@ -377,9 +518,89 @@ in
 
               # ── Network ─────────────────────────────────────────────────────
               map = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                example = "Muldraugh, KY;West Point, KY";
+                description = ''
+                  The <literal>Map=</literal> list, <emphasis>semicolon</emphasis>
+                  separated — note that <literal>Mods=</literal> is comma separated
+                  and <literal>WorkshopItems=</literal> is also semicolon
+                  separated, so this is the one key where the separator differs
+                  from its neighbours.
+
+                  null (the default) means <emphasis>derive it from the installed
+                  mods</emphasis>: every <literal>media/maps/&lt;name&gt;</literal>
+                  any installed mod ships is added automatically, in a
+                  deterministic order, with the <option>baseMap</option> last. See
+                  <option>mapOrder</option>.
+
+                  Set an explicit string to pin it and turn detection off — which
+                  you must do if your mods conflict, or if you want a map that no
+                  mod ships.
+                '';
+              };
+
+              baseMap = mkOption {
                 type = types.str;
                 default = "Muldraugh, KY";
-                description = "Map folder name under the install's <literal>media/maps</literal>.";
+                example = "West Point, KY";
+                description = ''
+                  The vanilla map, always placed LAST in the derived
+                  <literal>Map=</literal>.
+
+                  Last is deliberate: mod maps add new areas rather than patching
+                  vanilla tiles, so letting the base map resolve last means any
+                  genuine overlap goes in favour of vanilla — the direction that
+                  cannot corrupt terrain players already know.
+
+                  A mod shipping a map with this exact name is reported as an
+                  error, because it shadows vanilla terrain.
+                '';
+              };
+
+              mapOrder = mkOption {
+                type = mapOrder;
+                default = { };
+                description = ''
+                  How the derived <literal>Map=</literal> list is ordered and
+                  checked for conflicts. Ignored when <option>map</option> is set.
+                '';
+              };
+
+              spawn = mkOption {
+                type = types.submodule {
+                  options = {
+                    points = mkOption {
+                      type = types.listOf spawnPoint;
+                      default = [ ];
+                      description = ''
+                        Extra spawn points, grouped by profession. Rendered into
+                        <literal>&lt;servername&gt;_spawnpoints.lua</literal>.
+
+                        Empty (the default) leaves the file alone so PZ keeps
+                        whatever it generated itself.
+                      '';
+                    };
+                    regions = mkOption {
+                      type = types.listOf spawnRegion;
+                      default = [ ];
+                      description = ''
+                        Extra spawn regions. Rendered into
+                        <literal>&lt;servername&gt;_spawnregions.lua</literal>, in
+                        the order given.
+
+                        Empty (the default) leaves the file alone.
+                      '';
+                    };
+                  };
+                };
+                default = { };
+                description = ''
+                  Custom spawn points and regions — the two files PZ lists as
+                  necessary for a server to work that this module otherwise does
+                  not manage. Both are regenerated by PZ when absent, so they are
+                  written only when non-empty, and removed when emptied.
+                '';
               };
 
               defaultPort = mkOption {
@@ -476,21 +697,108 @@ in
               whitelist = mkOption {
                 type = nameList;
                 default = [ ];
-                description = "Usernames allowed in when <option>open</option> is false.";
+                example = [
+                  "seanc"
+                  "friend"
+                ];
+                description = ''
+                  Usernames allowed in when <option>open</option> is false.
+
+                  <emphasis>Build 41 only.</emphasis> On Build 42 the whitelist is a
+                  table in <literal>Zomboid/db/&lt;servername&gt;.db</literal>, and
+                  <literal>Whitelist=</literal> is not a documented ini key — so
+                  this is written only when
+                  <option>compatibility.build41</option> is true, and otherwise
+                  silently doing nothing. For a Build 42 server, manage it in the
+                  database or in-game.
+                '';
               };
 
               admins = mkOption {
                 type = nameList;
                 default = [ ];
+                example = [
+                  "seanc"
+                ];
                 description = ''
-                  Admin usernames (<literal>Users=</literal> in the .ini). These are
-                  Steam account names.
+                  Admin usernames, written to <literal>Users=</literal>.
 
-                  Note: on Build 42 the *admin login* is a row in
-                  <literal>Zomboid/db/&lt;servername&gt;.db</literal> and its first-run
-                  password is set by an interactive prompt, not by this module.
-                  Listing a name here grants in-game admin; it does not create the
-                  login. See README 'Build 42 admin accounts'.
+                  <emphasis>Build 41 only</emphasis>, for the same reason as
+                  <option>whitelist</option>. It grants in-game admin rights; it
+                  never creates the login.
+
+                  On Build 42, to actually create the admin account use
+                  <option>adminAccount</option> — there is no ini key for it.
+                '';
+              };
+
+              compatibility = mkOption {
+                type = types.submodule {
+                  options = {
+                    build41 = mkOption {
+                      type = types.bool;
+                      default = false;
+                      description = ''
+                        Write the Build 41 <literal>Whitelist=</literal> and
+                        <literal>Users=</literal> keys.
+
+                        Off by default because Build 42 does not document them: a
+                        config that lists admins and a whitelist while having no
+                        effect is worse than one that plainly does not. Turn this on
+                        only for a genuine Build 41 server.
+                      '';
+                    };
+                  };
+                };
+                default = { };
+                description = "Legacy-key escape hatches for older PZ builds.";
+              };
+
+              adminAccount = mkOption {
+                type = types.nullOr adminAccount;
+                default = null;
+                example = literalExpression ''
+                  {
+                    username = "seanc";
+                    passwordFile = config.age.secrets.pz-admin.path;
+                  }
+                '';
+                description = ''
+                  Create or update a Build 42 server admin login.
+
+                  This is the <emphasis>only</emphasis> way to get an admin account
+                  on Build 42 — see the submodule for why, and for the
+                  <literal>ps</literal>-visibility caveat.
+                '';
+              };
+
+              secretFiles = mkOption {
+                type = secretFiles;
+                default = { };
+                example = literalExpression ''
+                  {
+                    RCONPassword = config.age.secrets.pz-rcon.path;
+                    DiscordToken = config.age.secrets.pz-discord-token.path;
+                  }
+                '';
+                description = ''
+                  <literal>.ini</literal> keys whose values must come from a file,
+                  as <literal>Key = path</literal>. Read at start by
+                  <literal>merge_ini.py</literal> and written straight into the
+                  key.
+
+                  Use this — never <option>settings</option> — for anything secret.
+                  The Nix-rendered base <literal>.ini</literal> is a store path
+                  (mode 444, world-readable), so a secret in
+                  <option>settings</option> lands in a plaintext file any local
+                  user can read. The module <emphasis>fails evaluation</emphasis> if
+                  a known-secret key appears in <option>settings</option> or
+                  <option>sandbox</option>.
+
+                  Handles <literal>Password</literal> (the join password,
+                  equivalent to <option>passwordFile</option>), plus
+                  <literal>RCONPassword</literal>, <literal>DiscordToken</literal>
+                  and <literal>WebhookAddress</literal>.
                 '';
               };
 
@@ -500,11 +808,108 @@ in
                 description = ''
                   File whose contents become the <literal>Password=</literal> join
                   password (e.g. an agenix secret). Read at start; the value never
-                  enters a unit file or <literal>ps</literal> output.
+                  enters a unit file, the store, or <literal>ps</literal> output.
+
+                  Exactly equivalent to
+                  <literal>secretFiles.Password = ...</literal>, and wins if both
+                  are set. Kept as a separate option because the join password is
+                  by far the most common secret.
+                '';
+              };
+              # ── Process ─────────────────────────────────────────────────────
+
+              extraArgs = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                example = [
+                  "-statistic"
+                  "0"
+                ];
+                description = ''
+                  Extra arguments appended to the server command line, after
+                  <literal>-servername</literal>. For the flags PZ has no config key
+                  for, such as <literal>-statistic</literal>,
+                  <literal>-nosteam</literal>, <literal>-ip</literal> or
+                  <literal>-cache</literal>.
+
+                  <emphasis>Do not put credentials here.</emphasis> This list is
+                  written into the systemd unit, which is world-readable — the same
+                  store-leak problem <option>secretFiles</option> exists to avoid.
+                  Use <option>adminAccount</option> for the admin password.
+
+                  The flag surface moves between PZ builds, which is why this is a
+                  free-form list rather than typed booleans.
                 '';
               };
 
-              # ── Process ─────────────────────────────────────────────────────
+              upnp = mkOption {
+                type = types.bool;
+                default = false;
+                defaultText = literalExpression "false";
+                description = ''
+                  <literal>UPnP=</literal> — ask the router to open the server's
+                  ports automatically.
+
+                  Defaults to <emphasis>false</emphasis>, unlike PZ's own default of
+                  true. Automatic port forwarding is a poor default for a managed
+                  host: it silently punches holes in a firewall that
+                  <option>openFirewall</option> and the operator's own rules
+                  deliberately keep closed, and it cannot work at all behind a
+                  container or on a normal cloud network. Set this only when you
+                  genuinely want the router mutated, and prefer
+                  <option>openFirewall</option>.
+                '';
+              };
+
+              selfManagedMods = mkOption {
+                type = types.bool;
+                default = true;
+                defaultText = literalExpression "true";
+                description = ''
+                  <literal>SelfManagedMods=</literal> — tell PZ that the mod list is
+                  managed externally and must not be rewritten by the game or by
+                  in-game mod editing.
+
+                  true (the default) is what makes the declarative modpack actually
+                  stick: with it off, a player who opens the server's mod screen
+                  can write a different <literal>Mods=</literal> back to the
+                  <literal>.ini</literal>, and the next start would faithfully apply
+                  their change over yours.
+                '';
+              };
+
+              softReset = mkOption {
+                type = types.bool;
+                default = false;
+                description = ''
+                  Discard this server's world identity — <literal>Seed</literal>,
+                  <literal>ResetID</literal>, <literal>ServerPlayerID</literal> and
+                  friends — so PZ generates a fresh world on the next start.
+
+                  <emphasis>Destructive, and applied on every start while
+                  true.</emphasis> The NixOS module clears it once
+                  <command>systemd.nixos.reboot</command> takes effect, so this is a
+                  declarative "reset my world" switch; leave it on and every restart
+                  starts a new world. The <literal>Saves/</literal> directory is
+                  left alone — the old world stays on disk to recover.
+                '';
+              };
+
+              betaBranch = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                example = "legacy41";
+                description = ''
+                  Steam beta branch to install the dedicated server from, passed as
+                  <literal>-beta &lt;branch&gt;</literal>. null (the default) means
+                  the stable branch.
+
+                  Per-server, but applied by the <emphasis>shared</emphasis> install
+                  unit, so all servers on one install necessarily share a branch.
+                  Set it on every server, or on none.
+                '';
+              };
+
               jvmOpts = mkOption {
                 type = types.str;
                 default = "-Xmx4G -Xms2G";

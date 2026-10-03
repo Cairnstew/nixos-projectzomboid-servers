@@ -71,6 +71,10 @@
             pz = pz-lib;
           };
 
+          # The non-rotating ids/defaults, read from the one place they live so
+          # the package, the runner and the NixOS module cannot drift apart.
+          versions = builtins.fromJSON (builtins.readFile ./pkgs/project-zomboid-server/versions.json);
+
           # Evaluate a NixOS configuration containing this module, per system.
           # lib/tests.nix exposes `{ eval, … }`, so take `.eval`.
           eval-config = (import ./lib/tests.nix { lib = nixpkgs.lib; }).eval;
@@ -78,25 +82,51 @@
           # A complete per-server config carrying the same defaults the module's
           # options use, so `pz-lib.resolveServer` merges a pack identically
           # whether the server ends up under systemd or under `nix run`.
+          #
+          # Every field here must exist on a `resolveServer` result: the resolver
+          # copies them through with `inherit (srv)`, so a field added to an
+          # option but omitted here fails deep inside services.nix with
+          # "attribute X missing" instead of at the option.
           serverDefaults = srvName: {
             name = srvName;
             description = "";
             modpack = null;
             workshopMods = [ ];
             mods = [ ];
-            map = "Muldraugh, KY";
-            defaultPort = 16261;
-            udpPort = 16262;
+            map = null;
+            baseMap = versions.defaultBaseMap;
+            mapOrder = {
+              enable = true;
+              priority = [ ];
+              strict = false;
+              dedupe = false;
+            };
+            spawn = {
+              points = [ ];
+              regions = [ ];
+            };
+            defaultPort = versions.defaultPort;
+            udpPort = versions.defaultUdpPort;
             rconPort = 0;
             public = true;
             publicName = srvName;
-            maxPlayers = 32;
+            maxPlayers = versions.defaultMaxPlayers;
             open = true;
+            upnp = false;
+            selfManagedMods = true;
+            softReset = false;
             settings = { };
             sandbox = { };
             whitelist = [ ];
             admins = [ ];
+            adminAccount = null;
+            secretFiles = { };
             passwordFile = null;
+            compatibility = {
+              build41 = false;
+            };
+            betaBranch = null;
+            extraArgs = [ ];
             jvmOpts = "-Xmx4G -Xms2G";
             openFirewall = false;
             autoStart = true;
@@ -420,6 +450,23 @@
               program = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.project-zomboid-runner;
             };
 
+            pz-maps = {
+              type = "app";
+              program = lib.getExe (
+                pkgs.writeShellApplication {
+                  name = "pz-maps";
+                  runtimeInputs = [ pkgs.python3 ];
+                  text = ''
+                    # A thin, discoverable wrapper so `Map=` can be inspected and
+                    # audited without starting a server — the "why is this mod's
+                    # map not loading" tool, and the thing to run in CI to prove a
+                    # pack has no duplicate-map clashes.
+                    exec python3 ${./scripts/pz_maps.py} "$@"
+                  '';
+                }
+              );
+            };
+
             # A small CLI over the catalogue: what does a pack install, and what
             # would it render into a server's .ini / SandboxVars?
             pz-modpack = {
@@ -653,6 +700,421 @@
                   [ ! -e "$stale" ] || fail "a symlink for an undownloaded mod was left behind (would dangle)"
 
                   echo "prep roundtrip ok: world identity preserved, config merged, sandbox written, mods linked"
+                  touch "$out"
+                '';
+
+            # ── A pinned Map= suppresses detection cleanly ──────────────────────
+            # Regression guard for a real bug: the prep script passed its optional
+            # Map= argument as `${map_override+...}`, and the `+` form expands
+            # whenever the variable is SET — which an empty `map_override=""` is.
+            # So pinning a map made the script pass a literal empty argument and
+            # merge_ini.py aborted the whole start with a parse error. This is
+            # only reachable with PZ_MAP_PINNED=1, which is why `prep-roundtrip`
+            # (auto-detect) never saw it.
+            map-pin-clean =
+              let
+                srv = "pinned";
+                server = pz-lib.resolveServer self.modpacks srv (serverDefaults srv);
+                prep = pz-prepare.mkPrepScript {
+                  inherit server;
+                  iniBase = pz-prepare.mkIniBase { inherit server; };
+                  name = "pz-prep-pin";
+                };
+              in
+              pkgs.runCommand "pz-map-pin-clean-check"
+                {
+                  nativeBuildInputs = [ pkgs.coreutils ];
+                }
+                ''
+                  srv="${srv}"
+                  root="$TMPDIR/pz"
+                  data="$root/data"
+                  mkdir -p "$data/$srv/Zomboid/Server"
+                  export PZ_DATA_DIR="$data"
+                  export PZ_SERVER_DIR="$root/server"
+                  export PZ_SERVER_NAME="$srv"
+
+                  # No maps installed at all, so detection would find nothing and
+                  # leave map_override empty — the exact state that broke.
+                  PZ_MAP_PINNED=1 ${prep}/bin/pz-prep-pin "Map=Rosewood, OR"
+
+                  ini="$data/$srv/Zomboid/Server/$srv.ini"
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  grep -qx 'Map=Rosewood, OR' "$ini" || fail "the pinned Map= did not land"
+                  if grep -qx 'Map=$' "$ini"; then fail "an empty Map= was written"; fi
+                  grep -qx 'UDPPort=16262' "$ini" || fail "the rest of the config did not land"
+
+                  echo "map pin ok: pinning suppresses detection without an empty argument"
+                  touch "$out"
+                '';
+
+            # ── Secrets never reach a store path ───────────────────────────────
+            # The single most important check in this file.
+            #
+            # The regression it guards against is real and was measured: with a
+            # secret in `settings`, the rendered base `.ini` was a `writeText`
+            # store path at mode 444 containing e.g. `RCONPassword=hunter2` in
+            # cleartext — readable by every local user and greppable out of
+            # /nix/store. This asserts the value is nowhere in the store paths the
+            # module generates, while the path of the secret file is.
+            secrets-not-in-store =
+              let
+                srv = "secretive";
+                secretPath = pkgs.writeText "pz-join-password" "hunter2-not-in-store";
+                joinPath = pkgs.writeText "pz-join" "join-not-in-store";
+                server = pz-lib.resolveServer self.modpacks srv (
+                  (serverDefaults srv)
+                  // {
+                    secretFiles.RCONPassword = secretPath;
+                    passwordFile = joinPath;
+                  }
+                );
+                # The real artefacts, as store paths. Grepping the actual file in
+                # /nix/store is the point of the check, so it must be the genuine
+                # output rather than a copy — `builtins.readFile` cannot be used
+                # here because it cannot realise a derivation during pure eval.
+                iniBaseFile = pz-prepare.mkIniBase {
+                  inherit server;
+                  name = "${srv}.ini";
+                };
+                sandboxFile = pkgs.writeText "${srv}_SandboxVars.lua" (
+                  pz-lib.renderSandbox { settings = server.sandbox; }
+                );
+              in
+              pkgs.runCommand "pz-secrets-not-in-store-check"
+                {
+                  nativeBuildInputs = [ pkgs.coreutils ];
+                  # Derivation values in the environment become their store paths,
+                  # so the script greps the genuine world-readable files.
+                  PZ_INI_BASE = iniBaseFile;
+                  PZ_SANDBOX = sandboxFile;
+                  PZ_RCON_SECRET = secretPath;
+                }
+                ''
+                  ini="$PZ_INI_BASE"
+                  sandbox="$PZ_SANDBOX"
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  # The rendered files are the ones that end up mode 444 and
+                  # world-readable in the store. Neither may contain a value.
+                  if grep -q 'hunter2-not-in-store' "$ini"; then
+                    fail "the RCON password reached the rendered .ini ($(stat -c %a "$ini"))"
+                  fi
+                  if grep -q 'join-not-in-store' "$ini"; then
+                    fail "the join password reached the rendered .ini"
+                  fi
+                  if grep -q 'not-in-store' "$sandbox"; then
+                    fail "a secret reached the rendered SandboxVars.lua"
+                  fi
+
+                  # The secret KEYS must be absent entirely: they are supplied at
+                  # start by --secret-file, not rendered.
+                  if grep -q '^RCONPassword=' "$ini"; then
+                    fail "RCONPassword was rendered instead of deferred to a secret file"
+                  fi
+                  if grep -q '^Password=' "$ini"; then
+                    fail "Password was rendered instead of deferred to a secret file"
+                  fi
+
+                  # And the arguments the prep script will use name the secret
+                  # FILES, never their contents.
+                  args="${pz-lib.secretFileArgs server}"
+                  case "$args" in
+                    *"$PZ_RCON_SECRET"*) ;;
+                    *) fail "secretFileArgs does not reference the RCON secret's path" ;;
+                  esac
+                  case "$args" in
+                    *hunter2*|*join-not-in-store*) fail "secretFileArgs leaked a secret VALUE" ;;
+                  esac
+
+                  echo "secrets ok: no secret value in any rendered store file"
+                  touch "$out"
+                '';
+
+            # ── Spawn lua + soft-reset + Build 41 opt-in ────────────────────────
+            # Everything in `prep-roundtrip` that is about the NEW surface:
+            # the two spawn files, `--soft-reset`, and the fact that
+            # `Whitelist=`/`Users=` are absent unless `compatibility.build41`.
+            spawn-and-reset =
+              let
+                srv = "spawny";
+                server = pz-lib.resolveServer self.modpacks srv (
+                  (serverDefaults srv)
+                  // {
+                    whitelist = [
+                      "alice"
+                      "bob"
+                    ];
+                    admins = [ "carol" ];
+                    spawn.points = [
+                      {
+                        pos = [
+                          12067
+                          6801
+                          0
+                        ];
+                      }
+                      {
+                        pos = [
+                          12068
+                          6801
+                          0
+                        ];
+                      }
+                      {
+                        pos = [
+                          5000
+                          5000
+                          0
+                        ];
+                        profession = "engineer";
+                      }
+                      # A profession that is not a bare Lua identifier, to prove
+                      # the key gets bracket-quoted rather than emitted as
+                      # `"farm worker" = {`, which is a syntax error.
+                      {
+                        pos = [
+                          10
+                          10
+                          0
+                        ];
+                        profession = "farm worker";
+                      }
+                    ];
+                    spawn.regions = [
+                      {
+                        name = "Mod Spawn";
+                        file = "media/maps/ModName/spawnpoints.lua";
+                      }
+                      {
+                        name = "Quoted \"Region\"";
+                        file = "media/maps/Other/spawnpoints.lua";
+                      }
+                    ];
+                  }
+                );
+                prep = pz-prepare.mkPrepScript {
+                  inherit server;
+                  iniBase = pz-prepare.mkIniBase { inherit server; };
+                  name = "pz-prep-spawn";
+                };
+                iniBase = pz-prepare.mkIniBase {
+                  inherit server;
+                  name = "${srv}.ini";
+                };
+                # The same server with the Build 41 opt-in, so the "absent by
+                # default" assertion above is provably a choice and not a feature
+                # that was quietly deleted.
+                b41Server = pz-lib.resolveServer self.modpacks srv (
+                  (serverDefaults srv)
+                  // {
+                    whitelist = server.whitelist;
+                    admins = server.admins;
+                    compatibility.build41 = true;
+                  }
+                );
+                iniBaseB41 = pz-prepare.mkIniBase {
+                  server = b41Server;
+                  name = "${srv}-b41.ini";
+                };
+              in
+              pkgs.runCommand "pz-spawn-and-reset-check"
+                {
+                  # lua is here to PARSE the generated files. Two real syntax
+                  # errors shipped through this check before it existed, and
+                  # neither was visible by reading the output:
+                  #   * consecutive table entries joined by a newline instead of
+                  #     a comma — `}` then `{` is not valid Lua;
+                  #   * a quoted profession used as a key, `"farm worker" = {` —
+                  #     Lua reads the string as a positional value and then finds
+                  #     an `=` where it expects `,` or `}`.
+                  # Both are silent to grep and fatal to the game.
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                    pkgs.lua
+                  ];
+                  PZ_INI_B42 = iniBase;
+                  PZ_INI_B41 = iniBaseB41;
+                }
+                ''
+                  srv="${srv}"
+                  root="$TMPDIR/pz"
+                  data="$root/data"
+                  mkdir -p "$data/$srv/Zomboid/Server"
+
+                  cat > "$data/$srv/Zomboid/Server/$srv.ini" <<'SEED_INI'
+                  Seed=keep-me
+                  ResetID=999
+                  ServerPlayerID=42
+                  Password=existing-join-password
+                  SEED_INI
+
+                  export PZ_DATA_DIR="$data"
+                  export PZ_SERVER_DIR="$root/server"
+                  export PZ_SERVER_NAME="$srv"
+
+                  ${prep}/bin/pz-prep-spawn
+                  conf="$data/$srv/Zomboid/Server"
+                  ini="$conf/$srv.ini"
+
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  # ── Build 42 must NOT emit the dead keys ───────────────────
+                  # Not merely absent by default: writing a config that lists an
+                  # admin and a whitelist while doing nothing is worse than one
+                  # that plainly does not.
+                  if grep -q '^Whitelist=' "$ini"; then
+                    fail "Whitelist= was written on a Build 42 server"
+                  fi
+                  if grep -q '^Users=' "$ini"; then
+                    fail "Users= was written on a Build 42 server"
+                  fi
+                  if grep -q 'carol' "$PZ_INI_B42"; then
+                    fail "an admin name leaked into the Build 42 config"
+                  fi
+
+                  # The opt-in still works, which is what makes the above a
+                  # deliberate choice rather than a removed feature.
+                  grep -q '^Whitelist=' "$PZ_INI_B41" \
+                    || fail "compatibility.build41 did not re-enable Whitelist="
+                  grep -q '^Whitelist=alice,bob' "$PZ_INI_B41" || fail "build41 Whitelist is malformed"
+                  grep -q '^Users=carol' "$PZ_INI_B41" || fail "build41 Users is malformed"
+
+                  # ── Spawn lua ──────────────────────────────────────────────
+                  points="$conf/${srv}_spawnpoints.lua"
+                  regions="$conf/${srv}_spawnregions.lua"
+                  sandbox="$conf/${srv}_SandboxVars.lua"
+                  [ -f "$points" ] || fail "no _spawnpoints.lua written"
+                  [ -f "$regions" ] || fail "no _spawnregions.lua written"
+                  grep -q 'function SpawnPoints()' "$points" || fail "spawnpoints is not a SpawnPoints function"
+                  grep -q 'function SpawnRegions()' "$regions" || fail "spawnregions is not a SpawnRegions function"
+                  grep -q 'posX = 12067, posY = 6801, posZ = 0' "$points" \
+                    || fail "the spawn point coordinates were not rendered"
+                  # Grouped by profession, with "unemployed" as the default — and emitted as a
+                  # bare Lua identifier, the way PZ's own file does.
+                  grep -q '^        unemployed = {' "$points" || fail "no unemployed spawn group"
+                  grep -q '^        engineer = {' "$points" || fail "the engineer spawn group is missing"
+                  # Consecutive entries must be comma-separated.
+                  grep -q 'posZ = 0 },' "$points" || fail "spawn points are not comma-separated"
+                  grep -q 'name = "Mod Spawn", file = "media/maps/ModName/spawnpoints.lua"' "$regions" \
+                    || fail "the spawn region was not rendered"
+                  # Lua string escaping in a rendered name.
+                  grep -q 'name = "Quoted \\"Region\\""' "$regions" \
+                    || fail "a quote in a region name was not escaped"
+
+                  # ── Parse every generated Lua file ─────────────────────────
+                  # Sandboxing the parser: these files come from Nix values a user
+                  # controls, and loadfile executes nothing here, but running them
+                  # at all is worth keeping as a parse only.
+                  for f in "$points" "$regions" "$sandbox"; do
+                    if ! lua -e "local fn, err = loadfile('$f'); if not fn then io.stderr:write(tostring(err)..'\\n'); os.exit(1) end"; then
+                      fail "generated Lua is not valid: $f"
+                    fi
+                  done
+
+                  # Profession keys: bare when a bare identifier works (matching
+                  # PZ's own generated file), bracket-quoted when it does not.
+                  grep -q '^        \["farm worker"\] = {' "$points" \
+                    || fail "a profession name that is not an identifier was not bracket-quoted"
+                  if grep -q '"engineer" = {' "$points"; then
+                    fail "a plain profession name was emitted as a quoted key"
+                  fi
+
+                  # ── --soft-reset ────────────────────────────────────────────
+                  # A second invocation with the flag must drop world identity
+                  # while leaving config and the existing join password alone.
+                  ${prep}/bin/pz-prep-spawn --soft-reset
+                  grep -q '^Seed=' "$ini" && fail "--soft-reset did not clear Seed"
+                  grep -q '^ResetID=' "$ini" && fail "--soft-reset did not clear ResetID"
+                  grep -q '^ServerPlayerID=' "$ini" && fail "--soft-reset did not clear ServerPlayerID"
+                  grep -qx 'Password=existing-join-password' "$ini" \
+                    || fail "--soft-reset clobbered a key it does not own"
+                  grep -qx 'UDPPort=16262' "$ini" || fail "--soft-reset dropped our own config"
+                  [ -f "$points" ] || fail "--soft-reset removed the spawn file, which it must not"
+
+                  echo "spawn+reset ok: dead keys absent, spawn lua rendered, soft-reset scoped"
+                  touch "$out"
+                '';
+
+            # ── Deterministic map ordering ──────────────────────────────────────
+            # The property that makes `Map=` reproducible: the same mods in a
+            # different on-disk order must produce byte-identical output, a
+            # duplicate map name must be reported (and honoured under
+            # --priority), and the base map must land last.
+            map-ordering =
+              pkgs.runCommand "pz-map-ordering-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.python3
+                    pkgs.coreutils
+                  ];
+                }
+                ''
+                  maps="${./scripts/pz_maps.py}"
+                  work="$TMPDIR/maps"
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  # Two trees with identical CONTENT, created in opposite orders,
+                  # so any dependence on directory iteration order shows up as a
+                  # difference between the two runs.
+                  mk() {
+                    root="$1"; shift
+                    for id in "$@"; do
+                      mkdir -p "$root/wc/108600/$id/media/maps/Map$id"
+                      touch "$root/wc/108600/$id/media/maps/Map$id/map_0.lotpack"
+                    done
+                  }
+                  mk "$work/a" 500 100 400 200 300
+                  mk "$work/b" 300 200 400 100 500
+
+                  a="$(python3 "$maps" --workshop-root "$work/a/wc/108600" --base-map 'Muldraugh, KY' 2>/dev/null)"
+                  b="$(python3 "$maps" --workshop-root "$work/b/wc/108600" --base-map 'Muldraugh, KY' 2>/dev/null)"
+                  [ "$a" = "$b" ] || fail "map order depends on directory iteration order: '$a' vs '$b'"
+
+                  # Numeric id order, base map last.
+                  expected='Map100;Map200;Map300;Map400;Map500;Muldraugh, KY'
+                  [ "$a" = "$expected" ] || fail "unexpected order: got '$a', want '$expected'"
+
+                  # A directory that is not a map must not become a map name.
+                  mkdir -p "$work/c/wc/108600/1/media/maps/JustDocs"
+                  touch "$work/c/wc/108600/1/media/maps/JustDocs/README.md"
+                  # NOT named `out`: that is the derivation's output path.
+                  map_out="$(python3 "$maps" --workshop-root "$work/c/wc/108600" --base-map 'Muldraugh, KY' 2>/dev/null)"
+                  [ "$map_out" = 'Muldraugh, KY' ] || fail "a non-map directory leaked into Map=: '$map_out'"
+
+                  # A duplicate map name: reported, deterministic winner, and
+                  # overridable. This is the conflict case the ordering exists for.
+                  for id in 200 300; do
+                    mkdir -p "$work/d/wc/108600/$id/media/maps/Shared, KY"
+                    touch "$work/d/wc/108600/$id/media/maps/Shared, KY/map_0.lotpack"
+                  done
+                  err="$(python3 "$maps" --workshop-root "$work/d/wc/108600" --base-map 'Muldraugh, KY' 2>&1 >/dev/null || true)"
+                  case "$err" in
+                    *'is shipped by 2 mods'*) ;;
+                    *) fail "a duplicate map name was not reported: $err" ;;
+                  esac
+                  def="$(python3 "$maps" --workshop-root "$work/d/wc/108600" --base-map 'Muldraugh, KY' 2>/dev/null)"
+                  [ "$def" = 'Shared, KY;Muldraugh, KY' ] || fail "unexpected duplicate resolution: '$def'"
+                  flipped="$(python3 "$maps" --workshop-root "$work/d/wc/108600" --base-map 'Muldraugh, KY' --priority 300 2>/dev/null)"
+                  [ "$flipped" = 'Shared, KY;Muldraugh, KY' ] || fail "priority changed the set: '$flipped'"
+
+                  # --strict must actually fail, or it is decoration.
+                  if python3 "$maps" --workshop-root "$work/d/wc/108600" --base-map 'Muldraugh, KY' --strict >/dev/null 2>&1; then
+                    fail "--strict did not fail on a duplicate map name"
+                  fi
+
+                  # A mod shipping the base map's own name shadows vanilla terrain
+                  # and must be an ERROR, not a quiet pass.
+                  mkdir -p "$work/e/wc/108600/7/media/maps/Muldraugh, KY"
+                  touch "$work/e/wc/108600/7/media/maps/Muldraugh, KY/map_0.lotpack"
+                  shadow="$(python3 "$maps" --workshop-root "$work/e/wc/108600" --base-map 'Muldraugh, KY' 2>&1 >/dev/null || true)"
+                  case "$shadow" in
+                    *ERROR*) ;;
+                    *) fail "a mod shadowing the base map was not reported as an error" ;;
+                  esac
+
+                  echo "map ordering ok: deterministic, base map last, duplicates reported"
                   touch "$out"
                 '';
           };

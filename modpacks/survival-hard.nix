@@ -17,8 +17,12 @@
     PauseEmpty = false;
     SaveWorldEveryMinutes = 15;
     DoLuaChecksum = false;
-    # No safehouse spawn for new characters.
-    SpawnPoint = 2;
+    # NOTE: there is deliberately no `SpawnPoint` here. PZ's `SpawnPoint=` is a
+    # world coordinate triple — `SpawnPoint=0,0,0` is the origin — not a preset or
+    # an index, so a small integer like `2` does not mean "no safehouse spawn", it
+    # means two metres from the origin. An earlier draft of this pack asserted the
+    # opposite and was wrong. Suppress safehouse spawns through the sandbox
+    # settings below, not through this key.
   };
 
   defaultSandbox = {

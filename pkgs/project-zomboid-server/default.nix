@@ -44,6 +44,10 @@ let
   #      does not forward signals to ProjectZomboid64 — which is exactly why the
   #      unit stops by writing `quit` to the console FIFO with KillSignal=SIGCONT
   #      rather than by signalling the process.
+  #   4. It appends the Build 42 admin login from `PZ_ADMIN_USERNAME` /
+  #      `PZ_ADMIN_PASSWORD_FILE`. PZ has no ini key for the admin account, so the
+  #      argument pair is the only way; the password is read from a file here so it
+  #      never reaches the Nix store or the unit file.
   #
   # Bound in `let` (not in the mkDerivation attrset) so `passthru` — a *nested*
   # attrset, which Nix does NOT make self-recursive — can reach it too.
@@ -51,46 +55,76 @@ let
     name = "project-zomboid-server";
     runtimeInputs = [ steam-run ];
     text = ''
-      server_name="''${1-}"
-      if [ -z "$server_name" ] || [ "$server_name" = "-h" ] || [ "$server_name" = "--help" ]; then
-        cat >&2 <<'USAGE'
+        server_name="''${1-}"
+        if [ -z "$server_name" ] || [ "$server_name" = "-h" ] || [ "$server_name" = "--help" ]; then
+          cat >&2 <<'USAGE'
       usage: project-zomboid-server <server-name> [extra server args...]
 
       Environment:
-        PZ_SERVER_DIR  install dir containing start-server.sh (required)
-        PZ_JVM_OPTS    JVM flags, e.g. "-Xmx8G -Xms4G" (optional)
+        PZ_SERVER_DIR          install dir containing start-server.sh (required)
+        PZ_JVM_OPTS            JVM flags, e.g. "-Xmx8G -Xms4G" (optional)
+        PZ_ADMIN_USERNAME      Build 42 admin account name (optional)
+        PZ_ADMIN_PASSWORD_FILE file holding its password (required with the above)
       USAGE
         exit 2
       fi
-      shift
+        shift
 
-      if [ -z "''${PZ_SERVER_DIR-}" ]; then
-        echo "project-zomboid-server: PZ_SERVER_DIR is not set" >&2
-        exit 1
-      fi
+        if [ -z "''${PZ_SERVER_DIR-}" ]; then
+          echo "project-zomboid-server: PZ_SERVER_DIR is not set" >&2
+          exit 1
+        fi
 
-      launcher_path="$PZ_SERVER_DIR/start-server.sh"
-      if [ ! -x "$launcher_path" ]; then
-        echo "project-zomboid-server: $launcher_path is missing or not executable" >&2
-        echo "  install the server first: steamcmd +login anonymous +app_update ${versions.serverAppId} validate +quit" >&2
-        exit 1
-      fi
+        launcher_path="$PZ_SERVER_DIR/start-server.sh"
+        if [ ! -x "$launcher_path" ]; then
+          echo "project-zomboid-server: $launcher_path is missing or not executable" >&2
+          echo "  install the server first: steamcmd +login anonymous +app_update ${versions.serverAppId} validate +quit" >&2
+          exit 1
+        fi
 
-      # (1) Exactly one app id, one line. Not the dedicated-server app id.
-      printf '%s\n' '${versions.steamAppId}' > "$PZ_SERVER_DIR/steam_appid.txt"
+        # (1) Exactly one app id, one line. Not the dedicated-server app id.
+        printf '%s\n' '${versions.steamAppId}' > "$PZ_SERVER_DIR/steam_appid.txt"
 
-      cd "$PZ_SERVER_DIR"
+        cd "$PZ_SERVER_DIR"
 
-      # (2) Split the flag list into an array rather than relying on unquoted
-      #     word splitting: correct for empty PZ_JVM_OPTS, and shellcheck-clean
-      #     without a suppression.
-      jvm_opts=()
-      if [ -n "''${PZ_JVM_OPTS-}" ]; then
-        read -r -a jvm_opts <<< "''${PZ_JVM_OPTS-}"
-      fi
+        # (2) Split the flag list into an array rather than relying on unquoted
+        #     word splitting: correct for empty PZ_JVM_OPTS, and shellcheck-clean
+        #     without a suppression.
+        jvm_opts=()
+        if [ -n "''${PZ_JVM_OPTS-}" ]; then
+          read -r -a jvm_opts <<< "''${PZ_JVM_OPTS-}"
+        fi
 
-      # (3) exec so the JVM inherits this PID and receives signals directly.
-      exec ${lib.getExe steam-run} "$launcher_path" "''${jvm_opts[@]}" -servername "$server_name" "$@"
+        # (4) The Build 42 admin login. There is no ini key for this — the
+        #     account is a row in Zomboid/db/<servername>.db and the only way to
+        #     write it is this argument pair — so the password has to arrive on
+        #     the command line. Read it here from the file rather than having it
+        #     interpolated into the unit, so it never reaches the Nix store.
+        #
+        #     The value is unavoidably visible in `ps` for the lifetime of the
+        #     server. That is a Project Zomboid limitation, not one this module
+        #     can design around; see the `adminAccount` option.
+        admin_args=()
+        if [ -n "''${PZ_ADMIN_USERNAME-}" ]; then
+          if [ -z "''${PZ_ADMIN_PASSWORD_FILE-}" ]; then
+            echo "project-zomboid-server: PZ_ADMIN_USERNAME is set but PZ_ADMIN_PASSWORD_FILE is not" >&2
+            exit 1
+          fi
+          if [ ! -r "$PZ_ADMIN_PASSWORD_FILE" ]; then
+            echo "project-zomboid-server: cannot read PZ_ADMIN_PASSWORD_FILE" >&2
+            exit 1
+          fi
+          admin_password="$(cat "$PZ_ADMIN_PASSWORD_FILE")"
+          if [ -z "$admin_password" ]; then
+            echo "project-zomboid-server: PZ_ADMIN_PASSWORD_FILE is empty" >&2
+            exit 1
+          fi
+          admin_args=(-adminusername "$PZ_ADMIN_USERNAME" -adminpassword "$admin_password")
+        fi
+
+        # (3) exec so the JVM inherits this PID and receives signals directly.
+        exec ${lib.getExe steam-run} "$launcher_path" "''${jvm_opts[@]}" \
+          -servername "$server_name" "''${admin_args[@]}" "$@"
     '';
   };
 in
