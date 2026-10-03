@@ -19,6 +19,96 @@ which is the closest equivalent for Minecraft server fleets.
 
 ---
 
+## Running a server
+
+Two ways in. Both share one implementation (see [lib/prepare.nix](lib/prepare.nix)),
+so a server behaves the same whichever you pick.
+
+### `nix run` — no NixOS host needed
+
+```bash
+# Unmodded
+nix run github:you/nixos-projectzomboid-servers#pz-dedicated-server -- myserver
+
+# With a catalogue pack baked in — one app per pack
+nix run github:you/nixos-projectzomboid-servers#pz-vanilla-plus -- myserver
+```
+
+The first run downloads the dedicated server (several GB) with steamcmd, fetches
+the pack's Workshop mods, writes the config, then runs the server **with your
+terminal as the console**. Ctrl-C — or end-of-input — saves and quits cleanly
+rather than killing the JVM mid-save.
+
+```
+project-zomboid: server    myserver
+project-zomboid: modpack   vanilla-plus
+project-zomboid: data-dir  /mnt/pz
+project-zomboid: install   /mnt/pz/server
+project-zomboid: ports     16261 (udp) / 16262 (udp) / 0 (rcon)
+project-zomboid: prepared myserver in /mnt/pz/myserver
+project-zomboid: starting myserver
+```
+
+Useful flags:
+
+| Flag | Effect |
+| --- | --- |
+| `--data-dir PATH` | Base directory. Default `$PWD/pz-data`. |
+| `--port` / `--udp-port` / `--rcon-port` | Override the baked-in ports at runtime. |
+| `--jvm-opts "-Xmx8G -Xms4G"` | Heap. Reaches the JVM ahead of the vendor script. |
+| `--set KEY=VALUE` | Any `.ini` key, repeatable. Beats the modpack. |
+| `--no-install` | Skip the steamcmd validate — much faster restarts. |
+| `--print-config` | Write and print the config, then exit. **Needs no game files.** |
+
+`--print-config` is the fast loop for "what does this modpack actually do?":
+
+```console
+$ nix run .#pz-vanilla-plus -- --data-dir ./d --no-install --print-config myserver
+== ./d/myserver/Zomboid/Server/myserver.ini ==
+DefaultPort=16261
+Map=Muldraugh, KY
+WorkshopItems=2625441155;2625840413;2679583791;2634209060;2705410157;2705410286
+DoLuaChecksum=false
+PVP=true
+…
+== ./d/myserver/Zomboid/Server/myserver_SandboxVars.lua ==
+SandboxVars = {
+    Zombies = 3,
+    DayLength = 4,
+…
+```
+
+To add a local (non-Workshop) mod, put its folder in
+`<server-dir>/Zomboid/mods` and add its `mod.info` `id` to the pack's `mods`.
+
+### Under NixOS
+
+Use the module — see [Quick start](#quick-start) below.
+
+```nix
+services.project-zomboid-servers = {
+  enable = true;
+  modpacks = inputs.project-zomboid-servers.modpacks;
+  servers.main = {
+    modpack = "vanilla-plus";
+    hardware.memoryMax = "8G";
+  };
+};
+systemctl start project-zomboid-main
+```
+
+### What "shared" actually means
+
+`lib/prepare.nix` owns the install/validate step, the `.ini` merge, the
+SandboxVars render and the Workshop symlinks. The module runs those scripts from
+a systemd unit's `ExecStartPre`; the runner runs the identical scripts with
+`--data-dir`. Only the supervision differs — systemd's `.socket` unit owning a
+FIFO versus a small shell supervisor.
+
+The `.ini` merge is the reason this matters: it has to preserve Project Zomboid's
+world-identity keys, and two copies of that logic would drift, and the wrong one
+would reset worlds.
+
 ## Quick start
 
 ```nix
@@ -215,13 +305,20 @@ nix run .#pz-modpack -- show vanilla-plus
 nix develop              # nixfmt, shellcheck, deadnix, statix, python3
 ```
 
+Inspect a pack's effective config without downloading anything:
+
+```bash
+nix run .#pz-vanilla-plus -- --data-dir ./d --no-install --print-config myserver
+```
+
 Three checks:
 
 | Check | What it proves |
 | --- | --- |
 | `launcher` | The wrapper builds — `writeShellApplication` means shellcheck runs at build time, so a shell error fails the build. |
 | `modpack-catalogue` | Every pack in `modpacks/` is well-formed plain data. |
-| `module-eval` | A two-server configuration produces the right units, ports and Exec paths. |
+| `module-eval` | Two configurations (one plain, one with web consoles + tmux) produce the right units, ports and Exec paths. |
+| `prep-roundtrip` | Runs the real prep script against a seeded world and asserts the merge preserves world identity, that runtime overrides win, and that mods are linked/unlinked correctly. |
 
 `module-eval` is the interesting one. It asserts in Nix — not shell — that every
 server got a service *and* a console socket, that `ExecStart`/`ExecStartPre`/`ExecStop`

@@ -61,9 +61,80 @@
 
           modpackNames = lib.attrNames self.modpacks;
 
+          # The shared prep/install logic, used by BOTH the NixOS module and the
+          # standalone runner. `pz` is threaded in rather than re-imported inside
+          # lib/prepare.nix: `import .` parses as `(import .) { … }` in Nix, and an
+          # explicit argument makes the dependency obvious.
+          pz-lib = import ./lib { inherit lib; };
+          pz-prepare = import ./lib/prepare.nix {
+            inherit lib pkgs;
+            pz = pz-lib;
+          };
+
           # Evaluate a NixOS configuration containing this module, per system.
           # lib/tests.nix exposes `{ eval, … }`, so take `.eval`.
           eval-config = (import ./lib/tests.nix { lib = nixpkgs.lib; }).eval;
+
+          # A complete per-server config carrying the same defaults the module's
+          # options use, so `pz-lib.resolveServer` merges a pack identically
+          # whether the server ends up under systemd or under `nix run`.
+          serverDefaults = srvName: {
+            name = srvName;
+            description = "";
+            modpack = null;
+            workshopMods = [ ];
+            mods = [ ];
+            map = "Muldraugh, KY";
+            defaultPort = 16261;
+            udpPort = 16262;
+            rconPort = 0;
+            public = true;
+            publicName = srvName;
+            maxPlayers = 32;
+            open = true;
+            settings = { };
+            sandbox = { };
+            whitelist = [ ];
+            admins = [ ];
+            passwordFile = null;
+            jvmOpts = "-Xmx4G -Xms2G";
+            openFirewall = false;
+            autoStart = true;
+            restart = "always";
+            hardware = { };
+            extraServiceConfig = { };
+            managementSystem = {
+              systemd-socket.enable = true;
+            };
+            webConsole = false;
+            port = null;
+            enable = true;
+          };
+
+          # The standalone runner, with the pack resolved at EVAL time. Merging a
+          # pack means merging Nix values and rendering `Key=value` lines, so the
+          # pack cannot be a runtime flag without shipping the whole catalogue into
+          # the script and reimplementing the merge in shell. Hence one app per
+          # pack (`pz-<pack>`) plus an unmodded `pz-dedicated-server`.
+          mkRunner =
+            {
+              srvName,
+              modpack ? null,
+              server ? { },
+            }:
+            pkgs.callPackage ./pkgs/project-zomboid-runner {
+              inherit modpack;
+              # Not in pkgs, so callPackage cannot infer it.
+              project-zomboid-server = pkgs.callPackage ./pkgs/project-zomboid-server { };
+              pz-prepare = pz-prepare;
+              resolvedServer = pz-lib.resolveServer self.modpacks srvName (
+                (serverDefaults srvName)
+                // {
+                  inherit modpack;
+                }
+                // server
+              );
+            };
 
           # ── Catalogue validation ───────────────────────────────────────────
           # Every pack must be plain data. A stray `config` or option path would
@@ -333,64 +404,97 @@
         {
           packages = {
             project-zomboid-server = pkgs.callPackage ./pkgs/project-zomboid-server { };
+            project-zomboid-runner = mkRunner { srvName = "pz"; };
             inherit (pkgs) steamcmd;
           };
 
-          # A small CLI over the catalogue: what does a pack install, and what
-          # would it render into a server's .ini / SandboxVars?
-          apps.pz-modpack = {
-            type = "app";
-            program = lib.getExe (
-              pkgs.writeShellApplication {
-                name = "pz-modpack";
-                runtimeInputs = [
-                  pkgs.jq
-                  pkgs.coreutils
-                ];
-                text = ''
-                  catalogue="$(cat ${pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks)})"
+          # ── Apps ────────────────────────────────────────────────────────────
+          # Run a dedicated server:
+          #   nix run .#pz-dedicated-server -- myserver    (unmodded)
+          #   nix run .#pz-vanilla-plus          -- myserver    (pack baked in)
+          # Browse the catalogue:
+          #   nix run .#pz-modpack -- list | show <pack>
+          apps = {
+            pz-dedicated-server = {
+              type = "app";
+              program = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.project-zomboid-runner;
+            };
 
-                  usage() {
-                    echo "usage: pz-modpack [list|show <pack>]" >&2
-                    echo >&2
-                    echo "  list          every modpack in the catalogue" >&2
-                    echo "  show <pack>   that pack's Workshop items, mods and settings" >&2
-                    exit 2
-                  }
+            # A small CLI over the catalogue: what does a pack install, and what
+            # would it render into a server's .ini / SandboxVars?
+            pz-modpack = {
+              type = "app";
+              program = lib.getExe (
+                pkgs.writeShellApplication {
+                  name = "pz-modpack";
+                  runtimeInputs = [
+                    pkgs.jq
+                    pkgs.coreutils
+                  ];
+                  text = ''
+                    catalogue="$(cat ${pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks)})"
 
-                  case "''${1-}" in
-                    list)
-                      echo "$catalogue" | jq -r 'keys[]'
-                      ;;
-                    show)
-                      pack="''${2-}"
-                      [ -n "$pack" ] || usage
-                      echo "$catalogue" | jq -r --arg p "$pack" '
-                        if has($p) then
-                          .[$p]
-                          | "description: \(.description)",
-                            "workshopMods:",
-                            (if (.workshopMods | length) == 0 then "  (none)"
-                             else (.workshopMods[] | "  \(.id)  \(.title // "untitled")") end),
-                            "mods: \(if (.mods|length)==0 then "(none)" else (.mods|join(", ")) end)",
-                            "defaultSettings: \(.defaultSettings|tojson)",
-                            "defaultSandbox: \(.defaultSandbox|tojson)"
-                        else
-                          "pz-modpack: no such modpack: \($p)\navailable: \(keys|join(", "))" | error
-                        end
-                      '
-                      ;;
-                    -h|--help|help)
-                      usage
-                      ;;
-                    *)
-                      usage
-                      ;;
-                  esac
-                '';
+                    usage() {
+                      echo "usage: pz-modpack [list|show <pack>]" >&2
+                      echo >&2
+                      echo "  list          every modpack in the catalogue" >&2
+                      echo "  show <pack>   that pack's Workshop items, mods and settings" >&2
+                      exit 2
+                    }
+
+                    case "''${1-}" in
+                      list)
+                        echo "$catalogue" | jq -r 'keys[]'
+                        ;;
+                      show)
+                        pack="''${2-}"
+                        [ -n "$pack" ] || usage
+                        echo "$catalogue" | jq -r --arg p "$pack" '
+                          if has($p) then
+                            .[$p]
+                            | "description: \(.description)",
+                              "workshopMods:",
+                              (if (.workshopMods | length) == 0 then "  (none)"
+                               else (.workshopMods[] | "  \(.id)  \(.title // "untitled")") end),
+                              "mods: \(if (.mods|length)==0 then "(none)" else (.mods|join(", ")) end)",
+                              "defaultSettings: \(.defaultSettings|tojson)",
+                              "defaultSandbox: \(.defaultSandbox|tojson)"
+                          else
+                            "pz-modpack: no such modpack: \($p)\navailable: \(keys|join(", "))" | error
+                          end
+                        '
+                        ;;
+                      -h|--help|help)
+                        usage
+                        ;;
+                      *)
+                        usage
+                        ;;
+                    esac
+                  '';
+                }
+              );
+            };
+          }
+          # One app per catalogue pack: `nix run .#pz-vanilla-plus -- <name>`.
+          #
+          # Merged onto the attrset above so this stays ONE attribute
+          # (`apps = { ... } // ...;`). It cannot simply be listed inside the
+          # literal for two reasons: Nix attrsets are not self-recursive without
+          # `rec`, and a `//` continuation line is not a comment — Nix comments
+          # are `#`, while `//` is the integer-division operator.
+          // lib.listToAttrs (
+            map (
+              pack:
+              lib.nameValuePair "pz-${pack}" {
+                type = "app";
+                program = lib.getExe (mkRunner {
+                  srvName = "pz";
+                  modpack = pack;
+                });
               }
-            );
-          };
+            ) modpackNames
+          );
 
           formatter = pkgs.nixfmt-rfc-style;
 
@@ -429,6 +533,128 @@
                 '';
 
             module-eval = moduleEvalResult;
+
+            # ── Does the prep script actually WORK? ───────────────────────────
+            # module-eval only checks that the units are shaped correctly; it never
+            # runs them. This check executes the real prep script against a
+            # pre-seeded server home and asserts the behaviour that is easy to get
+            # wrong and expensive to discover in production:
+            #
+            #   * PZ's world-identity keys (Seed, ResetID, ServerPlayerID) survive;
+            #   * the Nix-rendered base config lands in the .ini;
+            #   * a runtime override (as the standalone runner passes) wins;
+            #   * SandboxVars.lua is written and is shaped like a Lua table;
+            #   * Workshop mods are symlinked, and stale ones unlinked.
+            #
+            # Cheap on purpose: a plain derivation, not a VM. The game binary is
+            # never needed, because the prep script only touches config and links.
+            #
+            # NOTE the shell variable is `srv`, never `name`: in a Nix derivation
+            # `$name` is the DERIVATION's name from the build environment, so using
+            # it here silently points the assertions at a different path than the
+            # one the prep script wrote — a check that passes for the wrong reason.
+            prep-roundtrip =
+              let
+                srv = "roundtrip";
+                server = pz-lib.resolveServer self.modpacks srv (
+                  (serverDefaults srv)
+                  // {
+                    modpack = "vanilla-plus";
+                    settings = {
+                      PVP = true;
+                      PauseEmpty = true;
+                    };
+                  }
+                );
+                prep = pz-prepare.mkPrepScript {
+                  inherit server;
+                  iniBase = pz-prepare.mkIniBase { inherit server; };
+                  name = "pz-prep-roundtrip";
+                };
+              in
+              pkgs.runCommand "pz-prep-roundtrip-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                  ];
+                }
+                ''
+                  # `srv` is a NIX binding, so it must be pushed into the shell
+                  # explicitly. Two traps in one line of thought: `$name` here would
+                  # be the DERIVATION's name from the build environment (not any
+                  # binding), and a Nix-only binding used as `$srv` would simply be
+                  # empty — either way the check would seed and assert against one
+                  # path while the prep script wrote another, and pass for the wrong
+                  # reason.
+                  srv="${srv}"
+                  root="$TMPDIR/pz"
+                  data="$root/data"
+                  server_root="$root/server"
+                  mkdir -p "$data/$srv/Zomboid/Server"
+
+                  # A world that already exists. These keys are PZ's, not ours.
+                  cat > "$data/$srv/Zomboid/Server/$srv.ini" <<'SEED_INI'
+                  Seed=world-seed-abcdef
+                  ResetID=424242
+                  ServerPlayerID=1234567
+                  LastModified=2026-01-01
+                  DefaultPort=11111
+                  SEED_INI
+
+                  # Fake the shared install so the symlink branch has something to
+                  # link to.
+                  mkdir -p "$server_root/steamapps/workshop/content/108600/2625441155/mods"
+                  touch "$server_root/steamapps/workshop/content/108600/2625441155/mods/.keep"
+
+                  # A stale symlink for a mod that is NO LONGER downloaded. The
+                  # prep script must unlink it rather than leave a dangling entry
+                  # PZ would try to load.
+                  stale="$data/$srv/Zomboid/Workshop/content/108600/9999999999"
+                  mkdir -p "$(dirname "$stale")"
+                  ln -s "$server_root/steamapps/workshop/content/108600/9999999999" "$stale"
+
+                  export PZ_DATA_DIR="$data"
+                  export PZ_SERVER_DIR="$server_root"
+                  export PZ_SERVER_NAME="$srv"
+
+                  # Runtime overrides, exactly as the runner passes them.
+                  ${prep}/bin/pz-prep-roundtrip \
+                    "DefaultPort=16299" \
+                    "Map=Rosewood, OR"
+
+                  ini="$data/$srv/Zomboid/Server/$srv.ini"
+                  sandbox="$data/$srv/Zomboid/Server/${srv}_SandboxVars.lua"
+
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  # ── World identity must survive ──────────────────────────────
+                  grep -qx 'Seed=world-seed-abcdef' "$ini" || fail "Seed was lost — the .ini was overwritten, not merged"
+                  grep -qx 'ResetID=424242' "$ini" || fail "ResetID was lost — the world would be renumbered"
+                  grep -qx 'ServerPlayerID=1234567' "$ini" || fail "ServerPlayerID was lost"
+                  grep -qx 'LastModified=2026-01-01' "$ini" || fail "LastModified was lost"
+
+                  # ── Our config landed, and the runtime override won ──────────
+                  grep -qx 'DefaultPort=16299' "$ini" || fail "runtime DefaultPort override did not win (got: $(grep '^DefaultPort=' "$ini" || true))"
+                  grep -qx 'Map=Rosewood, OR' "$ini" || fail "a Map value containing a comma and a space was mangled"
+                  grep -qx 'UDPPort=16262' "$ini" || fail "the Nix-rendered base config did not land (no UDPPort)"
+                  grep -qx 'PVP=true' "$ini" || fail "a server-level setting did not land, or a bool rendered as True"
+                  grep -q '^WorkshopItems=.*2625441155' "$ini" || fail "the modpack's Workshop items are not in WorkshopItems"
+
+                  # ── SandboxVars ──────────────────────────────────────────────
+                  [ -f "$sandbox" ] || fail "no _SandboxVars.lua written"
+                  head -1 "$sandbox" | grep -qx 'SandboxVars = {' || fail "_SandboxVars.lua does not open a SandboxVars table"
+                  tail -1 "$sandbox" | grep -qx '}' || fail "_SandboxVars.lua does not close the table"
+                  grep -qE '^ +Zombies = [0-9]+$' "$sandbox" || fail "the modpack's sandbox vars did not land"
+
+                  # ── Workshop symlinks ───────────────────────────────────────
+                  link="$data/$srv/Zomboid/Workshop/content/108600/2625441155"
+                  [ -L "$link" ] || fail "no symlink for a downloaded Workshop item"
+                  [ -e "$link" ] || fail "the Workshop symlink dangles"
+                  [ ! -e "$stale" ] || fail "a symlink for an undownloaded mod was left behind (would dangle)"
+
+                  echo "prep roundtrip ok: world identity preserved, config merged, sandbox written, mods linked"
+                  touch "$out"
+                '';
           };
         }
       );

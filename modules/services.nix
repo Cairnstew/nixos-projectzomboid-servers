@@ -39,13 +39,20 @@ let
     optionalString
     concatMap
     concatMapStringsSep
-    concatStringsSep
     unique
     sort
     ;
 
   cfg = config.services.project-zomboid-servers;
   pz = import ../lib { inherit lib; };
+
+  # The SAME prep/install scripts the standalone runner uses
+  # (`nix run .#pz-dedicated-server`). One implementation, so a server cannot
+  # behave one way under systemd and another under `nix run` — and so the `.ini`
+  # merge that preserves world identity is written once.
+  prepare = import ../lib/prepare.nix {
+    inherit lib pkgs pz;
+  };
 
   enabledServers = lib.filterAttrs (_: srv: srv.enable) cfg.servers;
   resolved = lib.mapAttrs (name: srv: pz.resolveServer cfg.modpacks name srv) enabledServers;
@@ -61,126 +68,35 @@ let
     unique (concatMap (srv: srv.workshopItems) (lib.attrValues resolved))
   );
 
-  # PZ looks for mods under <server home>/Zomboid/Workshop/content/108600/<id>.
-  # steamcmd populates <serverDir>/steamapps/workshop/content/108600/<id>; we
-  # symlink between them so one download serves every server.
-  workshopSrc = id: "${cfg.serverDir}/steamapps/workshop/content/108600/${id}";
-  workshopDst = name: id: "${cfg.dataDir}/${name}/Zomboid/Workshop/content/108600/${id}";
+  # The Workshop symlinking and the console FIFO path now live in
+  # lib/prepare.nix (shared with the standalone runner) and below respectively.
 
   consoleFifo = name: "${cfg.runDir}/${name}.fifo";
 
   # ── Install / update ───────────────────────────────────────────────────────
   # One shared install serves every server: PZ's binaries are identical, only the
-  # Zomboid home differs. Also downloads every Workshop item.
-  updateScriptText = ''
-    # steamcmd resolves relative paths against HOME unless forced; be explicit so
-    # an ambient HOME cannot land the install somewhere unexpected.
-    export HOME="${cfg.dataDir}"
-    mkdir -p "$HOME"
-
-    steamcmd() {
-      ${lib.getExe cfg.steamcmd} \
-        +force_install_dir "${cfg.serverDir}" \
-        +login anonymous "$@" +quit
-    }
-
-    steamcmd +app_update ${cfg.package.serverAppId or "380870"} validate
-
-    # `$id` is a SHELL loop variable, so the path is assembled by the shell from
-    # a Nix-interpolated root. Calling the `workshopSrc` Nix helper here would
-    # make Nix try to evaluate `id` at eval time, where it does not exist.
-    workshop_root="${cfg.serverDir}/steamapps/workshop/content/108600"
-
-    for id in ${concatStringsSep " " allWorkshopItems}; do
-      if [ -d "$workshop_root/$id" ]; then
-        continue
-      fi
-      echo "project-zomboid: downloading Workshop item $id"
-      steamcmd +workshop_download_item 108600 "$id"
-    done
-  '';
-
-  updateScript = pkgs.writeShellApplication {
-    name = "project-zomboid-install";
-    runtimeInputs = [ cfg.steamcmd ];
-    # Interpolated store paths carry their context automatically, so the
-    # string can be passed straight through.
-    text = updateScriptText;
+  # Zomboid home differs. De-duplicated at eval time across all servers.
+  installScript = prepare.mkInstallScript {
+    steamcmd = cfg.steamcmd;
+    serverAppId = cfg.package.serverAppId or "380870";
+    steamAppId = cfg.package.steamAppId or "108600";
+    workshopItems = allWorkshopItems;
   };
 
   # ── Per-server start-prep ──────────────────────────────────────────────────
-  # Lays down the `.ini` (merged in place — PZ's world identity lives in it), a
-  # fresh SandboxVars lua (fully ours, so rendered to a store file), and the
-  # Workshop mod symlinks.
+  # Delegates to lib/prepare.nix. The dirs come from the unit's Environment
+  # (PZ_DATA_DIR / PZ_SERVER_DIR), which is what lets the very same script serve
+  # the standalone runner, where the data dir is a runtime flag.
   mkStartPre =
     name: srv:
-    let
-      serverHome = "${cfg.dataDir}/${name}";
-      ini = "${serverHome}/Zomboid/Server/${srv.serverName}.ini";
-      sandbox = "${serverHome}/Zomboid/Server/${srv.serverName}_SandboxVars.lua";
-      mergeIni = ../scripts/merge_ini.py;
-
-      # Fully declarative and secret-free, so it can live in the store. This is
-      # also what keeps a multi-line value out of the shell script.
-      sandboxFile = pkgs.writeText "${srv.serverName}_SandboxVars.lua" (
-        pz.renderSandbox {
-          settings = srv.sandbox;
-        }
-      );
-
-      # Values may contain spaces (Map=Muldraugh, KY), so each is shell-escaped;
-      # argv needs no newlines, which keeps the whole thing one line.
-      iniUpdates = concatMapStringsSep " " lib.escapeShellArg (
-        pz.renderIniLines {
-          inherit (srv)
-            settings
-            mods
-            workshopItems
-            whitelist
-            admins
-            ;
-        }
-      );
-    in
-    pkgs.writeShellApplication {
+    prepare.mkPrepScript {
       name = "${unitName name}-prepare";
-      runtimeInputs = [
-        pkgs.coreutils
-        pkgs.python3
-      ];
-      text = ''
-        server_home="${serverHome}"
-        mkdir -p "$server_home/Zomboid/Server" \
-                 "$server_home/Zomboid/Workshop/content/108600" \
-                 "$server_home/Zomboid/Saves/Multiplayer/${srv.serverName}"
-
-        # Merged, NOT overwritten: Seed / ResetID / LastModified / ServerPlayerID
-        # live in this same file, and rewriting it would reset the world on every
-        # start. Only the keys below are touched.
-        python3 ${mergeIni} "${ini}" \
-          ${iniUpdates} \
-          ${optionalString (srv.passwordFile != null) "--password-file ${srv.passwordFile}"}
-
-        # SandboxVars is regenerated by PZ itself, so we own it outright.
-        cp ${sandboxFile} "${sandbox}"
-
-        # Link each Workshop item from the shared install into this server's
-        # home. Redone every start so a newly added mod appears with no manual
-        # step and a removed one is unlinked. Symlinks only, so the shared
-        # download is never touched.
-        ${concatStringsSep "\n" (
-          map (id: ''
-            src="${workshopSrc id}"
-            dst="${workshopDst name id}"
-            if [ -d "$src" ]; then
-              mkdir -p "$(dirname "$dst")"
-              ln -sfn "$src" "$dst"
-            elif [ -L "$dst" ]; then
-              rm -f "$dst"
-            fi
-          '') srv.workshopItems
-        )}
-      '';
+      server = srv;
+      iniBase = prepare.mkIniBase {
+        server = srv;
+        name = "${srv.serverName}.ini";
+      };
+      steamAppId = cfg.package.steamAppId or "108600";
     };
 
   # ── Console backends ───────────────────────────────────────────────────────
@@ -345,7 +261,11 @@ let
         WorkingDirectory = cfg.serverDir;
         Environment = [
           "HOME=${cfg.dataDir}/${name}"
+          # Read by lib/prepare.nix's prep script, which is shared with the
+          # standalone runner.
+          "PZ_DATA_DIR=${cfg.dataDir}"
           "PZ_SERVER_DIR=${cfg.serverDir}"
+          "PZ_SERVER_NAME=${srv.serverName}"
           "PZ_JVM_OPTS=${srv.jvmOpts}"
         ];
 
@@ -505,7 +425,7 @@ let
     name = "project-zomboid-update";
     runtimeInputs = [ pkgs.systemd ];
     text = ''
-      ${updateScriptText}
+      ${installScript}/bin/project-zomboid-install
 
       ${
         if cfg.restartAfterUpdate then
@@ -540,7 +460,14 @@ in
             User = cfg.user;
             Group = cfg.group;
             WorkingDirectory = cfg.dataDir;
-            ExecStart = lib.getExe updateScript;
+            # lib/prepare.nix takes the directories from the environment, which is
+            # what lets the standalone runner reuse the same script with a
+            # runtime --data-dir.
+            Environment = [
+              "PZ_DATA_DIR=${cfg.dataDir}"
+              "PZ_SERVER_DIR=${cfg.serverDir}"
+            ];
+            ExecStart = lib.getExe installScript;
             # A first install pulls the whole game over the network.
             TimeoutStartSec = "45min";
           };
@@ -559,6 +486,10 @@ in
           serviceConfig = {
             Type = "oneshot";
             User = "root";
+            Environment = [
+              "PZ_DATA_DIR=${cfg.dataDir}"
+              "PZ_SERVER_DIR=${cfg.serverDir}"
+            ];
             ExecStart = lib.getExe mkUpdateTimer;
             TimeoutStartSec = "45min";
           };
