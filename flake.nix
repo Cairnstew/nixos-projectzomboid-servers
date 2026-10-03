@@ -79,6 +79,28 @@
           # lib/tests.nix exposes `{ eval, … }`, so take `.eval`.
           eval-config = (import ./lib/tests.nix { lib = nixpkgs.lib; }).eval;
 
+          # The messages of every assertion that FAILED for a given extra config,
+          # as one string. A failing assertion does not abort evaluation — it is
+          # collected in `config.assertions` with `assertion = false` and read back
+          # here — so this is how a check can assert that a guard trips.
+          failedMessages =
+            extra:
+            let
+              evaluated = eval-config {
+                inherit pkgs;
+                config.services.project-zomboid-servers = {
+                  enable = true;
+                  inherit (extra) servers;
+                  # `or { }` rather than `inherit`, because a caller testing only
+                  # `servers` does not pass a `modpacks` key at all.
+                  modpacks = extra.modpacks or { };
+                };
+              };
+            in
+            lib.concatStringsSep "\n---\n" (
+              map (a: a.message) (lib.filter (a: !a.assertion) evaluated.config.assertions)
+            );
+
           # A complete per-server config carrying the same defaults the module's
           # options use, so `pz-lib.resolveServer` merges a pack identically
           # whether the server ends up under systemd or under `nix run`.
@@ -1034,6 +1056,67 @@
                   [ -f "$points" ] || fail "--soft-reset removed the spawn file, which it must not"
 
                   echo "spawn+reset ok: dead keys absent, spawn lua rendered, soft-reset scoped"
+                  touch "$out"
+                '';
+
+            # ── The secret guard actually guards ───────────────────────────────
+            # A security control that is never exercised is a control that does not
+            # work. This proves the assertion FIRES on every route a secret can
+            # take into a store file — `settings`, `sandbox`, and each of a
+            # modpack's two default sets — and, just as importantly, that a config
+            # using `secretFiles` passes cleanly.
+            #
+            # An assertion failure does not throw; it lands in `config.assertions`
+            # with `assertion = false` and the message. So this reads them back
+            # rather than expecting evaluation to abort.
+            secret-guard =
+              pkgs.runCommand "pz-secret-guard-check"
+                {
+                  nativeBuildInputs = [ pkgs.coreutils ];
+                  # Serialised eval results. `passAsFile` rather than
+                  # `builtins.readFile`: the latter cannot realise a derivation
+                  # during pure evaluation.
+                  passAsFile = [ "leaksIni" "leaksSandbox" "leaksPackIni" "leaksPackSandbox" "clean" ];
+                  leaksIni = failedMessages {
+                    servers.foo.settings.RCONPassword = "hunter2";
+                  };
+                  leaksSandbox = failedMessages { servers.foo.sandbox.DiscordToken = "bot"; };
+                  leaksPackIni = failedMessages {
+                    modpacks.bad.defaultSettings.WebhookAddress = "https://example/hook";
+                    servers.foo.modpack = "bad";
+                  };
+                  leaksPackSandbox = failedMessages {
+                    modpacks.bad.defaultSandbox.RCONPassword = "hunter2";
+                    servers.foo.modpack = "bad";
+                  };
+                  clean = failedMessages {
+                    servers.foo.secretFiles.RCONPassword = "/run/secrets/rcon";
+                    servers.foo.passwordFile = "/run/secrets/join";
+                  };
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  expect_guard() {
+                    label="$1"; file="$2"
+                    grep -q 'a secret is set in' "$file" \
+                      || fail "$label did not trip the secret guard"
+                  }
+
+                  expect_clean() {
+                    label="$1"; file="$2"
+                    if [ -s "$file" ]; then
+                      fail "$label should have evaluated cleanly, but reported: $(cat "$file")"
+                    fi
+                  }
+
+                  expect_guard "a secret in settings"        "$leaksIniPath"
+                  expect_guard "a secret in sandbox"         "$leaksSandboxPath"
+                  expect_guard "a secret in a pack defaultSettings" "$leaksPackIniPath"
+                  expect_guard "a secret in a pack defaultSandbox"  "$leaksPackSandboxPath"
+                  expect_clean "a config using secretFiles"  "$cleanPath"
+
+                  echo "secret guard ok: trips on every route, silent when secretFiles is used"
                   touch "$out"
                 '';
 

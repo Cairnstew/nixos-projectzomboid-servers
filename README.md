@@ -57,6 +57,15 @@ Useful flags:
 | `--port` / `--udp-port` / `--rcon-port` | Override the baked-in ports at runtime. |
 | `--jvm-opts "-Xmx8G -Xms4G"` | Heap. Reaches the JVM ahead of the vendor script. |
 | `--set KEY=VALUE` | Any `.ini` key, repeatable. Beats the modpack. |
+| `--secret KEY=PATH` | Read an `.ini` key's value from a file. **Use this, not `--set`, for secrets.** |
+| `--map NAME` | Pin `Map=` instead of deriving it. |
+| `--base-map NAME` | The vanilla map, ordered last. |
+| `--map-priority ID` | Mod id that wins a duplicate-map clash. Repeatable. |
+| `--strict-maps` / `--dedupe-maps` | Fail on a clash / rename losers aside. |
+| `--list-maps` | Print the derived `Map=` and why, then exit. No server needed. |
+| `--extra-arg ARG` | Argument for the server command line. Repeatable. |
+| `--admin-user` + `--admin-pass-file` | Create/update the Build 42 admin login. |
+| `--soft-reset` | Discard world identity, generating a fresh world. |
 | `--no-install` | Skip the steamcmd validate — much faster restarts. |
 | `--print-config` | Write and print the config, then exit. **Needs no game files.** |
 
@@ -152,6 +161,10 @@ Then `systemctl start project-zomboid-main`. The first start downloads the game
 (Steam app 380870) and the pack's Workshop mods — expect several GB and a few
 minutes.
 
+Note there is no `map` in that config, and that is deliberate: `Map=` is derived
+from the maps the installed mods actually ship, in a deterministic order. Set
+`map` only to pin it — see [Maps are derived](#maps-are-derived-and-ordered-deterministically).
+
 A complete, buildable example is in [`examples/single-server`](examples/single-server).
 
 ---
@@ -178,11 +191,182 @@ Namespace: `services.project-zomboid-servers`.
 | `startLimitIntervalSec` / `startLimitBurst` | int | `120` / `5` | Crash-loop bound. |
 | `web.*` | submodule | disabled | ttyd consoles. See below. |
 
-Per server: `name`, `description`, `modpack`, `workshopMods`, `mods`, `map`,
-`defaultPort`, `udpPort`, `rconPort`, `openFirewall`, `public`, `publicName`,
-`maxPlayers`, `settings`, `sandbox`, `open`, `whitelist`, `admins`,
-`passwordFile`, `jvmOpts`, `autoStart`, `restart`, `managementSystem`,
-`hardware`, `extraServiceConfig`, `webConsole`, `port`.
+Per server:
+
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `name` / `description` | str | attr name | `name` drives the `.ini`, lua files and save folder. |
+| `modpack` | str \| null | `null` | Inline `workshopMods`/`mods` are **appended** to the pack's. |
+| `workshopMods` / `mods` | list | `[]` | Workshop ids vs local mod folder names — not interchangeable. |
+| `map` | str \| null | `null` | `null` = derive from installed mods. Semicolon separated. See below. |
+| `baseMap` | str | `Muldraugh, KY` | The vanilla map; always ordered **last**. |
+| `mapOrder` | submodule | see below | Collision policy for derived `Map=`. |
+| `spawn.points` / `spawn.regions` | list | `[]` | Rendered to `<server>_spawnpoints.lua` / `_spawnregions.lua`. |
+| `defaultPort` / `udpPort` | port | `16261` / `16262` | PZ binds **two** UDP ports; both must be unique. |
+| `rconPort` | port | `0` | `0` = RCON off. See the note on 27015 below. |
+| `openFirewall` | bool | `false` | Opens the two UDP ports. |
+| `public` / `publicName` / `maxPlayers` | | `true` / name / `32` | |
+| `settings` / `sandbox` | attrs | `{}` | Any PZ key. **Never put a secret here** — see Secrets. |
+| `secretFiles` | attrsOf path | `{}` | `Key = /path/to/secret`. The only way to set a secret. |
+| `passwordFile` | path \| null | `null` | Sugar for `secretFiles.Password`. Wins if both set. |
+| `adminAccount` | submodule \| null | `null` | Creates the Build 42 admin login. |
+| `whitelist` / `admins` | listOf str | `[]` | **Build 41 only.** Inert on 42 unless `compatibility.build41`. |
+| `compatibility.build41` | bool | `false` | Re-enables `Whitelist=` / `Users=`. |
+| `extraArgs` | listOf str | `[]` | Appended to the server command line. No credentials. |
+| `upnp` | bool | `false` | `UPnP=`. PZ defaults this **true**; see below. |
+| `selfManagedMods` | bool | `true` | Stop PZ rewriting the mod list out from under you. |
+| `softReset` | bool | `false` | Discard world identity, generating a fresh world. Destructive. |
+| `betaBranch` | str \| null | `null` | e.g. `"legacy41"`. One install = one branch (asserted). |
+| `jvmOpts` | str | `-Xmx4G -Xms2G` | Injected **ahead of** the vendor launcher. |
+| `autoStart` / `restart` | bool / str | `true` / `always` | |
+| `managementSystem` / `hardware` / `extraServiceConfig` | submodule / attrs | inherited / `{}` | |
+| `webConsole` / `port` | bool / port \| null | `true` / auto | ttyd console. |
+
+### Maps are derived, and ordered deterministically
+
+`Map=` is the one setting that **cannot** be written down statically. A map exists
+only if some installed mod ships `media/maps/<name>/`, and which mods are installed
+is not known until `steamcmd` has run. So by default `map = null` means *derive it*,
+and `scripts/pz_maps.py` does that at start from what is actually on disk.
+
+The order is load-bearing. PZ resolves `media/maps/<name>` across *every* loaded
+mod, so when two mods ship the same map name the winner is whichever the mod
+loader reaches first — which depends on `Mods=`/`WorkshopItems=` order, and
+therefore on download order. That is non-deterministic, and silently so: the
+server starts fine and the wrong tiles load.
+
+So the sort key is **total**, and every component is a stable comparison of data
+we control — nothing depends on how the filesystem listed a directory:
+
+1. mod maps first, by `(priority, kind, numeric id, mod id, map name)`
+2. the `baseMap` **last**, always — mod maps add new areas rather than patching
+   vanilla tiles, so letting the base map resolve last means any genuine overlap
+   goes in favour of vanilla, which is the direction that cannot corrupt terrain
+   players already know.
+
+```console
+$ nix run .#pz-maps -- --workshop-root ./server/steamapps/workshop/content/108600 \
+    --base-map "Muldraugh, KY" --explain
+pz-maps: warning: map 'West Point, KY' is shipped by 2 mods
+  using: workshop mod 200
+  ignored: workshop mod 300
+pz-maps: ordering:
+  Louisville, KY: from workshop mod 100 (rank (0, 0, 100, '100', ...))
+  West Point, KY: from workshop mod 200 (rank (0, 0, 200, '200', ...))
+  Muldraugh, KY: base map, always ordered last
+Louisville, KY;West Point, KY;Muldraugh, KY
+```
+
+Also available as `pz-dedicated-server --list-maps`, which is the thing to reach
+for when a mod is not showing up on the map.
+
+Note the separators differ per key, which is a reliable source of silent
+misconfiguration: `Map=` is **semicolon** separated, `Mods=` is **comma**
+separated, and `WorkshopItems=` is **semicolon** separated.
+
+| `mapOrder` | Default | Notes |
+| --- | --- | --- |
+| `enable` | `true` | Forced off when `map` is set — an explicit value wins outright. |
+| `priority` | `[]` | Mod ids that win duplicate-map clashes and order first, in order. |
+| `strict` | `false` | Refuse to start on any clash. For CI, or once a pack is known clean. |
+| `dedupe` | `false` | Rename losers to `*.pz-duplicate`. **Writes to the shared install**, so off by default; recoverable by renaming back. |
+
+Set `map` explicitly to pin the list and turn detection off — which you must do
+if your mods conflict, or you want a map no mod ships. A mod shipping the
+`baseMap`'s own name is reported as an **error**, because it shadows vanilla
+terrain.
+
+For context: the most popular server-config editor for the game — Workshop item
+2725216703, "Mod Manager: Server", ~1.4M subscribers — documents that it
+explicitly does *not* manage maps or spawn regions, leaving them to be edited by
+hand. Deriving them is most of what this module does that a GUI cannot.
+
+### Secrets
+
+The rendered base `.ini` is a `pkgs.writeText` store path, which is mode `444`
+and world-readable. Anything in `settings` is therefore **not a secret** — it is a
+plaintext file any local user can `grep` out of `/nix/store`. `RCONPassword`,
+`DiscordToken` and `WebhookAddress` are all reachable that way.
+
+So use `secretFiles`, which carries paths rather than values:
+
+```nix
+services.project-zomboid-servers.servers.foo = {
+  passwordFile = config.age.secrets.pz-join.path;         # → Password=
+  secretFiles = {
+    RCONPassword = config.age.secrets.pz-rcon.path;
+    DiscordToken = config.age.secrets.pz-discord.path;
+  };
+};
+```
+
+The values are read at start by `merge_ini.py` and written straight into the
+key. Evaluation **fails** if one of those keys appears in `settings` or
+`sandbox`, and `renderIniLines` filters them independently, so a bare module
+import cannot leak one either. The `secrets-not-in-store` check enforces this.
+
+`extraArgs` is the same trap in a different place — it is baked into a
+world-readable unit file, so no credentials there either.
+
+### Admin accounts
+
+Build 42 has **no `.ini` key** for the admin login: it is a row in
+`Zomboid/db/<servername>.db`, and the only supported way to write it is the
+`-adminusername` / `-adminpassword` command-line pair.
+
+```nix
+adminAccount = {
+  username = "seanc";
+  passwordFile = config.age.secrets.pz-admin.path;
+};
+```
+
+**Known limitation:** a process argument is visible in `ps` for the lifetime of
+the server. PZ offers no alternative and every other deployment shares the
+exposure, but the password is at least read from a file rather than baked into
+the unit, so it never reaches `systemctl cat` or the Nix store.
+
+`whitelist` and `admins` are **Build 41 only**. `Whitelist=` and `Users=` are
+not documented Build 42 ini keys, so writing them produced a config that listed
+admins and a whitelist and did nothing. They are now gated behind
+`compatibility.build41 = true`, off by default.
+
+### Spawn points and regions
+
+`<server>_spawnpoints.lua` and `<server>_spawnregions.lua` are two of the four
+files PZ lists as necessary for a server to work. Both are generated by PZ when
+absent, so the module writes them only when configured, and **removes** them when
+emptied — otherwise dropping the option would silently do nothing to a running
+server.
+
+```nix
+spawn = {
+  points = [
+    { pos = [ 12067 6801 0 ]; }                    # profession defaults to unemployed
+    { pos = [ 5000 5000 0 ]; profession = "engineer"; }
+  ];
+  regions = [
+    { name = "Mod Spawn"; file = "media/maps/ModName/spawnpoints.lua"; }
+  ];
+};
+```
+
+`pos` is a world coordinate triple. So, for the avoidance of doubt, is PZ's own
+`SpawnPoint=` ini key: `SpawnPoint=0,0,0` is the origin, not a preset and not an
+index. Profession keys are emitted bare when they are valid Lua identifiers
+(matching PZ's own generated file) and bracket-quoted otherwise, and the
+`spawn-and-reset` check parses the result with a real Lua interpreter — two
+syntax errors got through grep before that existed.
+
+### Two defaults that differ from PZ
+
+- **`upnp = false`.** PZ defaults `UPnP=true`. Automatic port forwarding is a poor
+  default for a managed host: it silently punches holes in a firewall that
+  `openFirewall` and the operator's own rules deliberately keep closed, and it
+  cannot work behind a container at all. Use `openFirewall`.
+- **`rconPort` default is `0`** (off), and when you do enable it the flake's
+  suggested port is **27016**, not PZ's 27015 — that is Minecraft's default, and
+  this module is meant to sit alongside a Minecraft server.
 
 ---
 
@@ -194,8 +378,9 @@ project-zomboid-install.service     (oneshot, RemainAfterExit)
   └─ steamcmd +workshop_download_item 108600 <id>…   (de-duplicated)
 
 project-zomboid-foo.service        (one per enabled server)
-  ├─ ExecStartPre → writes Zomboid/Server/<name>.ini   (MERGED in place)
-  │                 writes Zomboid/Server/<name>_SandboxVars.lua (owned)
+  ├─ ExecStartPre → merges Zomboid/Server/<name>.ini   (world identity kept)
+  │                 resolves Map= from the installed mods  (deterministic)
+  │                 writes _SandboxVars.lua, _spawnpoints.lua, _spawnregions.lua
   │                 links Zomboid/Workshop/content/108600/<id>
   ├─ ExecStart     → project-zomboid-server <name>  (the launcher package)
   └─ ExecStop      → writes `save`, waits, writes `quit` down the console FIFO
@@ -214,6 +399,21 @@ updates only the keys the module owns and leaves every other line untouched.
 
 `_SandboxVars.lua` is the opposite case: PZ regenerates it entirely, so the module
 owns it outright and renders it to a store file.
+
+### Why `Map=` is the one thing derived at runtime
+
+Every other value is catalogue data and stays in Nix. `Map=` cannot: a map exists
+only if an installed mod ships it, and the mod list on disk is not known until
+`steamcmd` has run. `scripts/pz_maps.py` resolves it at start, in a total order
+so the result is reproducible. See "Maps are derived" above.
+
+### Why generated files are `install`ed, not `cp`ed
+
+A store file is mode `444`, and `cp` gives a new file the source's permissions —
+so the destination was created read-only and the **second** start failed with
+`cp: cannot create regular file: Permission denied`. In production PZ rewrites
+`_SandboxVars.lua` in between and masks it, which is exactly why it survived.
+`install -m 0644` unlinks first, so it is correct regardless of the current mode.
 
 ### Why `steam_appid.txt` is written by the launcher
 
@@ -253,10 +453,14 @@ Things that bite, recorded so they are not re-learned:
 
 - **`DoLuaChecksum = true` has a Linux false-positive bug** that blocks clients
   from joining. Both example packs set it to `false`.
-- **Admin accounts live in SQLite**, at `Zomboid/db/<servername>.db`, and the
-  first-run password is an **interactive prompt** — not an `.ini` key. `admins`
-  grants in-game admin; it does not create the login. If you need a headless
-  admin, write the SQLite row yourself.
+- **Admin accounts live in SQLite**, at `Zomboid/db/<servername>.db`, and there
+  is no `.ini` key for them — only the `-adminusername`/`-adminpassword` pair.
+  Use `adminAccount`; see "Admin accounts" above for the `ps` caveat.
+- **`Whitelist=` and `Users=` are not Build 42 ini keys.** They are Build 41
+  leftovers; the whitelist is a table in the same SQLite database. They are
+  written only under `compatibility.build41`.
+- **`SpawnPoint=` is a world coordinate triple** (`x,y,z`), not a preset or an
+  index. `SpawnPoint=2` means two metres from the origin.
 - The stable build at time of writing is **42.21.0**; wiki pages still target
   42.20.x, so flag names move between them.
 - `mod.info` ships with CRLF, so validating a downloaded mod with a shell `grep`
@@ -311,14 +515,25 @@ Inspect a pack's effective config without downloading anything:
 nix run .#pz-vanilla-plus -- --data-dir ./d --no-install --print-config myserver
 ```
 
-Three checks:
+The checks:
 
 | Check | What it proves |
 | --- | --- |
 | `launcher` | The wrapper builds — `writeShellApplication` means shellcheck runs at build time, so a shell error fails the build. |
 | `modpack-catalogue` | Every pack in `modpacks/` is well-formed plain data. |
 | `module-eval` | Two configurations (one plain, one with web consoles + tmux) produce the right units, ports and Exec paths. |
-| `prep-roundtrip` | Runs the real prep script against a seeded world and asserts the merge preserves world identity, that runtime overrides win, and that mods are linked/unlinked correctly. |
+| `prep-roundtrip` | Runs the real prep script against a seeded world: the merge preserves world identity, runtime overrides win, SandboxVars is written, mods are linked and stale ones unlinked. |
+| `secrets-not-in-store` | No secret value appears in any rendered store file, and `secretFileArgs` references paths only. |
+| `secret-guard` | The assertion actually **fires** — on a secret in `settings`, in `sandbox`, in a modpack's `defaultSettings` and in its `defaultSandbox` — and stays silent for a config using `secretFiles`. |
+| `spawn-and-reset` | The dead Build 42 keys are absent (and present under `build41`), spawn lua renders, **is parsed by a real Lua interpreter**, and `--soft-reset` is scoped to the identity keys. |
+| `map-ordering` | Two trees built in opposite orders give identical `Map=`; a non-map directory never leaks in; a duplicate is reported, deterministic and overridable; `--strict` fails; base-map shadowing is an error. |
+| `map-pin-clean` | Pinning `Map=` suppresses detection without passing an empty argument. |
+
+Four of those exist because they caught a real bug rather than because the
+behaviour was speculative — the store-mode-444 `cp`, the `${v+$v}` argument, the
+empty-argument quoting trap, and the missing comma in the Lua table. That is the
+argument for executing the prep script in a check at all: every one of those is
+invisible to `nix flake check --no-build` and to reading the generated file.
 
 `module-eval` is the interesting one. It asserts in Nix — not shell — that every
 server got a service *and* a console socket, that `ExecStart`/`ExecStartPre`/`ExecStop`
