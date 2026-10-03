@@ -358,6 +358,22 @@ index. Profession keys are emitted bare when they are valid Lua identifiers
 `spawn-and-reset` check parses the result with a real Lua interpreter — two
 syntax errors got through grep before that existed.
 
+### Keys deliberately not given first-class options
+
+A few keys are reachable through `settings` but have no dedicated option,
+because they could not be verified against an authoritative source:
+
+- **`STEAMPORT1` / `STEAMPORT2`** appear in at least one community
+  implementation's environment template but are **absent from the Build 42
+  ini key list**. Rather than guess, they are left as plain `settings` keys —
+  reachable if you need them, but not blessed with an option whose name would
+  imply the module knows what they do.
+- **`MIN_MEMORY` / `MAX_MEMORY`** in the same template are JVM heap sizing,
+  which this module already exposes properly as `jvmOpts`.
+
+If you set one of these and it does not appear to take effect, that is the
+reason: it is not a documented key, so the game may ignore it.
+
 ### Two defaults that differ from PZ
 
 - **`upnp = false`.** PZ defaults `UPnP=true`. Automatic port forwarding is a poor
