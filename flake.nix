@@ -8,10 +8,21 @@
   outputs =
     { self, nixpkgs }:
     let
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-      ];
+      # x86_64-linux ONLY, deliberately.
+      #
+      # `aarch64-linux` used to be declared here, which was wrong: the dedicated
+      # server is a Steamworks title with no ARM Linux build, so `steamcmd` and
+      # `steam-run` cannot be instantiated there and evaluating
+      # `packages.aarch64-linux.project-zomboid-server` fails with "i686 Linux
+      # package set can only be used with the x86 family". That made
+      # `nix flake check --all-systems` fail, and would have broken any CI that
+      # uses it.
+      #
+      # An ARM host is still fine: consume this module there and point
+      # `package` at an x86_64 build under emulation, or run the server
+      # elsewhere. What is not fine is advertising an output that cannot
+      # evaluate.
+      systems = [ "x86_64-linux" ];
       # Project Zomboid is a Steamworks title: steamcmd, steam-run and the
       # launcher wrapper are all unfree. Import nixpkgs with `allowUnfree` for
       # every system up front, so neither this flake's own checks nor a consumer
@@ -1076,7 +1087,13 @@
                   # Serialised eval results. `passAsFile` rather than
                   # `builtins.readFile`: the latter cannot realise a derivation
                   # during pure evaluation.
-                  passAsFile = [ "leaksIni" "leaksSandbox" "leaksPackIni" "leaksPackSandbox" "clean" ];
+                  passAsFile = [
+                    "leaksIni"
+                    "leaksSandbox"
+                    "leaksPackIni"
+                    "leaksPackSandbox"
+                    "clean"
+                  ];
                   leaksIni = failedMessages {
                     servers.foo.settings.RCONPassword = "hunter2";
                   };
