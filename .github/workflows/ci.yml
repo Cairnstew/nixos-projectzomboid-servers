@@ -67,7 +67,15 @@ jobs:
       # "permission denied", and because that produces empty output it would
       # judge every file clean, i.e. check nothing.
       - name: Resolve the formatter
-        run: echo "FMT=$(nix eval --raw .#formatter.x86_64-linux.outPath)/bin/nixfmt" >> "$GITHUB_ENV"
+        run: |
+          # `nix build --print-out-paths` REALISES the store path.
+          # `nix eval --raw .#….outPath` only computes the path as a string --
+          # it does not build anything. On a fresh runner nothing has built
+          # nixfmt yet, so the directory is absent and the -x guard in the next
+          # step trips with "formatter not executable". --no-link keeps the
+          # result symlink out of the worktree.
+          out="$(nix build .#formatter.x86_64-linux --no-link --print-out-paths)"
+          echo "FMT=$out/bin/nixfmt" >> "$GITHUB_ENV"
 
       - name: nixfmt
         run: |
