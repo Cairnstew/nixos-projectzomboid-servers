@@ -485,7 +485,22 @@ let
   };
 in
 {
-  config = mkIf cfg.enable {
+  # `cfg.package != null` as well as `cfg.enable`, and the reason is diagnostic.
+  #
+  # Every unit below reaches the launcher through `lib.getExe cfg.package`, so
+  # with `package` unset the evaluation dies INSIDE this file with
+  #
+  #   lib.meta.getExe': The first argument is of type null, but it should be a
+  #   derivation instead
+  #
+  # — thrown while building `systemd.services.<name>.serviceConfig`, which is
+  # evaluated before anyone can read `config.assertions`. So the module's own
+  # assertion explaining the fix never gets a chance to appear.
+  #
+  # Defining no units at all when `package` is missing lets evaluation finish, so
+  # the one message that says what to do is the one that gets reported. The
+  # resulting state (units absent) is already what the config asked for.
+  config = mkIf (cfg.enable && cfg.package != null) {
     # One place for every unit, so nothing can shadow or duplicate.
     systemd.services = mkMerge [
       # The install unit the servers require. Defined HERE, in the same file, so

@@ -118,12 +118,22 @@ in
           # module file (bypassing the wrapper) leaves it null.
           assertion = cfg.package != null;
           message = ''
-            services.project-zomboid-servers.package is null.
+            services.project-zomboid-servers.package is null, so no launcher
+            package is available and no server units were defined.
 
-            Import the module via the flake —
-            `inputs.project-zomboid-servers.nixosModules.project-zomboid-servers` —
-            so the launcher package can be supplied. Setting `package` yourself
-            also works.
+            The module file cannot name its own package, because a flake input's
+            module scope has no path back to its flake. Import it through one of
+            the entry points that fills `package` in for you:
+
+              flake       inputs.project-zomboid-servers.nixosModules.project-zomboid-servers
+              non-flake   (import (builtins.fetchTarball "…")).nixosModules.default
+
+            Or set it yourself:
+
+              package = pkgs.project-zomboid-server;   # needs this flake's overlay
+
+            Also note that Project Zomboid is unfree, so `allowUnfree` must be
+            true in your nixpkgs config.
           '';
         }
 

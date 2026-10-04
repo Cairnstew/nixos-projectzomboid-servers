@@ -351,8 +351,17 @@
 
               # Each failed assertion becomes its own failure line, with the
               # module's own message — which is the whole point of reading them.
+              #
+              # `optionals … [ … ]`, NOT `optionalString`: this list is `++`-ed
+              # into `failures` below, so every element must itself be a LIST.
+              # `lib.concatMap` over `optionalString` looks correct and is not —
+              # `concatMap` is `concat . map`, and `concat` expects a list. With
+              # no failures `concat [ ]` returns `[]` without complaint, so the
+              # bug hides until the day an assertion fails, at which point the
+              # check dies with "expected a list but found a string" instead of
+              # printing the message it exists to print.
               assertionFailures = lib.concatMap (
-                a: lib.optionalString (!a.assertion) "assertion failed: ${a.message}"
+                a: lib.optionals (!a.assertion) [ "assertion failed: ${a.message}" ]
               ) failedAssertions;
 
               staticFailures = [
@@ -613,6 +622,146 @@
                 '';
 
             module-eval = moduleEvalResult;
+
+            # ── The non-flake entry point actually works ──────────────────────
+            # `default.nix` is what a consumer without flakes imports, and it was
+            # entirely broken: the top level was a function of `{ flake }`, so
+            # `(import (builtins.fetchTarball …)).nixosModules.default` — the
+            # command the file's own comment advertised — failed with "expected a
+            # set but found a function". It stayed broken because nothing in this
+            # flake referenced it, so `nix flake check` was blind to it.
+            #
+            # This check imports it the way such a consumer does and asserts the
+            # configuration comes out right. Only the parts that do NOT need
+            # `<nixpkgs>` are reachable here: pure flake evaluation cannot look up
+            # a channel path ("cannot look up '<nixpkgs>' in pure evaluation
+            # mode"), so `modpacks` and `lib` — which take their `lib` from
+            # `import <nixpkgs>` — are deliberately left to `modpack-catalogue`
+            # and the prep checks, which exercise the same code through the
+            # flake. The module is the part that was actually broken, and the
+            # part a consumer cannot work around.
+            nonflake-entry =
+              let
+                nf = import ./default.nix;
+
+                # `nixpkgs.lib.nixosSystem` directly rather than this flake's
+                # `eval-config` helper: the helper injects its own `package`
+                # `mkDefault`, which would collide with the one `default.nix`
+                # supplies — two `mkDefault`s at one priority. That is also
+                # exactly the path a real consumer takes.
+                evaluated = nixpkgs.lib.nixosSystem {
+                  system = pkgs.stdenv.hostPlatform.system;
+                  modules = [
+                    nf.nixosModules.default
+                    {
+                      # Unfree is already on in `pkgs`; passing it as an
+                      # externally created instance also avoids NixOS's
+                      # "configures nixpkgs with an externally created instance"
+                      # assertion, which is what a real non-flake config does.
+                      nixpkgs.pkgs = pkgs;
+                      boot.loader.grub.enable = false;
+                      fileSystems."/" = {
+                        device = "/dev/disk/by-label/nixos";
+                        fsType = "ext4";
+                      };
+                      system.stateVersion = "25.05";
+                      services.project-zomboid-servers = {
+                        enable = true;
+                        dataDir = "/var/lib/project-zomboid";
+                        servers.plain = { };
+                      };
+                    }
+                  ];
+                };
+
+                cfg = evaluated.config.services.project-zomboid-servers;
+                services = evaluated.config.systemd.services;
+                sockets = evaluated.config.systemd.sockets;
+                sc = services.project-zomboid-plain.serviceConfig or { };
+
+                rawAssertions = evaluated.config.assertions or [ ];
+                assertions =
+                  if builtins.isList rawAssertions then rawAssertions else lib.attrValues rawAssertions;
+                # A LIST, because these get `++`-ed into the `problems` list below —
+                # so it has to be built with `optionals` (which yields a list),
+                # not `optionalString` (which yields a string) and not
+                # `concatMapStringsSep` (also a string).
+                #
+                # `lib.concatMap` over `optionalString` looks right and is wrong:
+                # `concatMap` = `concat . map`, and `concat` wants each element to
+                # be a list. With no failures `concat [ ]` never trips over it,
+                # so the bug stays hidden until an assertion actually fails — the
+                # exact moment the check most needs to explain itself.
+                failedAssertions = lib.concatMap (a: lib.optionals (!a.assertion) [ a.message ]) (
+                  lib.filter (a: !a.assertion) assertions
+                );
+
+                problems =
+                  lib.filter (s: s != null && s != "") (
+                    [
+                      # The attrset shape is the whole point: selecting
+                      # `.nixosModules` off an `import` is impossible if the top
+                      # level is a function.
+                      (lib.optionalString (
+                        !builtins.isAttrs nf
+                      ) "default.nix does not evaluate to an attrset, so `(import (fetchTarball …)).nixosModules.default` cannot work")
+
+                      (lib.optionalString (
+                        !(nf ? nixosModules && nf ? modpacks && nf ? overlay && nf ? lib)
+                      ) "default.nix is missing one of nixosModules / modpacks / overlay / lib")
+
+                      # An overlay is `final: _prev:` — TWO arguments, because
+                      # nixpkgs passes both. Applying one by hand
+                      # (`(import ./overlay.nix) pkgs`) returns a partially
+                      # applied function, which then fails much later and far
+                      # from the cause ("expected a set but found a function"
+                      # pointing at the overlay's own body).
+                      #
+                      # Asserted behaviourally rather than by inspecting the
+                      # signature: `builtins.functionArgs` cannot see plain
+                      # arguments at all (it reports `{}` for `x: x`), but
+                      # over-applying is observable — applying to ONE argument
+                      # must still yield a function.
+                      (lib.optionalString (
+                        !(builtins.isFunction nf.overlay)
+                        || !(builtins.isFunction (nf.overlay pkgs))
+                      ) "overlay is not a two-argument (final, _prev) function")
+
+                      (lib.optionalString (
+                        !(builtins.isFunction nf.nixosModules.default)
+                        || !(builtins.isFunction nf.nixosModules.project-zomboid-servers)
+                      ) "nixosModules does not expose two module functions")
+
+                      # `package` defaults to null in modules/options.nix because
+                      # that file cannot reach the flake; default.nix is what
+                      # fills it in for a non-flake consumer. Without this the
+                      # module's own assertion fires and the consumer is told to
+                      # set `package` — for a package this project ships.
+                      (lib.optionalString (cfg.package == null) "package was not supplied, so a non-flake consumer would have to set it by hand")
+
+                      (lib.optionalString (
+                        !(services ? project-zomboid-plain)
+                      ) "no project-zomboid-plain unit")
+                      (lib.optionalString (!(sockets ? project-zomboid-plain)) "no console socket for plain")
+                      (lib.optionalString (!(services ? project-zomboid-install)) "no project-zomboid-install unit")
+                      (lib.optionalString (
+                        !(lib.hasPrefix "/nix/store/" (sc.ExecStart or ""))
+                      ) "ExecStart is not an absolute store path")
+                    ]
+                    ++ failedAssertions
+                  );
+              in
+              if problems == [ ] then
+                pkgs.runCommand "pz-nonflake-entry-check" { } ''
+                  echo "non-flake entry ok: default.nix is an attrset, supplies package, produces working units"
+                  touch "$out"
+                ''
+              else
+                throw ''
+                  default.nix (the non-flake entry point) is broken:
+
+                    ${lib.concatStringsSep "\n" (map (p: "  - ${p}") problems)}
+                '';
 
             # ── Does the prep script actually WORK? ───────────────────────────
             # module-eval only checks that the units are shaped correctly; it never
