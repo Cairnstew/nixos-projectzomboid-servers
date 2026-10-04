@@ -1,0 +1,140 @@
+name: ci
+
+# Everything the project asserts about itself, on every push. `nix flake check`
+# is the whole gate: it evaluates both module entry points, builds the launcher,
+# and runs the checks that execute the real prep script against a seeded world.
+#
+# The flake's `systems` list is `x86_64-linux` only, and `--all-systems` is used
+# anyway: it is what catches a bad `systems` list, because a check that silently
+# does not run looks identical to a check that passes.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  # Lets a maintainer confirm the gate is real without pushing a commit.
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  flake-check:
+    name: nix flake check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+            experimental-features = nix-command flakes
+
+      - name: Check the example too
+        # The example is a separate flake with its own lock, so the parent's
+        # `nix flake check` never looks at it — and it is the only thing that
+        # exercises the real consumer path end to end.
+        run: nix flake check ./examples/single-server
+
+      - name: flake check
+        run: nix flake check --all-systems --print-build-logs
+
+  formatting:
+    name: nixfmt / deadnix / statix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+            experimental-features = nix-command flakes
+
+# `nix fmt` is deliberately NOT used: `pkgs.nixfmt-rfc-style` is deprecated
+      # in current nixpkgs and fails on <stdin> with "unexpected end of input".
+      # That is upstream breakage, reproducible on an untouched checkout, and it
+      # would take the whole job down for a reason that has nothing to do with
+      # this repository. The formatter binary is invoked per file instead.
+      #
+      # NB `formatter.<system>.outPath` is the package ROOT, not the binary --
+      # it is `$outPath/bin/nixfmt`. Using outPath directly fails with
+      # "permission denied", and because that produces empty output it would
+      # judge every file clean, i.e. check nothing.
+      - name: Resolve the formatter
+        run: echo "FMT=$(nix eval --raw .#formatter.x86_64-linux.outPath)/bin/nixfmt" >> "$GITHUB_ENV"
+
+      - name: nixfmt
+        run: |
+          [ -x "$FMT" ] || { echo "::error::formatter not executable: $FMT"; exit 1; }
+          rc=0
+          total=0
+          while IFS= read -r f; do
+            total=$((total + 1))
+            # Both streams, and the exit code: a file that does not PARSE makes
+            # nixfmt write to stderr and exit non-zero, printing nothing on
+            # stdout. Testing only stdout would call that file formatted.
+            if ! out="$("$FMT" -- "$f" 2>&1)" || [ -n "$out" ]; then
+              echo "::error file=$f::not nixfmt-clean"
+              [ -n "$out" ] && echo "$out" | head -20
+              rc=1
+            fi
+          done < <(find . -name '*.nix' -not -path './.git/*')
+          # Guard against the loop finding no files at all, which would pass.
+          [ "$total" -ge 10 ] || { echo "::error::only found $total .nix files"; exit 1; }
+          echo "checked $total .nix files"
+          exit $rc
+
+      - name: deadnix
+        run: nix run nixpkgs#deadnix -- --fail .
+
+      # Advisory, not a gate. statix currently reports 42 findings across the
+      # codebase (mostly "assignment instead of inherit"), all pre-existing.
+      # Turning that into a hard gate would mean a 42-item style cleanup riding
+      # along with unrelated work, so it is reported and left visible instead.
+      - name: statix (advisory)
+        continue-on-error: true
+        run: |
+          nix run nixpkgs#statix -- check . \
+            || echo "::warning::statix reported findings (pre-existing; not gating)"
+
+      - name: python compiles
+        run: |
+          nix shell nixpkgs#python3 -c python3 -m py_compile scripts/*.py
+
+  links:
+    name: documentation links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Cheap, and it catches the most common documentation rot: a section
+      # renamed without updating the link that points at it.
+      #
+      # Process substitution, not `find … | while`, throughout: a pipeline puts
+      # the loop body in a SUBSHELL, so a `status=1` set inside it is discarded
+      # and the step passes while reporting errors. That is the worst possible
+      # failure for a check.
+      - name: Relative links resolve
+        run: |
+          rc=0
+          while IFS= read -r md; do
+            dir="$(dirname "$md")"
+            # Inline links only, to relative paths.
+            while IFS= read -r target; do
+              case "$target" in
+                http*|mailto:*|"") continue ;;
+              esac
+              if [ ! -e "$dir/$target" ]; then
+                echo "::error file=$md::broken link -> $target"
+                rc=1
+              fi
+            done < <(grep -oE '\]\([^)#][^)]*\)' "$md" \
+                     | sed -E 's/^\]\(//; s/\)$//; s/#.*$//')
+          done < <(find . -name '*.md' -not -path './.git/*')
+          exit $rc

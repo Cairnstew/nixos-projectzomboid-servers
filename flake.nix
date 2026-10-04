@@ -623,6 +623,68 @@
 
             module-eval = moduleEvalResult;
 
+            # ── The option reference is complete ───────────────────────────────
+            # A reference that has silently fallen behind the module is worse than
+            # no reference: a consumer reads it, concludes an option does not
+            # exist, and works around it. `docs/options.md` is therefore checked
+            # against `modules/options.nix`.
+            #
+            # Name-level, by extracting `name = mkOption` / `mkEnableOption` from
+            # the source with grep. Deliberately not generated from the evaluated
+            # option tree: options inside an `attrsOf` submodule (`servers.*`,
+            # `modpacks.*`, `web.*`) are not statically enumerable — `getSubOptions`
+            # and `getSubModules` both refuse to cooperate — so a generated
+            # reference could not cover the per-server options, which are most of
+            # them.
+            #
+            # One direction only: every DECLARED option must be documented. The
+            # reverse is not checked, because option names in prose ("`port`",
+            # "`name`") cannot be told apart from option references reliably.
+            options-documented =
+              pkgs.runCommand "pz-options-documented-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                  ];
+                  OPTIONS_NIX = ./modules/options.nix;
+                  OPTIONS_DOC = ./docs/options.md;
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  # Every declaration in the source, deduplicated.
+                  declared="$(grep -oE '^[[:space:]]*[A-Za-z][A-Za-z0-9_.-]*[[:space:]]*=[[:space:]]*mk(Option|EnableOption)' \
+                    "$OPTIONS_NIX" \
+                    | sed -E 's/^[[:space:]]*([A-Za-z][A-Za-z0-9_.-]*)[[:space:]]*=.*/\1/' \
+                    | sort -u)"
+
+                  count="$(printf '%s\n' "$declared" | grep -c . || true)"
+                  # A regex change that matches nothing would make this check
+                  # pass for the wrong reason, which is the failure mode a
+                  # completeness check cannot afford.
+                  [ "$count" -ge 60 ] \
+                    || fail "only $count option declarations were found in options.nix -- has the declaration style changed? This check would pass vacuously."
+
+                  missing=""
+                  for opt in $declared; do
+                    grep -qF -- "$opt" "$OPTIONS_DOC" || missing="$missing $opt"
+                  done
+
+                  if [ -n "$missing" ]; then
+                    fail "options declared in modules/options.nix but absent from docs/options.md:$missing"
+                  fi
+
+                  # The document must actually be the reference, not a stub.
+                  grep -q 'servers.<name>' "$OPTIONS_DOC" \
+                    || fail "docs/options.md has no servers.<name> section"
+                  grep -q 'services.project-zomboid-servers' "$OPTIONS_DOC" \
+                    || fail "docs/options.md never names the option namespace"
+
+                  echo "options documented ok: $count declarations, all present in docs/options.md"
+                  touch "$out"
+                '';
+
             # ── The non-flake entry point actually works ──────────────────────
             # `default.nix` is what a consumer without flakes imports, and it was
             # entirely broken: the top level was a function of `{ flake }`, so
@@ -680,8 +742,7 @@
                 sc = services.project-zomboid-plain.serviceConfig or { };
 
                 rawAssertions = evaluated.config.assertions or [ ];
-                assertions =
-                  if builtins.isList rawAssertions then rawAssertions else lib.attrValues rawAssertions;
+                assertions = if builtins.isList rawAssertions then rawAssertions else lib.attrValues rawAssertions;
                 # A LIST, because these get `++`-ed into the `problems` list below —
                 # so it has to be built with `optionals` (which yields a list),
                 # not `optionalString` (which yields a string) and not
@@ -696,60 +757,58 @@
                   lib.filter (a: !a.assertion) assertions
                 );
 
-                problems =
-                  lib.filter (s: s != null && s != "") (
-                    [
-                      # The attrset shape is the whole point: selecting
-                      # `.nixosModules` off an `import` is impossible if the top
-                      # level is a function.
-                      (lib.optionalString (
-                        !builtins.isAttrs nf
-                      ) "default.nix does not evaluate to an attrset, so `(import (fetchTarball …)).nixosModules.default` cannot work")
+                problems = lib.filter (s: s != null && s != "") (
+                  [
+                    # The attrset shape is the whole point: selecting
+                    # `.nixosModules` off an `import` is impossible if the top
+                    # level is a function.
+                    (lib.optionalString (!builtins.isAttrs nf)
+                      "default.nix does not evaluate to an attrset, so `(import (fetchTarball …)).nixosModules.default` cannot work"
+                    )
 
-                      (lib.optionalString (
-                        !(nf ? nixosModules && nf ? modpacks && nf ? overlay && nf ? lib)
-                      ) "default.nix is missing one of nixosModules / modpacks / overlay / lib")
+                    (lib.optionalString (
+                      !(nf ? nixosModules && nf ? modpacks && nf ? overlay && nf ? lib)
+                    ) "default.nix is missing one of nixosModules / modpacks / overlay / lib")
 
-                      # An overlay is `final: _prev:` — TWO arguments, because
-                      # nixpkgs passes both. Applying one by hand
-                      # (`(import ./overlay.nix) pkgs`) returns a partially
-                      # applied function, which then fails much later and far
-                      # from the cause ("expected a set but found a function"
-                      # pointing at the overlay's own body).
-                      #
-                      # Asserted behaviourally rather than by inspecting the
-                      # signature: `builtins.functionArgs` cannot see plain
-                      # arguments at all (it reports `{}` for `x: x`), but
-                      # over-applying is observable — applying to ONE argument
-                      # must still yield a function.
-                      (lib.optionalString (
-                        !(builtins.isFunction nf.overlay)
-                        || !(builtins.isFunction (nf.overlay pkgs))
-                      ) "overlay is not a two-argument (final, _prev) function")
+                    # An overlay is `final: _prev:` — TWO arguments, because
+                    # nixpkgs passes both. Applying one by hand
+                    # (`(import ./overlay.nix) pkgs`) returns a partially
+                    # applied function, which then fails much later and far
+                    # from the cause ("expected a set but found a function"
+                    # pointing at the overlay's own body).
+                    #
+                    # Asserted behaviourally rather than by inspecting the
+                    # signature: `builtins.functionArgs` cannot see plain
+                    # arguments at all (it reports `{}` for `x: x`), but
+                    # over-applying is observable — applying to ONE argument
+                    # must still yield a function.
+                    (lib.optionalString (
+                      !(builtins.isFunction nf.overlay) || !(builtins.isFunction (nf.overlay pkgs))
+                    ) "overlay is not a two-argument (final, _prev) function")
 
-                      (lib.optionalString (
-                        !(builtins.isFunction nf.nixosModules.default)
-                        || !(builtins.isFunction nf.nixosModules.project-zomboid-servers)
-                      ) "nixosModules does not expose two module functions")
+                    (lib.optionalString (
+                      !(builtins.isFunction nf.nixosModules.default)
+                      || !(builtins.isFunction nf.nixosModules.project-zomboid-servers)
+                    ) "nixosModules does not expose two module functions")
 
-                      # `package` defaults to null in modules/options.nix because
-                      # that file cannot reach the flake; default.nix is what
-                      # fills it in for a non-flake consumer. Without this the
-                      # module's own assertion fires and the consumer is told to
-                      # set `package` — for a package this project ships.
-                      (lib.optionalString (cfg.package == null) "package was not supplied, so a non-flake consumer would have to set it by hand")
+                    # `package` defaults to null in modules/options.nix because
+                    # that file cannot reach the flake; default.nix is what
+                    # fills it in for a non-flake consumer. Without this the
+                    # module's own assertion fires and the consumer is told to
+                    # set `package` — for a package this project ships.
+                    (lib.optionalString (
+                      cfg.package == null
+                    ) "package was not supplied, so a non-flake consumer would have to set it by hand")
 
-                      (lib.optionalString (
-                        !(services ? project-zomboid-plain)
-                      ) "no project-zomboid-plain unit")
-                      (lib.optionalString (!(sockets ? project-zomboid-plain)) "no console socket for plain")
-                      (lib.optionalString (!(services ? project-zomboid-install)) "no project-zomboid-install unit")
-                      (lib.optionalString (
-                        !(lib.hasPrefix "/nix/store/" (sc.ExecStart or ""))
-                      ) "ExecStart is not an absolute store path")
-                    ]
-                    ++ failedAssertions
-                  );
+                    (lib.optionalString (!(services ? project-zomboid-plain)) "no project-zomboid-plain unit")
+                    (lib.optionalString (!(sockets ? project-zomboid-plain)) "no console socket for plain")
+                    (lib.optionalString (!(services ? project-zomboid-install)) "no project-zomboid-install unit")
+                    (lib.optionalString (
+                      !(lib.hasPrefix "/nix/store/" (sc.ExecStart or ""))
+                    ) "ExecStart is not an absolute store path")
+                  ]
+                  ++ failedAssertions
+                );
               in
               if problems == [ ] then
                 pkgs.runCommand "pz-nonflake-entry-check" { } ''

@@ -4,9 +4,14 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # Replace with the real remote once this is published:
+    # `path:../..` makes this example work from a fresh clone, for anyone, with
+    # no publishing step. Once the flake has a remote, replace it with:
+    #
     #   project-zomboid-servers.url = "github:you/nixos-projectzomboid-servers";
-    project-zomboid-servers.url = "path:/home/seanc/Projects/nixos-projectzomboid-servers";
+    #
+    # …and commit the resulting lock entry. Everything else in this example is
+    # exactly what a consumer would write.
+    project-zomboid-servers.url = "path:../..";
   };
 
   outputs =
@@ -33,7 +38,11 @@
       # as intended. Cheaper than a toplevel check, which would build an entire
       # NixOS closure — and it is the same assertion style as the parent flake's
       # own `module-eval` check.
-      checks.example-evaluates =
+      # Keyed by system explicitly. A flat `checks.example-evaluates` is accepted
+      # by Nix, but then `nix flake check` reports the check as "omitted" for every
+      # system it cannot see it on — a warning that trains people to ignore
+      # warnings in this repo's CI.
+      checks.x86_64-linux.example-evaluates =
         let
           # Deliberately `nixosSystem` rather than the parent flake's
           # `lib.tests.eval`: this configuration already imports the flake's own
