@@ -72,10 +72,31 @@ whatever you use:
 
 ```nix
 proxy.upstreams = lib.mkMerge (map (u: {
-  inherit (u) port path stripPrefix displayName;
-  name = u.name;
+  ${u.name} = {
+    inherit (u) port path stripPrefix displayName;
+  };
 }) config.services.project-zomboid-servers.webConsoleUpstreams);
 ```
+
+Each element has to be a **dynamic key**. `mkMerge` on an `attrsOf` option merges
+the list's attrsets together as the option's value, so the mapping must produce
+`{ "<name>" = { … }; }`. Two plausible-looking alternatives compile and register
+nothing at all, which is the worst kind of failure here because the console
+still works — it is just not reachable through the proxy:
+
+```nix
+# WRONG: `port`, `path` and `name` become top-level KEYS of `upstreams`,
+# and the real entry never appears. Check with:
+#   builtins.attrNames config.<your>.proxy.upstreams
+#   → [ "displayName" "name" "path" "port" "stripPrefix" ]
+lib.mkMerge (map (u: { inherit (u) port path stripPrefix displayName; name = u.name; }) …)
+
+# ALSO WRONG: nameValuePair yields `{ name = …; value = …; }`, not a dynamic key.
+lib.mkMerge (map (u: lib.nameValuePair u.name { … }) …)
+```
+
+If your proxy option is a **list** rather than `attrsOf`, the first (wrong) form
+is the right one — key the shape off the option's type.
 
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |

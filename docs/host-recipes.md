@@ -175,10 +175,13 @@ services.project-zomboid-servers = {
   };
 };
 
-# Map into whatever proxy you use.
+# Map into whatever proxy you use. The dynamic key matters: see the
+# `webConsoleUpstreams` section of docs/options.md for what a list-shaped
+# proxy option wants instead.
 proxy.upstreams = lib.mkMerge (map (u: {
-  inherit (u) port path stripPrefix displayName;
-  name = u.name;
+  ${u.name} = {
+    inherit (u) port path stripPrefix displayName;
+  };
 }) config.services.project-zomboid-servers.webConsoleUpstreams);
 ```
 

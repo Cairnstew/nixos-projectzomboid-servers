@@ -436,6 +436,26 @@ nixpkgs and fails on `<stdin>` with "unexpected end of input". That is upstream
 and reproducible on an untouched checkout. Invoke the formatter binary per file,
 as `.github/workflows/ci.yml` does.
 
+### OpenCode tooling
+
+`.opencode/` holds this repo's own OpenCode config — a `pz-modpack` skill and a
+`pz-modpack-status` tool. It lives here rather than in a consumer's config
+because the knowledge it encodes is *this* project's: the catalogue layout, the
+unit names, the `Map=` derivation, and which keys are Build 41 only.
+
+```bash
+# read-only, no host needed
+pz-modpack-status                          # every pack + the consumer's servers
+pz-modpack-status {"modpack":"vanilla-plus"}   # one pack, with Workshop URLs
+```
+
+`pz-modpack-status` reads `modpacks/` relative to the repo root, preferring
+`nix eval` on `self.modpacks` and falling back to reading the directory when
+`nix` cannot answer (offline, cold store, private input). It also detects a
+consuming NixOS config — a tree containing
+`modules/nixos/projectzomboid-server/servers/` — and reports those servers,
+their enable state, chosen pack and inline Workshop mods.
+
 ---
 
 ## Licence
