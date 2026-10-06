@@ -319,7 +319,11 @@ let
           "PZ_DATA_DIR=${cfg.dataDir}"
           "PZ_SERVER_DIR=${cfg.serverDir}"
           "PZ_SERVER_NAME=${srv.serverName}"
-          "PZ_JVM_OPTS=${mkJvmOpts srv}"
+          # Quoted so systemd keeps this as ONE assignment. Without the quotes
+          # its parser splits the value on whitespace and logs
+          # `Invalid environment assignment, ignoring: -Xms4G` for every flag
+          # after the first — which is every jvmOpts, including the default.
+          "PZ_JVM_OPTS=\"${mkJvmOpts srv}\""
         ]
         # The admin login. Only the USERNAME and the secret's PATH — never the
         # password itself, which the launcher reads from the file at start. A
