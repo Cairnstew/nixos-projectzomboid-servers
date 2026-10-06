@@ -416,9 +416,11 @@ let
               ${pkgs.systemd}/bin/systemctl status "$svc" --no-pager 2>&1 | head -40
               ;;
             .start|.stop|.restart)
-              # Scoped, password-less sudo for exactly these verbs and this
-              # unit is granted by config.nix.
-              sudo -n ${pkgs.systemd}/bin/systemctl "''${line#.}" "$svc" 2>&1
+              # No sudo: config.nix grants this user a polkit rule for
+              # manage-units on project-zomboid-* , which systemctl consults
+              # over D-Bus on its own. A `sudo -n` here would be refused outright
+              # on hosts that set security.sudo.execWheelOnly.
+              ${pkgs.systemd}/bin/systemctl "''${line#.}" "$svc" 2>&1
               ;;
             .help)
               echo "commands: .status .start .stop .restart"

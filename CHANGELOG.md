@@ -6,6 +6,20 @@ All notable changes to this project. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Web-console unit control now uses polkit instead of sudoers.** The scoped
+  `security.sudo.extraRules` entry for the console user was unreachable on any
+  host that sets `security.sudo.execWheelOnly = true`: that option makes the sudo
+  wrapper executable by the `wheel` group only, so `project-zomboid-web` died with
+  `sudo: unable to execute /run/wrappers/bin/sudo: Permission denied` before the
+  rule was consulted — `.start`/`.stop`/`.restart` in the web console silently
+  failed. Adding the user to `wheel` is not an option (with
+  `wheelNeedsPassword = false` that is full passwordless root). The module now
+  installs a polkit rule granting that user `manage-units` on `project-zomboid-*`
+  and the console shim calls `systemctl` without sudo. This is strictly narrower
+  than before and works under either hardening posture.
+
 ### Fixed
 
 - **The module could not be enabled at all with the default `web.enable = false`.**

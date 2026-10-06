@@ -67,7 +67,15 @@
             (if unit.enable or false then null else "project-zomboid-main is not enabled")
             (if (sc.Restart or null) == "always" then null else "Restart is not \"always\"")
             (
-              if builtins.elem "PZ_JVM_OPTS=-Xmx6G -Xms3G" (sc.Environment or [ ]) then
+              # Matches loosely on purpose: systemd splits an unquoted
+              # Environment value on whitespace, so the unit carries the value
+              # quoted (`PZ_JVM_OPTS="-Xmx6G -Xms3G"`). Assert that the flags
+              # reach the Environment at all rather than pinning the quoting.
+              if
+                builtins.any (
+                  e: builtins.match "PZ_JVM_OPTS=.*-Xmx6G -Xms3G.*" e != null
+                ) (sc.Environment or [ ])
+              then
                 null
               else
                 "jvmOpts did not reach the unit's Environment"

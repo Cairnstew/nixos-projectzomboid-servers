@@ -257,27 +257,31 @@ in
         "d '${cfg.serverDir}' 0755 ${cfg.user} ${cfg.group} - -"
       ];
 
-      # ── Console user, scoped sudo, proxy upstreams ─────────────────────────
-      # `lib.optional`, not `optionalAttrs`: extraRules is a LIST option, and
-      # optionalAttrs yields an attrset — `{}` when the console is off, which
-      # fails evaluation outright ("not of type list of (submodule)") for every
-      # server that leaves `web.enable` at its default of false.
-      security.sudo.extraRules = lib.optional cfg.web.enable {
-        users = [ cfg.web.user ];
-        # Exactly the verbs the web shim exposes, and only these units.
-        commands =
-          map
-            (verb: {
-              command = "${pkgs.systemd}/bin/systemctl ${verb} project-zomboid-*";
-              options = [ "NOPASSWD" ];
-            })
-            [
-              "start"
-              "stop"
-              "restart"
-              "status"
-            ];
-      };
+      # ── Console user, scoped unit control, proxy upstreams ─────────────────
+      # polkit, NOT sudoers. A scoped `security.sudo.extraRules` entry looks
+      # right but is unreachable on any host that sets
+      # `security.sudo.execWheelOnly = true` (a common hardening): that option
+      # makes the sudo wrapper itself executable by the `wheel` group only, so a
+      # service user like `project-zomboid-web` gets
+      # "sudo: unable to execute /run/wrappers/bin/sudo: Permission denied"
+      # before the rule is ever consulted. Putting the user in `wheel` instead is
+      # not an option — with `wheelNeedsPassword = false` that grants full
+      # passwordless root. polkit grants exactly the one action on exactly these
+      # units, and `systemctl` consults it automatically.
+      security.polkit.extraConfig = lib.optionalString cfg.web.enable ''
+        // Project Zomboid web console: let the console user manage its own
+        // units and nothing else. Matches the `project-zomboid-` unit prefix,
+        // mirroring what a scoped sudoers rule would have allowed.
+        polkit.addRule(function(action, subject) {
+          if (action.id == "org.freedesktop.systemd1.manage-units" &&
+              subject.user == "${cfg.web.user}") {
+            var unit = action.lookup("unit");
+            if (unit && unit.indexOf("project-zomboid-") === 0) {
+              return polkit.Result.YES;
+            }
+          }
+        });
+      '';
 
       services.project-zomboid-servers.webConsoleUpstreams = pz.mkProxyUpstreams {
         inherit webServers webPort;
