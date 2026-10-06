@@ -22,6 +22,17 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **Enabling `web.enable` deleted the server user.** The two halves of the
+  service-user definition were combined with `//`, which is a *shallow* merge,
+  and both halves carry a `users` key — so the web-console half's `users`
+  replaced the server half's outright, dropping `users.project-zomboid` (its
+  group survived, since only the other half defines `groups`). A server that was
+  already running then failed on its next stop/start with `Failed to determine
+  credentials for user 'project-zomboid': Unknown user` (`status=217/USER`),
+  systemd waited out `TimeoutStopSec` and SIGKILLed it. Now `lib.recursiveUpdate`.
+  This only fires on hosts that enable the console, and only once a server has
+  been started — which is why the suite never caught it.
+
 - **The module could not be enabled at all with the default `web.enable = false`.**
   `security.sudo.extraRules` is a *list* option, but was assigned
   `lib.optionalAttrs cfg.web.enable [ … ]`, which yields an **attrset** — `{}`

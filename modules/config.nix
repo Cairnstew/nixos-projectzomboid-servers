@@ -227,10 +227,16 @@ in
 
       # ── Service user / group ──────────────────────────────────────────────
       # Created conditionally on the name so `user`/`group` stay renameable.
-      # Both halves are merged into one `users` attrset (and both `users.*`
-      # sub-attrsets below are merged into it) so nothing is silently dropped.
-      users =
-        lib.optionalAttrs (cfg.user == "project-zomboid") {
+      # Both halves MUST be deep-merged: `//` is shallow, and both halves carry a
+      # `users` key, so `a // b` would let the web-console half's `users` REPLACE
+      # the server half's — silently deleting the `project-zomboid` user (while
+      # keeping its group, which only the left half defines) the moment
+      # `web.enable` is turned on. The running server then dies on its next stop
+      # or start with `Failed to determine credentials for user
+      # 'project-zomboid': Unknown user` (status=217/USER). Caught on the first
+      # host to enable the console after servers were already running.
+      users = lib.recursiveUpdate
+        (lib.optionalAttrs (cfg.user == "project-zomboid") {
           users.project-zomboid = {
             isSystemUser = true;
             group = cfg.group;
@@ -240,14 +246,14 @@ in
             description = "Project Zomboid dedicated server";
           };
           groups.project-zomboid = { };
-        }
-        // lib.optionalAttrs cfg.web.enable {
+        })
+        (lib.optionalAttrs cfg.web.enable {
           users.${cfg.web.user} = {
             isSystemUser = true;
             group = cfg.group;
             shell = pkgs.bashInteractive;
           };
-        };
+        });
 
       # The data dir must exist before any unit writes into it. tmpfiles rather
       # than createHome alone, because a server's Zomboid home is created
