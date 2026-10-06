@@ -258,24 +258,26 @@ in
       ];
 
       # ── Console user, scoped sudo, proxy upstreams ─────────────────────────
-      security.sudo.extraRules = lib.optionalAttrs cfg.web.enable [
-        {
-          users = [ cfg.web.user ];
-          # Exactly the verbs the web shim exposes, and only these units.
-          commands =
-            map
-              (verb: {
-                command = "${pkgs.systemd}/bin/systemctl ${verb} project-zomboid-*";
-                options = [ "NOPASSWD" ];
-              })
-              [
-                "start"
-                "stop"
-                "restart"
-                "status"
-              ];
-        }
-      ];
+      # `lib.optional`, not `optionalAttrs`: extraRules is a LIST option, and
+      # optionalAttrs yields an attrset — `{}` when the console is off, which
+      # fails evaluation outright ("not of type list of (submodule)") for every
+      # server that leaves `web.enable` at its default of false.
+      security.sudo.extraRules = lib.optional cfg.web.enable {
+        users = [ cfg.web.user ];
+        # Exactly the verbs the web shim exposes, and only these units.
+        commands =
+          map
+            (verb: {
+              command = "${pkgs.systemd}/bin/systemctl ${verb} project-zomboid-*";
+              options = [ "NOPASSWD" ];
+            })
+            [
+              "start"
+              "stop"
+              "restart"
+              "status"
+            ];
+      };
 
       services.project-zomboid-servers.webConsoleUpstreams = pz.mkProxyUpstreams {
         inherit webServers webPort;

@@ -8,6 +8,15 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **The module could not be enabled at all with the default `web.enable = false`.**
+  `security.sudo.extraRules` is a *list* option, but was assigned
+  `lib.optionalAttrs cfg.web.enable [ … ]`, which yields an **attrset** — `{}`
+  when the console is off. Evaluation therefore died with "A definition for
+  option `security.sudo.extraRules` is not of type `list of (submodule)`" for
+  every server that did not turn the web console on, which is the default. Now
+  `lib.optional`, so the option is `[ ]` or `[ { … } ]`. This only ever passed
+  in the repo's own example because that example enables the web console.
+
 - **`jvmOpts` never reached the JVM.** `pzexe` splits its arguments on a `--`
   separator: everything before it is a JVM flag, everything after is a game
   argument. The launcher was invoking it as `… "${jvm_opts[@]}" -servername …`
