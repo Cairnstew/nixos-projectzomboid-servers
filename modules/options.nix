@@ -422,7 +422,6 @@ in
                 These are the <literal>id=</literal> values from each mod's
                 <literal>mod.info</literal>, NOT Workshop ids — and they are
                 comma-separated where WorkshopItems is semicolon-separated.
-                Use this for modworkshop.net mods, which are not Workshop items.
               '';
             };
             defaultSettings = mkOption {
@@ -916,11 +915,69 @@ in
                 example = "-Xmx8G -Xms4G -XX:+UseZGC";
                 description = ''
                   JVM flags for the server process. Passed via
-                  <literal>PZ_JVM_OPTS</literal> and injected *ahead of* the
-                  vendor launcher, because <literal>start-server.sh</literal> sets
-                  its own hardcoded <literal>-Xms/-Xmx</literal> and ignores anything
-                  set after it. Free-form because the flag surface moves between
-                  PZ builds.
+                  <literal>PZ_JVM_OPTS</literal> and placed *before* the
+                  <literal>--</literal> separator the launcher inserts, which is
+                  what routes them to the JVM rather than to the game.
+
+                  These flags are the only way to set the heap: the vendor's
+                  <literal>ProjectZomboid64.json</literal> ships a hardcoded
+                  <literal>-Xmx8g</literal>, and <literal>start-server.sh</literal>
+                  offers no other hook. Free-form because the flag surface moves
+                  between PZ builds. Sizing matters — <literal>start-server.sh</literal>
+                  always exits <literal>0</literal>, so an OOM-killed JVM is not
+                  distinguishable from a clean quit by exit status alone.
+                '';
+              };
+
+              javaAgent = mkOption {
+                type = types.nullOr (
+                  types.submodule {
+                    options = {
+                      jar = mkOption {
+                        type = types.path;
+                        description = ''
+                          The agent JAR. Loaded with <literal>-javaagent:</literal>
+                          before any mod class is on the classpath.
+                        '';
+                      };
+                      args = mkOption {
+                        type = types.str;
+                        default = "";
+                        description = ''
+                          Agent arguments, joined with commas. A leading
+                          <literal>=</literal> is added automatically; leave this
+                          empty for an agent that takes none.
+                        '';
+                      };
+                    };
+                  }
+                );
+                default = null;
+                example = literalExpression ''
+                  {
+                    jar = pkgs.zombiebuddy;
+                    args = "policy=allow-all,frontend=console,verbosity=1";
+                  }
+                '';
+                description = ''
+                  A Java agent to load into the server JVM, prepended to
+                  <option>jvmOpts</option>.
+
+                  This is the hook <emphasis>Java-mod frameworks</emphasis> need.
+                  Project Zomboid's own mod system is Lua-only; frameworks such as
+                  ZombieBuddy work by attaching a JVM agent that patches game
+                  classes, and the mods they enable ship their JARs *inside* their
+                  own Workshop folder (referenced by <literal>javaJarFile</literal>
+                  in <literal>mod.info</literal>), so nothing needs copying — only
+                  the agent has to reach the JVM.
+
+                  <emphasis>Headless servers must set a policy.</emphasis>
+                  Frameworks default to prompting for approval per unknown JAR on
+                  stdin, which a systemd unit has no one to answer: the server
+                  appears to hang at boot. Pass a non-prompting policy
+                  (ZombieBuddy: <literal>policy=allow-all</literal> or
+                  <literal>deny-new</literal>, plus
+                  <literal>frontend=console</literal>).
                 '';
               };
 

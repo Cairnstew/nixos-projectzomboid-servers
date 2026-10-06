@@ -332,6 +332,7 @@ let
         extraArgs
         extraServiceConfig
         hardware
+        javaAgent
         jvmOpts
         managementSystem
         mapOrder

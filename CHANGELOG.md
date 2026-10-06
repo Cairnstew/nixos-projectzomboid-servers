@@ -6,6 +6,40 @@ All notable changes to this project. Format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **`jvmOpts` never reached the JVM.** `pzexe` splits its arguments on a `--`
+  separator: everything before it is a JVM flag, everything after is a game
+  argument. The launcher was invoking it as `… "${jvm_opts[@]}" -servername …`
+  with no separator, so every flag was handed to the *game*, which logged
+  `unknown option "-Xmx…"` and ignored it. The JVM silently ran on the vendor's
+  stock `-Xmx8g` — heap sizing, `-XX` flags and (later) `-javaagent` were all
+  inert, with no error to show for it. Verified against a live 42.21.0 install:
+  `-Xmxbad` via argv produces the game's `unknown option` and no JVM error,
+  while the same flag after `--`, or in `ProjectZomboid64.json`'s `vmArgs`,
+  produces the JVM's `Invalid maximum heap size`. The launcher now emits the
+  separator.
+
+### Added
+
+- `javaAgent` (`{ jar, args }`, per server): loads a JVM agent before any mod
+  class is on the classpath, prepended to `jvmOpts`. This is the hook Java-mod
+  frameworks such as ZombieBuddy need — PZ's own mod system is Lua-only, and the
+  mods those frameworks enable keep their JARs inside their own Workshop folders,
+  so only the agent has to reach the JVM. A headless server must set a
+  non-prompting policy (`policy=allow-all` for ZombieBuddy), or the framework
+  waits on a stdin prompt nobody can answer and the server appears to hang.
+- The `viewpoint` modpack: OwenOasis' "Project Viewpoint Vanilla+" Steam Workshop
+  collection (122 of its 123 items; `ZombieBuddy Extensions` is excluded as
+  `versionMax=42.0` and jar-less). Order follows the collection, which is what
+  `WorkshopItems=` receives.
+
+### Changed
+
+- `jvmOpts` and the `mods` option descriptions corrected. The `mods` text had
+  claimed `modworkshop.net` hosts Project Zomboid mods and that non-Workshop mods
+  should be sought there; it does not, its API lists no Zomboid entry at all.
+
 ## [0.2.0] — 2026-10-03
 
 The audit release. Fixes a secret leak, removes two Build 41 leftovers that were

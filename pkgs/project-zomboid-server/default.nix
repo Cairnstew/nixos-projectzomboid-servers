@@ -122,8 +122,19 @@ let
           admin_args=(-adminusername "$PZ_ADMIN_USERNAME" -adminpassword "$admin_password")
         fi
 
-        # (3) exec so the JVM inherits this PID and receives signals directly.
-        exec ${lib.getExe steam-run} "$launcher_path" "''${jvm_opts[@]}" \
+        # (3) The `--` is load-bearing: it is the separator pzexe uses to split
+        #     JVM flags from game arguments. Without it every option in
+        #     PZ_JVM_OPTS (heap sizing, -XX flags, -javaagent) is handed to the
+        #     GAME, which logs `unknown option "<flag>"` and ignores it — so the
+        #     JVM runs on the vendor's stock -Xmx8g and any memory option here is
+        #     silently inert. Verified against a live 42.21.0 install:
+        #       start-server.sh -Xmxbad        -> "unknown option" (game), no JVM error
+        #       start-server.sh -Xmxbad -- ... -> "Invalid maximum heap size" (JVM)
+        #     Everything after `--` is a game argument, so -servername and the
+        #     admin pair must stay on this side of it.
+        #
+        # (4) exec so the JVM inherits this PID and receives signals directly.
+        exec ${lib.getExe steam-run} "$launcher_path" "''${jvm_opts[@]}" -- \
           -servername "$server_name" "''${admin_args[@]}" "$@"
     '';
   };

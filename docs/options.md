@@ -171,7 +171,8 @@ a matching `.socket` for its console.
 | `selfManagedMods` | bool | `true` | Stop PZ rewriting `Mods=` out from under you. |
 | `softReset` | bool | `false` | Discard world identity, generating a fresh world. Destructive. |
 | `betaBranch` | str \| null | `null` | e.g. `"legacy41"`. Per-server, but applied by the **shared** install, so set it on every server or none. |
-| `jvmOpts` | str | `-Xmx4G -Xms2G` | Injected **ahead of** the vendor launcher, which ignores anything set after it. |
+| `jvmOpts` | str | `-Xmx4G -Xms2G` | Placed **before the `--`** the launcher inserts, which is what routes flags to the JVM rather than to the game. The only way to set the heap. |
+| `javaAgent` | submodule \| null | `null` | `{ jar, args }` — a JVM agent (e.g. ZombieBuddy) prepended to `jvmOpts`. A headless server **must** set a non-prompting policy. |
 | `autoStart` | bool | `true` | |
 | `restart` | str | `"always"` | See [below](#why-restart-is-always). |
 | `managementSystem` | submodule | inherits top level | Override per server to mix backends. |

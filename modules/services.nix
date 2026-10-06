@@ -61,6 +61,27 @@ let
   unitName = name: "project-zomboid-${name}";
   installUnit = "project-zomboid-install";
 
+  # The effective JVM flag string for one server: the optional agent first, then
+  # jvmOpts. Order matters — a -javaagent must be present at premain, before any
+  # mod class can be loaded, and modpacks are free to add -XX flags that assume
+  # the agent is already attached.
+  #
+  # The launcher separates these from the game arguments with `--`, so anything
+  # here reaches the JVM. (Before that separator existed, every flag below was
+  # silently handed to the game instead.)
+  mkJvmOpts =
+    srv:
+    let
+      agent =
+        if srv.javaAgent == null then
+          ""
+        else
+          "-javaagent:${srv.javaAgent.jar}"
+          + lib.optionalString (srv.javaAgent.args != "") "=${srv.javaAgent.args}"
+          + " ";
+    in
+    "${agent}${srv.jvmOpts}";
+
   # Every Workshop item any enabled server needs, de-duplicated at EVAL time —
   # two servers sharing a pack must not trigger two downloads of the same item.
   # This is static data, so it belongs in Nix rather than a shell pipeline.
@@ -131,7 +152,7 @@ let
         [
           "export HOME=\"${cfg.dataDir}/${name}\""
           "export PZ_SERVER_DIR=\"${cfg.serverDir}\""
-          "export PZ_JVM_OPTS=\"${srv.jvmOpts}\""
+          "export PZ_JVM_OPTS=\"${mkJvmOpts srv}\""
         ]
         ++ lib.optional (srv.adminAccount != null) ''
           export PZ_ADMIN_USERNAME=${lib.escapeShellArg srv.adminAccount.username}
@@ -298,7 +319,7 @@ let
           "PZ_DATA_DIR=${cfg.dataDir}"
           "PZ_SERVER_DIR=${cfg.serverDir}"
           "PZ_SERVER_NAME=${srv.serverName}"
-          "PZ_JVM_OPTS=${srv.jvmOpts}"
+          "PZ_JVM_OPTS=${mkJvmOpts srv}"
         ]
         # The admin login. Only the USERNAME and the secret's PATH — never the
         # password itself, which the launcher reads from the file at start. A
