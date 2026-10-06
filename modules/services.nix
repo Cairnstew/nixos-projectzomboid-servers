@@ -479,7 +479,7 @@ let
                 --max-clients 2 \
                 --check-origin \
                 ${optionalString needsAuth "--credential \"${cfg.web.username}:$password\""} \
-                ${mkWebShim name}
+                ${lib.getExe (mkWebShim name)}
             '';
           }
         );

@@ -22,6 +22,15 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **The web console never worked: ttyd was handed a store *directory*.**
+  `mkWebShim` returns a `writeShellApplication`, whose store path is a directory
+  containing `bin/<name>`, but the launcher interpolated the package itself into
+  ttyd's command position. ttyd therefore tried to exec a directory, the child
+  exited immediately with code 243, and the browser terminal opened and closed in
+  a loop (`started process … process exited with code 243 … WS closed`). Now
+  `lib.getExe (mkWebShim name)`. The HTTP page still served, which is why the
+  console looked merely "broken" rather than absent.
+
 - **Enabling `web.enable` deleted the server user.** The two halves of the
   service-user definition were combined with `//`, which is a *shallow* merge,
   and both halves carry a `users` key — so the web-console half's `users`
