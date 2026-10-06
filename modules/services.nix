@@ -360,10 +360,18 @@ let
 
   # ── Console sockets ────────────────────────────────────────────────────────
   mkConsoleSocket =
-    name:
+    name: srv:
     lib.nameValuePair (unitName name) {
       wantedBy = [ "sockets.target" ];
-      requires = [ "${unitName name}.service" ];
+      # `Requires=` on a socket EAGERLY starts the paired service whenever the
+      # socket starts, and sockets.target pulls the socket in at boot — so an
+      # unconditional `requires` made `autoStart = false` meaningless: the server
+      # came up anyway (verified: `systemctl restart <unit>.socket` starts the
+      # service). Keep the dependency only when autoStart is on. Without it the
+      # implicit same-name socket activation still brings the service up on the
+      # first write to the console FIFO, which is what autoStart = false should
+      # mean.
+      requires = lib.optional srv.autoStart "${unitName name}.service";
       partOf = [ "${unitName name}.service" ];
       socketConfig = {
         ListenFIFO = consoleFifo name;
@@ -601,7 +609,7 @@ in
     # `systemd.sockets`.
     # The `_:` adapter makes the arity explicit — see the note on the web
     # consoles below for why partial application here is a trap.
-    systemd.sockets = lib.mapAttrs' (name: _: mkConsoleSocket name) (
+    systemd.sockets = lib.mapAttrs' (name: srv: mkConsoleSocket name srv) (
       lib.filterAttrs (_: srv: srv.managementSystem.systemd-socket.enable) resolved
     );
 

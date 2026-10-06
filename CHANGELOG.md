@@ -22,6 +22,16 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **`autoStart = false` did not stop the server starting at boot.** The console
+  FIFO socket declared `requires = [ "<unit>.service" ]` unconditionally, and a
+  `Requires=` on a socket eagerly starts its paired service when the socket is
+  started — while the socket is itself pulled in by `sockets.target` at boot.
+  The option only removed the service from `multi-user.target`, so the socket
+  brought it up anyway. Verified: `systemctl restart <unit>.socket` started the
+  service with `autoStart = false`. The dependency is now conditional on
+  `autoStart`; when it is off, the implicit same-name socket activation still
+  starts the server on the first write to the console FIFO.
+
 - **The web console never worked: ttyd was handed a store *directory*.**
   `mkWebShim` returns a `writeShellApplication`, whose store path is a directory
   containing `bin/<name>`, but the launcher interpolated the package itself into
