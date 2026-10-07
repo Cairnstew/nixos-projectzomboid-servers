@@ -16,7 +16,7 @@
 {
   config,
   lib,
-  options,
+  osConfig ? null,
   ...
 }:
 let
@@ -32,8 +32,15 @@ let
 
   cfg = config.services.project-zomboid-servers;
 
-  osCfg =
-    if options ? osConfig then (config.osConfig.services.project-zomboid-servers or null) else null;
+  # `osConfig` is a module ARGUMENT, not an option: Home Manager's NixOS
+  # integration passes it through `specialArgs`, and a standalone Home Manager
+  # leaves it at the `_module.args` default of null
+  # (modules/misc/submodule-support.nix).
+  #
+  # Reading it as `options ? osConfig` is the trap, and it fails SILENTLY: there
+  # is no option by that name, so the test is always false, the module does
+  # nothing, and it still looks correctly wired up.
+  osCfg = if osConfig == null then null else (osConfig.services.project-zomboid-servers or null);
 
   hosts = if osCfg == null then { } else osCfg.clientHosts;
 in
