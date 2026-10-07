@@ -91,11 +91,20 @@ let
     in
     "${agent}${srv.jvmOpts}";
 
-  # Every Workshop item any enabled server needs, de-duplicated at EVAL time —
-  # two servers sharing a pack must not trigger two downloads of the same item.
+  # Every Workshop item ANY consumer needs, de-duplicated at EVAL time — two
+  # consumers sharing a pack must not trigger two downloads of the same item.
   # This is static data, so it belongs in Nix rather than a shell pipeline.
+  #
+  # Client hosts are included deliberately. They are not servers, but they read
+  # the same Workshop content, and the install unit is the only thing that keeps
+  # that shared download current — so omitting them would let the copy a client
+  # host symlinks from go stale the moment the last dedicated server was turned
+  # off, which is exactly the configuration a client host is for.
   allWorkshopItems = sort (a: b: a < b) (
-    unique (concatMap (srv: srv.workshopItems) (lib.attrValues resolved))
+    unique (
+      concatMap (srv: srv.workshopItems) (lib.attrValues resolved)
+      ++ concatMap (srv: srv.workshopItems) (lib.attrValues clientResolved)
+    )
   );
 
   # One install serves one branch, so the shared install unit takes the first

@@ -31,6 +31,9 @@ All notable changes to this project. Format follows
   Workshop item from the shared steamcmd download into the client's Steam library
   — **one download serves both hosts** rather than two. Leaving
   `PZ_CLIENT_WORKSHOP` unset skips it, so a Steam-subscribed client is untouched.
+  The shared install/update unit now counts a client host's items among those it
+  keeps downloaded, so that copy does not go stale the moment the last dedicated
+  server is switched off — which is precisely the client-host configuration.
 
   Note this is the *config* only. A pack whose mods need a JVM agent
   (e.g. ZombieBuddy) also needs that agent installed in the **client**, which is
