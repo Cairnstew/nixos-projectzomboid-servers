@@ -80,14 +80,18 @@ A Steam Workshop **collection** is never something a server consumes — PZ read
 
 ```bash
 nix run .#pz-workshop -- expand <collection-id>   # draft modpacks/<name>.nix
+nix run .#pz-workshop -- resolve <collection-id>  # each item's internal Mod ID + Mods=/WorkshopItems=
 nix run .#pz-workshop -- emit <pack>              # paste-ready URLs
 ```
 
 The draft is for review, not to commit blind: a collection cannot tell you which
 items are inert on your build (the `viewpoint` pack deliberately drops ZombieBuddy
-Extensions) or the `Mods=` local-mod ids. There is **no** publish command — Steam
-has no public write API for collections, so `emit` is the whole of "generate a
-collection".
+Extensions). `expand` DOES prefill `mods` from each item's description `Mod ID:`
+declaration (the Steam API returns the description text) so the draft is
+runnable before the first download — verify it, since an author may also mention
+a dependency, and items that do not declare one are flagged in the draft.
+There is **no** publish command — Steam has no public write API for collections,
+so `emit` is the whole of "generate a collection".
 
 For a **client** (a player's machine), `nix run .#pz-client-mods -- <pack>`
 downloads the pack's Workshop items with `steamcmd` and installs them as local
@@ -181,7 +185,9 @@ nix run .#pz-vanilla-plus -- myserver        # your terminal is the console
 nix run .#pz-vanilla-plus -- --list-maps myserver
 nix run .#pz-maps -- --workshop-root <dir> --explain
 nix run .#pz-modpack -- show vanilla-plus
-nix run .#pz-workshop -- expand <collection-id>    # collection -> draft pack
+nix run .#pz-workshop -- expand <collection-id>    # collection -> draft pack (mods prefilled)
+nix run .#pz-workshop -- resolve collection <id>   # internal Mod IDs + paste-ready ini lines
+nix run .#pz-workshop -- resolve pack <name>       # same, for an existing pack
 nix run .#pz-workshop -- emit vanilla-plus         # paste-ready Workshop URLs
 nix run .#pz-client-mods -- vanilla-plus           # install a pack's mods for a client
 ```

@@ -8,6 +8,20 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Workshop items are resolved before any download.** `pz-workshop expand` now
+  pre-fills the draft pack's `mods` list from each item's description `Mod ID:`
+  declaration (the Steam Web API returns the description text, so no HTML
+  scraping — and a live 138-item collection declared one for every item). A new
+  `pz-workshop resolve {collection,pack} <id>` maps a collection or an existing
+  pack to its internal Mod IDs and prints the paste-ready `Mods=` /
+  `WorkshopItems=` lines in the module's exact separators. Both stay
+  best-effort: an author may also declare a dependency, and unresolved items are
+  flagged for confirmation after the first download — the running server's
+  `Mods=` is always the `mod.info`-derived one. Map folders are deliberately
+  never read from descriptions (the text is too noisy — "map mods", "Maps are
+  changing in B42"); `pz_maps.py` reads the files instead. The `pz-workshop-helper`
+  check now covers the description parsing and the prefill.
+
 - **The install is verified, not fire-and-forget.** The shared install now
   downloads a batch of Workshop items, checks each one on disk (an empty
   directory counts as a failure), retries the stragglers once, and — if any

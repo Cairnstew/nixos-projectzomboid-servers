@@ -630,7 +630,8 @@
             };
 
             # Steam Workshop helpers over a collection and the catalogue:
-            #   nix run .#pz-workshop -- expand <collection-id>   draft a pack
+            #   nix run .#pz-workshop -- expand <collection-id>   draft a pack (mods prefilled)
+            #   nix run .#pz-workshop -- resolve {collection,pack} <id>   internal Mod IDs
             #   nix run .#pz-workshop -- emit <pack>              paste-ready list
             # There is no "publish" command: Steam has no public write API for
             # collections. See scripts/pz_workshop.py.
@@ -797,10 +798,43 @@
                   if ("\\" + d) not in rendered:
                       raise SystemExit("render_pack left an unescaped interpolation")
 
+                  # Description -> internal Mod ID parsing (the "resolve after
+                  # download" gap): HTML/bbcode must be stripped, the
+                  # `Mod ID:[/b] X` artifact handled, `MID:` accepted, and a
+                  # description that only mentions a dependency must not be
+                  # misread as declaring nothing for the item itself.
+                  parse = m.mod_ids_from_description
+                  samples = [
+                      ("<div>Mod ID: ZombieBuddy</div>", ["ZombieBuddy"]),
+                      ("[b]Mod ID:[/b] ZombieBuddy_Extensions", ["ZombieBuddy_Extensions"]),
+                      ("MID: Viewpoint", ["Viewpoint"]),
+                      ("Whatever description", []),
+                      ("Works with Mod ID: OtherMod<br>Mod ID: ThisMod",
+                       ["OtherMod", "ThisMod"]),
+                  ]
+                  for desc, want in samples:
+                      if parse(desc) != want:
+                          raise SystemExit("mod_ids_from_description: " + repr(parse(desc)) + " != " + repr(want))
+
+                  # render_pack prefills mods in item order, dedupes, keeps the
+                  # escaping, and flags an item whose description declared no id.
+                  rendered = m.render_pack(
+                      "9", None,
+                      [("a", "A", None), ("b", "B", None), ("c", "C no id", None)],
+                      "108600", "p",
+                      mods_by_id={"a": ["Alpha"], "b": ["Bravo", "Alpha"]},
+                  )
+                  if rendered.count('"Alpha"') != 1 or '"Bravo";' not in rendered:
+                      raise SystemExit("render_pack prefill/dedupe broken")
+                  if '  mods = [ ];' in rendered:
+                      raise SystemExit("render_pack lost the mods list")
+                  if "no `Mod ID:` in its description" not in rendered:
+                      raise SystemExit("render_pack missing the unresolved-item flag")
+
                   print("pz-workshop assertions ok")
                   PY
 
-                  echo "pz-workshop ok: emit matches the catalogue; expand order and escaping hold"
+                  echo "pz-workshop ok: emit matches the catalogue; expand order, escaping and Mod-ID parsing hold"
                   touch "$out"
                 '';
 

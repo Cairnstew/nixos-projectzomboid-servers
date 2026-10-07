@@ -384,7 +384,8 @@ nix run .#pz-modpack -- show vanilla-plus
 
 # Steam Workshop helpers
 nix run .#pz-workshop -- emit vanilla-plus               # paste-ready URL list
-nix run .#pz-workshop -- expand 3812346398 > draft.nix   # collection -> draft pack
+nix run .#pz-workshop -- resolve pack vanilla-plus       # internal Mod IDs + Mods=/WorkshopItems=
+nix run .#pz-workshop -- expand 3812346398 > draft.nix   # collection -> draft pack (mods prefilled)
 
 # Put a pack's mods onto a CLIENT machine (local mods the game loads)
 nix run .#pz-client-mods -- vanilla-plus
@@ -411,7 +412,7 @@ The checks:
 | `spawn-and-reset` | The dead Build 42 keys are absent (and present under `build41`), spawn lua renders, **is parsed by a real Lua interpreter**, and `--soft-reset` is scoped to the identity keys. |
 | `map-ordering` | Two trees built in opposite orders give identical `Map=`; a non-map directory never leaks in; a duplicate is reported, deterministic and overridable; `--strict` fails; base-map shadowing is an error. |
 | `map-pin-clean` | Pinning `Map=` suppresses detection without passing an empty argument. |
-| `pz-workshop-helper` | `emit` reproduces every pack's Workshop ids in order, and `expand` orders collection children by Steam's own `sortorder` and escapes an interpolation in a title so the draft pack still evaluates. |
+| `pz-workshop-helper` | `emit` reproduces every pack's Workshop ids in order, `expand` orders collection children by Steam's own `sortorder`, escapes an interpolation in a title so the draft pack still evaluates, and parses each item's description `Mod ID:` (HTML/bbcode artifacts included) so the draft's `mods` list is prefilled and deduplicated. |
 | `pz-client-mods-plan` | The client downloader's `--json` plan matches each pack's item count, defaults to the local-mods target, and rejects an unknown pack — all without touching the network. |
 
 Every one of those bugs is invisible to `nix flake check --no-build` and to

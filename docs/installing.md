@@ -267,7 +267,8 @@ nix run .#pz-modpack -- list
 nix run .#pz-modpack -- show vanilla-plus
 
 # Steam Workshop: a collection is a source to expand, not something a server reads
-nix run .#pz-workshop -- expand 3812346398 > modpacks/draft.nix
+nix run .#pz-workshop -- expand 3812346398 > modpacks/draft.nix   # mods prefilled from Mod ID: lines
+nix run .#pz-workshop -- resolve collection 3812346398            # internal Mod IDs + Mods=/WorkshopItems=
 nix run .#pz-workshop -- emit viewpoint            # paste-ready URLs for Steam
 
 # Put a pack's Workshop mods onto a CLIENT (installs them as local mods)
