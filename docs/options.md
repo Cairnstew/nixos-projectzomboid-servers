@@ -35,6 +35,7 @@ the [README](../README.md) and [host recipes](host-recipes.md).
 | `startLimitIntervalSec` | int | `120` | Crash-loop window. |
 | `startLimitBurst` | int | `5` | Restarts allowed in that window. |
 | `webConsoleUpstreams` | listOf submodule | *(read-only)* | Derived. See [webConsoleUpstreams](#webconsoleupstreams). |
+| `clientHosts` | attrsOf submodule | *(read-only)* | Derived from `servers.<name>.clientHost.enable`. See [clientHosts](#clienthosts). |
 | `web` | submodule | disabled | See [web](#web). |
 
 ### `managementSystem`
@@ -105,6 +106,53 @@ is the right one — key the shape off the option's type.
 | `path` | str | — | URL prefix, trailing slash. Defaults to `/pz/<name>/`. |
 | `stripPrefix` | bool | `true` | ttyd requires this. |
 | `displayName` | str | `""` | Label for proxy UIs. The module always populates it — `mkProxyUpstreams` sets `Project Zomboid console: <name>`. |
+
+### `clientHosts`
+
+READ-ONLY. One entry per server with `clientHost.enable = true`. **Independent of
+`enable`** — see [clientHost](#clienthost).
+
+A Project Zomboid world can be run two ways: as a dedicated server (the systemd
+units this module creates) or from the game's own **Host** button, which runs the
+server inside the client's process. Both read the same `<name>.ini`, the same
+`<name>_SandboxVars.lua` and the same mod list. This option renders the *client*
+half of that from the same pack, so the mod list is written down once and cannot
+drift between the two hosts.
+
+Nothing is installed by this module: `~/Zomboid` is a user-level path a system
+module cannot own. Run `prepare` from the client user's own configuration.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `serverName` | str | The client-side name — the `<name>.ini` basename and the save folder. |
+| `prepare` | path | A runnable script that seeds the client's Zomboid home. Takes `PZ_CLIENT_ZOMBOID` (required), `PZ_SERVER_DIR` and `PZ_CLIENT_WORKSHOP` (optional) from the environment. |
+| `iniFile` | path | The Nix-rendered base `.ini`, *before* the merge. Hand this to `prepare`; installing it directly would overwrite `Seed`/`ServerPlayerID` on an existing world. |
+| `sandboxFile` | path | The Nix-rendered `<name>_SandboxVars.lua`. |
+| `mods` | listOf str | The resolved `Mods=` list. |
+| `workshopItems` | listOf str | The resolved `WorkshopItems=` list (Steam Workshop ids). |
+
+```nix
+# A Home Manager activation hook, running as the client user:
+home.activation.pz-client-host = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  export PZ_CLIENT_ZOMBOID="$HOME/Zomboid"
+  export PZ_SERVER_DIR=/mnt/data/project-zomboid/server
+  export PZ_CLIENT_WORKSHOP="$HOME/.local/share/Steam/steamapps/workshop/content/108600"
+  run ${config.services.project-zomboid-servers.clientHosts.viewpoint.prepare}/bin/project-zomboid-viewpoint-client-host
+'';
+```
+
+Two behaviours worth knowing:
+
+- The `.ini` is **merged, not rewritten**, so `Seed`, `ServerPlayerID` and
+  `LastModified` survive — the same reason the dedicated server merges. Re-running
+  is safe.
+- Named keys come from the server's resolved settings, so a server defined with
+  `public = true` will **overwrite** a client-side `Public=false` in that file.
+  Override it in `settings` if the client host should stay private.
+- `PZ_CLIENT_WORKSHOP`, when set together with `PZ_SERVER_DIR`, symlinks every
+  Workshop item from the shared steamcmd download into the client's Steam library
+  — **one 2.6G download serves both hosts** instead of two. Leave it unset to
+  leave a Steam-subscribed client alone.
 
 ---
 
@@ -180,6 +228,31 @@ a matching `.socket` for its console.
 | `extraServiceConfig` | attrs | `{}` | Extra `serviceConfig`. Avoid sandboxing directives that break `steam-run`'s user-namespace FHS. |
 | `webConsole` | bool | `true` | Needs `web.enable`. |
 | `port` | port \| null | `null` | Web console port; `null` assigns from `web.portBase` in sorted server order. |
+| `clientHost` | submodule | disabled | Render files for the game's in-game **Host** button from this same pack. See [clientHost](#clienthost). |
+
+### `clientHost`
+
+Render this pack's config for the game's own **Host** button, i.e. a world hosted
+from inside a client rather than as a dedicated server. The result is exposed as
+[`clientHosts`](#clienthosts); this module never installs it.
+
+**Deliberately independent of `enable`.** `enable` decides whether a dedicated
+server exists on this host; a client host is a different way to run the same
+world, and the common case is exactly the one where `enable = false` — a player's
+own machine, where the pack drives the Host screen and no dedicated server is
+installed at all.
+
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `enable` | bool | `false` | Produce a `clientHosts.<attr>` entry. |
+| `name` | str | `"servertest"` | The client-side server name. PZ names both `<name>.ini` and `Saves/Multiplayer/<name>` after it — so changing it makes a **new world** rather than reusing the existing one. `servertest` is what the Host screen uses by default. |
+
+The `.ini` is merged rather than rewritten (see
+[`clientHosts`](#clienthosts)), and `PZ_CLIENT_WORKSHOP` shares one Workshop
+download between the dedicated server and the client. Note that the client half
+of a Java-mod pack needs its JVM agent installed **in the client**, which is a
+launch-option (or `ProjectZomboid64.json`) change outside this module — see the
+pack's own instructions.
 
 ### Maps
 

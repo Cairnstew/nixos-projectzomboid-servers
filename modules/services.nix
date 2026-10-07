@@ -58,6 +58,15 @@ let
   resolved = lib.mapAttrs (name: srv: pz.resolveServer cfg.modpacks name srv) enabledServers;
   serverNames = builtins.attrNames resolved;
 
+  # Servers that asked for client-host files, resolved INDEPENDENTLY of `enable`.
+  # That independence is the whole point: the main use of a client host is the
+  # case where NO dedicated server exists on this host, and the pack must still
+  # render. Deriving this from `resolved` would silently drop exactly that
+  # configuration — a pack that renders nothing, with no error.
+  clientResolved = lib.mapAttrs (name: srv: pz.resolveServer cfg.modpacks name srv) (
+    lib.filterAttrs (_: srv: srv.clientHost.enable) cfg.servers
+  );
+
   unitName = name: "project-zomboid-${name}";
   installUnit = "project-zomboid-install";
 
@@ -612,6 +621,36 @@ in
     systemd.sockets = lib.mapAttrs' (name: srv: mkConsoleSocket name srv) (
       lib.filterAttrs (_: srv: srv.managementSystem.systemd-socket.enable) resolved
     );
+
+    # ── Client-host files (the in-game Host button) ──────────────────────────
+    # Plain data + a runnable script, exactly like `webConsoleUpstreams`: this
+    # module does not own `~/Zomboid`, so it renders and hands over. Consumed by
+    # the client user's own configuration (see the `clientHosts` option docs).
+    services.project-zomboid-servers.clientHosts = lib.mapAttrs (
+      name: srv:
+      let
+        clientName = srv.clientHost.name;
+        iniBase = prepare.mkIniBase {
+          server = srv;
+          name = "${clientName}.ini";
+        };
+      in
+      {
+        inherit (srv) mods workshopItems;
+        serverName = clientName;
+        iniFile = iniBase;
+        sandboxFile = prepare.mkSandboxFile {
+          server = srv;
+          name = "${clientName}_SandboxVars.lua";
+        };
+        prepare = prepare.mkClientHostScript {
+          name = "${unitName name}-client-host";
+          server = srv;
+          inherit iniBase clientName;
+          steamAppId = cfg.package.steamAppId or "108600";
+        };
+      }
+    ) clientResolved;
 
     systemd.timers = mkIf (cfg.updateSchedule != null) {
       "project-zomboid-update" = {

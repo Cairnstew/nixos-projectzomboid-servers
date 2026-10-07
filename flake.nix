@@ -457,8 +457,61 @@
                 ) "web consoles opened TCP ports without web.openFirewall")
               ];
 
+              # ── Third scenario: a pack driving the in-game Host button ───────
+              # `enable = false` on the SERVER, on purpose: the main use of a
+              # client host is a machine with NO dedicated server, so the pack
+              # must still render while no unit exists. A separate evaluation for
+              # the same reason as the web scenario — a branch no check evaluates
+              # is a branch that rots, and "renders nothing, silently" is exactly
+              # how this would fail.
+              clientEval = eval-config {
+                inherit pkgs;
+                config.services.project-zomboid-servers = {
+                  enable = true;
+                  dataDir = "/var/lib/project-zomboid";
+                  modpacks = self.modpacks;
+                  servers.viewpoint = {
+                    enable = false;
+                    modpack = "viewpoint";
+                    clientHost.enable = true;
+                  };
+                };
+              };
+
+              clientCfg = clientEval.config.services.project-zomboid-servers;
+              clientHosts = clientCfg.clientHosts or { };
+              clientSvcs = clientEval.config.systemd.services;
+              oneHost = clientHosts.viewpoint or null;
+
+              clientFailures = [
+                (lib.optionalString (
+                  clientHosts ? viewpoint == false
+                ) "clientHost.enable produced no clientHosts entry")
+                # The whole point of resolving separately: a client host must not
+                # drag a dedicated server into existence.
+                (lib.optionalString (
+                  clientSvcs ? project-zomboid-viewpoint
+                ) "a server with enable = false still produced a dedicated server unit")
+                (lib.optionalString (
+                  oneHost == null || oneHost.serverName != "servertest"
+                ) "clientHosts.viewpoint.serverName is not the default \"servertest\"")
+                (lib.optionalString (
+                  oneHost == null || !(lib.hasPrefix "/nix/store/" (toString (oneHost.prepare or "")))
+                ) "clientHosts.viewpoint.prepare is not a store path")
+                (lib.optionalString (
+                  oneHost == null
+                  || !(lib.hasPrefix "/nix/store/" (toString (oneHost.iniFile or "")))
+                ) "clientHosts.viewpoint.iniFile is not a store path")
+                (lib.optionalString (
+                  oneHost == null || builtins.length (oneHost.workshopItems or [ ]) < 100
+                ) "the viewpoint pack's Workshop list did not reach clientHosts")
+                (lib.optionalString (
+                  oneHost == null || builtins.length (oneHost.mods or [ ]) < 100
+                ) "the viewpoint pack's Mods list did not reach clientHosts")
+              ];
+
               failures = lib.filter (s: s != null && s != "") (
-                perServer ++ staticFailures ++ assertionFailures ++ webFailures
+                perServer ++ staticFailures ++ assertionFailures ++ webFailures ++ clientFailures
               );
             in
             if failures == [ ] then

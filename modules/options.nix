@@ -1058,6 +1058,33 @@ in
                   ports stable as long as you do not rename servers.
                 '';
               };
+
+              # ── Client-host files ──────────────────────────────────────────
+              # Deliberately INDEPENDENT of `enable`. `enable` decides whether the
+              # dedicated server exists on this host; a client host is a separate
+              # way to run the same pack, and the common case is exactly the one
+              # where `enable = false` — the pack drives the in-game Host button
+              # and no dedicated server is installed at all.
+              clientHost = {
+                enable = mkEnableOption ''
+                  client-host files for this server, for Project Zomboid's in-game
+                  Host button (see <option>clientHosts</option>)
+                '';
+
+                name = mkOption {
+                  type = types.str;
+                  default = "servertest";
+                  description = ''
+                    The client-side server name. Project Zomboid names both the
+                    config and the save after it:
+                    <literal>Zomboid/Server/&lt;name&gt;.ini</literal> and
+                    <literal>Zomboid/Saves/Multiplayer/&lt;name&gt;</literal>.
+                    <literal>servertest</literal> is the name the game's Host
+                    screen uses by default, so changing it makes a NEW world
+                    rather than reusing the existing one.
+                  '';
+                };
+              };
             };
           }
         )
@@ -1148,6 +1175,79 @@ in
           name = u.name;
         }) config.services.project-zomboid-servers.webConsoleUpstreams);
         </programlisting>
+      '';
+    };
+
+    clientHosts = mkOption {
+      type = types.attrsOf (
+        types.submodule {
+          options = {
+            serverName = mkOption {
+              type = types.str;
+              description = "The client-side server name — the `<name>.ini` basename.";
+            };
+            prepare = mkOption {
+              type = types.path;
+              description = ''
+                A runnable script that seeds the client's Project Zomboid home
+                from this server's config. Takes its paths from the environment:
+
+                <programlisting>
+                PZ_CLIENT_ZOMBOID=~/Zomboid \
+                PZ_SERVER_DIR=/mnt/data/project-zomboid/server \
+                PZ_CLIENT_WORKSHOP=~/.local/share/Steam/steamapps/workshop/content/108600 \
+                  /nix/store/…-project-zomboid-&lt;name&gt;-client-host
+                </programlisting>
+
+                <literal>PZ_CLIENT_ZOMBOID</literal> is required;
+                <literal>PZ_SERVER_DIR</literal> and
+                <literal>PZ_CLIENT_WORKSHOP</literal> are optional and, when both
+                are set, symlink the shared Workshop download into the client's
+                Steam library so the mods are not downloaded twice.
+              '';
+            };
+            iniFile = mkOption {
+              type = types.path;
+              description = ''
+                The Nix-rendered base `<name>.ini` (a store file), BEFORE the
+                world-identity merge. Normally handed to <option>prepare</option>
+                rather than installed directly — installing it verbatim would
+                overwrite Seed / ServerPlayerID on an existing world.
+              '';
+            };
+            sandboxFile = mkOption {
+              type = types.path;
+              description = "The Nix-rendered `<name>_SandboxVars.lua` (a store file).";
+            };
+            mods = mkOption {
+              type = types.listOf types.str;
+              description = "The resolved `Mods=` list, for a client that installs its own config.";
+            };
+            workshopItems = mkOption {
+              type = types.listOf types.str;
+              description = "The resolved `WorkshopItems=` list (Steam Workshop ids).";
+            };
+          };
+        }
+      );
+      # No `default` — read-only options may have exactly one definition and
+      # `default = { }` would count as one. services.nix is the only definer.
+      readOnly = true;
+      description = ''
+        READ-ONLY. One entry per server with
+        <option>servers.&lt;name&gt;.clientHost.enable</option> = true.
+
+        This exists so a pack can drive BOTH ways of hosting a world from one
+        description. A dedicated server (the systemd units below) and the game's
+        in-game <emphasis>Host</emphasis> button run the same `.ini`, the same
+        SandboxVars and the same mod list; only the two hosts' file locations
+        differ. Rendering the client side here means the mod list is never
+        written down twice, and cannot drift.
+
+        Nothing is installed by this module: the client's Zomboid home is a
+        user-level path (`~/Zomboid`) that a system module cannot own. Run
+        <option>prepare</option> from wherever the client user is configured —
+        e.g. a Home Manager <literal>home.activation</literal> hook.
       '';
     };
 

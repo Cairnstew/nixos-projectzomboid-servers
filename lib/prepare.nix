@@ -77,6 +77,17 @@ rec {
       + "\n"
     );
 
+  # ── The `<name>_SandboxVars.lua`, rendered by Nix ──────────────────────────
+  # Shared by the dedicated-server prep and the client-host prep: both OWN this
+  # file outright (PZ regenerates it from whatever is on disk), so the rendering
+  # must not diverge between the two ways of hosting a world.
+  mkSandboxFile =
+    {
+      server,
+      name ? "${server.serverName}_SandboxVars.lua",
+    }:
+    pkgs.writeText name (pz.renderSandbox { settings = server.sandbox; });
+
   # ── Per-server start-prep ──────────────────────────────────────────────────
   # `server` is a `pz.resolveServer` result.
   mkPrepScript =
@@ -90,12 +101,7 @@ rec {
       steamAppId ? "108600",
     }:
     let
-      # Fully declarative and secret-free, so they can live in the store. Keeping
-      # them out of the shell script also stops a multi-line value from
-      # de-indenting the surrounding Nix string and breaking a heredoc terminator.
-      sandboxFile = pkgs.writeText "${server.serverName}_SandboxVars.lua" (
-        pz.renderSandbox { settings = server.sandbox; }
-      );
+      sandboxFile = mkSandboxFile { inherit server; };
 
       # Spawn lua. PZ writes these itself when they are absent, so we own them
       # outright — but only when there is something to say: rendering an empty
@@ -280,6 +286,102 @@ rec {
         )}
 
         echo "project-zomboid: prepared $pz_name in $server_home"
+      '';
+    };
+
+  # ── Client-host prep ───────────────────────────────────────────────────────
+  # Sibling of `mkPrepScript` for the OTHER way a Project Zomboid world runs:
+  # the in-game Host button, which runs the server inside the CLIENT's own
+  # process. A pack described once must drive both hosts, so the `.ini` merge and
+  # the SandboxVars rendering above are shared verbatim — otherwise the mod list
+  # would be written down twice and the two would drift.
+  #
+  # What differs is only where the files land, and that there is no install or
+  # update step: Steam owns the client's game and updates it on its own schedule.
+  #
+  # Runtime inputs come from the environment, because the client's Zomboid home
+  # and Steam library are user-level paths this module cannot know:
+  #
+  #   PZ_CLIENT_ZOMBOID    the client's Zomboid home, e.g. ~/Zomboid   (required)
+  #   PZ_SERVER_DIR        the shared steamcmd install (Workshop source)
+  #   PZ_CLIENT_WORKSHOP   the client library's
+  #                        `steamapps/workshop/content/<steamAppId>` directory
+  #
+  # When BOTH of the last two are set, every Workshop item this server needs is
+  # symlinked from the shared install into the client library, so ONE download
+  # serves both hosts. Leaving PZ_CLIENT_WORKSHOP unset skips that and expects the
+  # client to have subscribed on Steam — which is the only thing a hosted world
+  # cannot do for joining players (`WorkshopItems=` makes them download it).
+  #
+  # `install -m 0644`, never `cp`, for the same reason as the dedicated path: the
+  # source is a store file at mode 444 and `cp` would create a read-only
+  # destination that PZ could not then rewrite.
+  mkClientHostScript =
+    {
+      name ? "project-zomboid-client-host",
+      server,
+      iniBase,
+      # The client-side server name — `Zomboid/Server/<clientName>.ini`. NOT
+      # `server.serverName`: on a client host the dedicated server's name is
+      # usually absent or irrelevant, and the game names the file after what its
+      # own Host screen is called (`servertest` by default).
+      clientName ? server.serverName,
+      mergeIni ? ../scripts/merge_ini.py,
+      steamAppId ? "108600",
+    }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = [
+        pkgs.coreutils
+        pkgs.python3
+      ];
+      text = ''
+        require_env() {
+          if [ -z "''${!1-}" ]; then
+            echo "project-zomboid: $1 must be set" >&2
+            exit 1
+          fi
+        }
+        require_env PZ_CLIENT_ZOMBOID
+
+        pz_name="${clientName}"
+        server_conf="$PZ_CLIENT_ZOMBOID/Server"
+        mkdir -p "$server_conf"
+
+        # MERGED, not overwritten. Once the client has hosted this world the very
+        # same file carries Seed / ServerPlayerID / LastModified, so rewriting it
+        # wholesale would reset the world — the identical trap the dedicated
+        # server's merge exists for, hence the same merge_ini.py.
+        python3 ${mergeIni} \
+          "$server_conf/$pz_name.ini" \
+          --from-file ${iniBase} \
+          ${pz.secretFileArgs server} \
+          ${optionalString (builtins.length (pz.iniUpdates server) > 0) ''
+            "$@" \
+          ''}
+
+        install -m 0644 ${mkSandboxFile { inherit server; }} \
+          "$server_conf/''${pz_name}_SandboxVars.lua"
+
+        # One download, two hosts. Skipped unless the caller names a client
+        # Workshop directory, so a Steam-subscribed client is left alone.
+        if [ -n "''${PZ_CLIENT_WORKSHOP-}" ]; then
+          require_env PZ_SERVER_DIR
+          mkdir -p "$PZ_CLIENT_WORKSHOP"
+          ${concatStringsSep "\n" (
+            map (id: ''
+              src="$PZ_SERVER_DIR/steamapps/workshop/content/${steamAppId}/${id}"
+              dst="$PZ_CLIENT_WORKSHOP/${id}"
+              if [ -d "$src" ]; then
+                ln -sfn "$src" "$dst"
+              elif [ -L "$dst" ]; then
+                rm -f "$dst"
+              fi
+            '') server.workshopItems
+          )}
+        fi
+
+        echo "project-zomboid: prepared client host $pz_name in $server_conf"
       '';
     };
 

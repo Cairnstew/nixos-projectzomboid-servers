@@ -6,6 +6,37 @@ All notable changes to this project. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A pack can now drive the in-game Host button, not only a dedicated server.**
+  `servers.<name>.clientHost.enable` renders this server's config for the world a
+  player runs from Project Zomboid's own **Host** button, exposed read-only as
+  `clientHosts.<name>`: a `prepare` script, the base `.ini` and SandboxVars store
+  files, and the resolved `Mods=`/`WorkshopItems=` lists. Both ways of hosting a
+  world read the same files, so a pack is described once and the two cannot drift
+  into different mod lists.
+
+  Deliberately **independent of `enable`**: the main use of a client host is a
+  machine with no dedicated server, and a pack must still render there. Deriving
+  it from `enable` would have silently produced nothing for exactly that case.
+
+  The `prepare` script reuses the dedicated server's `merge_ini.py`, so the
+  client's `.ini` is **merged, not rewritten** — `Seed`, `ServerPlayerID` and
+  `LastModified` survive and re-running is safe, the same guarantee the dedicated
+  path has. Verified by running it against an existing client `.ini`: the three
+  world-identity keys came through unchanged while `Mods=`/`WorkshopItems=` were
+  filled in.
+
+  Setting `PZ_SERVER_DIR` and `PZ_CLIENT_WORKSHOP` makes the script symlink every
+  Workshop item from the shared steamcmd download into the client's Steam library
+  — **one download serves both hosts** rather than two. Leaving
+  `PZ_CLIENT_WORKSHOP` unset skips it, so a Steam-subscribed client is untouched.
+
+  Note this is the *config* only. A pack whose mods need a JVM agent
+  (e.g. ZombieBuddy) also needs that agent installed in the **client**, which is
+  a launch-option change outside any NixOS module and is left to the pack's own
+  instructions.
+
 ### Changed
 
 - **Web-console unit control now uses polkit instead of sudoers.** The scoped

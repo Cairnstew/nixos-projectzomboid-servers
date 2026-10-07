@@ -326,6 +326,7 @@ let
         autoStart
         baseMap
         betaBranch
+        clientHost
         compatibility
         defaultPort
         enable
