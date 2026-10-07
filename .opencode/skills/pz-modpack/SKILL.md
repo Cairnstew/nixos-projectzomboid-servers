@@ -73,6 +73,30 @@ A mod's Workshop page is
 `https://steamcommunity.com/sharedfiles/filedetails/?id=<id>`. Verify each id is
 current for the server's build (41 / 42) before pinning it.
 
+## Steam collections
+
+A Steam Workshop **collection** is never something a server consumes — PZ reads
+`WorkshopItems=` (individual ids). A collection is a source to *expand*:
+
+```bash
+nix run .#pz-workshop -- expand <collection-id>   # draft modpacks/<name>.nix
+nix run .#pz-workshop -- emit <pack>              # paste-ready URLs
+```
+
+The draft is for review, not to commit blind: a collection cannot tell you which
+items are inert on your build (the `viewpoint` pack deliberately drops ZombieBuddy
+Extensions) or the `Mods=` local-mod ids. There is **no** publish command — Steam
+has no public write API for collections, so `emit` is the whole of "generate a
+collection".
+
+For a **client** (a player's machine), `nix run .#pz-client-mods -- <pack>`
+downloads the pack's Workshop items with `steamcmd` and installs them as local
+mods in `~/Zomboid/mods` — the form PZ's client loads without a subscription.
+Anonymous `steamcmd` cannot fetch every item; add `--login <steam-name>` when it
+answers `Access Denied`. On a Home Manager client the same thing is declarative:
+`services.project-zomboid-servers.home.installMods = true` (plus `steamLogin`).
+It does **not** subscribe — Steam has no API for that — it installs local mods.
+
 ## Consuming the module
 
 ```nix
@@ -131,6 +155,15 @@ Stopping cleanly sends `quit` down the console so the JVM saves and exits `0`.
 - **World identity lives in the same `.ini`** the module writes (`Seed`,
   `ResetID`, `ServerPlayerID`). `merge_ini.py` only touches keys the module owns,
   which is what makes upgrades preserve your world.
+- **Installs are additive; a pack switch is not clean unless you prune.** The
+  shared `steamapps/workshop/content/108600` and each server's link farms only
+  ever grow, and because derived `Map=` scans the shared root, a removed mod's
+  map keeps being injected. `prune = true` (or `--prune` under `nix run`) makes
+  the installed set match the declaration, but only after every item verifies.
+- **A gated Workshop item is a missing mod, not a warning.** Anonymous steamcmd
+  answers `Access Denied` for mature-content/author-restricted items (Brita's
+  Armor Pack). Set `steamLogin` and run `steamcmd +login <account>` once as the
+  server user; or supply the folder by hand through `servers.<name>.localMods`.
 
 ## Checking a pack
 
@@ -148,6 +181,9 @@ nix run .#pz-vanilla-plus -- myserver        # your terminal is the console
 nix run .#pz-vanilla-plus -- --list-maps myserver
 nix run .#pz-maps -- --workshop-root <dir> --explain
 nix run .#pz-modpack -- show vanilla-plus
+nix run .#pz-workshop -- expand <collection-id>    # collection -> draft pack
+nix run .#pz-workshop -- emit vanilla-plus         # paste-ready Workshop URLs
+nix run .#pz-client-mods -- vanilla-plus           # install a pack's mods for a client
 ```
 
 Full option reference: `docs/options.md`. Host recipes: `docs/host-recipes.md`.

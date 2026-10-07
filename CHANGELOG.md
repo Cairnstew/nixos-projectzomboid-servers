@@ -8,6 +8,38 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **The install is verified, not fire-and-forget.** The shared install now
+  downloads a batch of Workshop items, checks each one on disk (an empty
+  directory counts as a failure), retries the stragglers once, and — if any
+  still have not arrived — exits non-zero naming each id and title, with
+  remediation. The servers `Require` this unit, so they no longer quietly start
+  with mods missing. A `PZ_STEAMCMD` override lets an operator pin a different
+  steamcmd, and lets the check exercise the whole flow offline.
+- **`steamLogin` — private and mature-gated Workshop items are now installable.**
+  Items that answer `Access Denied` anonymously (Brita's Armor Pack is the known
+  example) are fetched by logging the shared install's steamcmd in as an account
+  that owns Project Zomboid. The password is never stored: the token is cached
+  once under `dataDir` with `steamcmd +login <account>`, and non-interactive runs
+  reuse it.
+- **`localMods` — the fallback for a mod that cannot be downloaded at all.**
+  `servers.<name>.localMods` takes `folder-name = directory`, symlinks each into
+  the server's `Zomboid/mods`, and adds the key to `Mods=` automatically — so a
+  private or modworkshop.net mod is declared once instead of hunted by hand.
+- **`prune` — a clean pack switch.** With `prune = true` the shared
+  `steamapps/workshop/content/<appid>` is reduced to the union of what enabled
+  servers and client hosts declare, and each server's Workshop and local-mod link
+  farms to its own declared list. Prune runs only after every item verifies, and
+  `links` mode touches only symlinks the module made — a hand-placed directory is
+  never deleted. Under `nix run` the same is `--prune`. Newly tested by
+  `scripts/pz_prune.py` and offline install/prep checks.
+- **`failOnMissingMods = false` — a degraded-but-up server.** When a Workshop item
+  cannot be downloaded, log it, **skip** it, and let the install succeed instead
+  of refusing (the default). The skipped item stays in `WorkshopItems=`, PZ warns
+  at start, a later install picks it up with nothing re-declared, and prune is
+  withheld while anything is missing so a re-login can fetch it. Standalone:
+  `--lenient`. The install check now covers strict-fail, skip+log, and
+  "no prune while missing" in one offline run.
+
 - **A pack can now drive the in-game Host button, not only a dedicated server.**
   `servers.<name>.clientHost.enable` renders this server's config for the world a
   player runs from Project Zomboid's own **Host** button, exposed read-only as
@@ -63,6 +95,46 @@ All notable changes to this project. Format follows
   not installed via Steam at all — now behaves correctly where a baked-in path
   silently did nothing; the absent case is reported and skipped, never fatal.
   Covered by the `steam-workshop-discovery` check.
+
+- **Two Steam Workshop CLIs, for moving between a collection and a pack.**
+  `nix run .#pz-workshop -- expand <collection-id>` reads a Steam Workshop
+  collection and prints a reviewable draft `modpacks/<name>.nix`, child order
+  preserved; `… emit <pack>` prints a pack's items as paste-ready URLs. Steam has
+  no public write API for collections, so "generate a collection" can only mean
+  emit its contents for a human to paste — and a collection is never what a
+  dedicated server consumes, which reads `WorkshopItems=` (individual ids). The
+  draft is deliberately not a finished pack: a collection cannot say which items
+  are inert on your build (the `viewpoint` pack drops ZombieBuddy Extensions) or
+  the `Mods=` local-mod ids. Covered by the `pz-workshop-helper` check, whose
+  offline half asserts child ordering and Nix-safe escaping.
+
+- **`nix run .#pz-client-mods -- <pack>` fetches a pack's mods onto a CLIENT.**
+  It downloads each Workshop item with `steamcmd` and installs the mod(s) it
+  contains as **local mods** in `~/Zomboid/mods` — the one form Project Zomboid's
+  client loads with no Steam subscription, per the upstream wiki's "manual local
+  installation". The install keys each folder by its `mod.info` `id=`, the same
+  id the server's `Mods=` list uses. `--steam-library` pre-seeds the Steam
+  library instead (inert until subscribed, the client-host caveat); `--login`
+  is for items that answer `Access Denied` anonymously (verified: some do, some
+  do not; the authenticated download needs real credentials and is the one path
+  the checks cannot cover). Staging defaults under `~/.cache` because NixOS
+  `steamcmd` runs under `steam-run`, whose private `/tmp` silently swallows a
+  download.
+  Covered by the `pz-client-mods-plan` check.
+
+- **A Home Manager option so a client gets the pack's mods declaratively.**
+  `services.project-zomboid-servers.home.installMods` runs the downloader as an
+  idempotent systemd user service at login, installing the mods for whatever the
+  NixOS side marked `clientHost.<name>.enable`. It deliberately does not
+  "subscribe": that is not possible — Steam has no public write API for
+  subscriptions, `steamcmd` answers `Command not found: workshop_subscribe`, and
+  the client's `appworkshop_<appid>.acf` carries no `subscribed` flag (all
+  checked) — so it installs **local mods** in `~/Zomboid/mods`, the form the
+  client actually loads. The new `home.steamLogin` covers items that answer
+  `Access Denied` anonymously, reusing a SteamCMD token cached by a one-time
+  `steamcmd +login` because a unit has no terminal to prompt on. The downloader
+  became a package (`pkgs.project-zomboid-client-mods`) shared by the
+  `pz-client-mods` app and this module, so the two cannot drift.
 
 ### Changed
 

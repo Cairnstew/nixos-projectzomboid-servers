@@ -114,6 +114,11 @@ stdenvNoCC.mkDerivation {
     admin_user=""
     admin_pass_file=""
     soft_reset=0
+    # Runtime auth + prune: this script has no Nix server definition to read a
+    # default from, so lib/prepare.nix reads both from the environment.
+    steam_login=""
+    prune=0
+    lenient=0
 
     # `modpack` is a NIX binding. Assigned here so the shell has a real variable
     # to print and branch on — reading `${"modpack:-none"}` directly in the script
@@ -149,6 +154,10 @@ stdenvNoCC.mkDerivation {
       --admin-user NAME    create/update the Build 42 admin account
       --admin-pass-file P  file holding its password (required with --admin-user)
       --soft-reset         discard world identity, generating a fresh world
+      --login NAME         Steam account for gated Workshop items (default: anonymous)
+      --prune              remove mods no longer declared (shared cache + link farms)
+      --lenient            log-and-skip Workshop items that cannot be downloaded
+                           instead of failing the install (the server boots without them)
       --no-install         skip the steamcmd validate (much faster restarts)
       --list-maps          print the derived Map= list and exit
       --print-config       write the config, print it, exit — needs no game files
@@ -182,6 +191,9 @@ stdenvNoCC.mkDerivation {
         --admin-user) admin_user="$2"; shift 2 ;;
         --admin-pass-file) admin_pass_file="$2"; shift 2 ;;
         --soft-reset) soft_reset=1; shift ;;
+        --login)      steam_login="$2"; shift 2 ;;
+        --prune)      prune=1;         shift ;;
+        --lenient)    lenient=1;       shift ;;
         --no-install) do_install=0;    shift ;;
         --list-maps)  list_maps=1;     shift ;;
         --print-config) print_only=1;  shift ;;
@@ -217,6 +229,17 @@ stdenvNoCC.mkDerivation {
     # The prep script is shared with the NixOS module and reads the server name
     # from here, because it is a runtime argument rather than Nix data.
     export PZ_SERVER_NAME="$server_name"
+
+    # Auth + prune, read by lib/prepare.nix from the environment so the shared
+    # install and prep scripts honour them without a second implementation.
+    # Only exported when set, so the script's own anonymous default applies.
+    if [ -n "$steam_login" ]; then
+      export PZ_STEAM_LOGIN="$steam_login"
+    fi
+    export PZ_PRUNE="$prune"
+    if [ "$lenient" -eq 1 ]; then
+      export PZ_FAIL_ON_MISSING=0
+    fi
 
     # Map policy overrides, so the shared prep script can honour runtime flags
     # without a second implementation. PZ_MAP_PRIORITY is colon-separated

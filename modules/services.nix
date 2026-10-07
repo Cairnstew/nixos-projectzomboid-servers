@@ -124,12 +124,27 @@ let
   # ── Install / update ───────────────────────────────────────────────────────
   # One shared install serves every server: PZ's binaries are identical, only the
   # Zomboid home differs. De-duplicated at eval time across all servers.
+  #
+  # Workshop id -> title, so a failed download can name the mod rather than only
+  # its number. Drawn from the catalogue and any inline server mods; a title is
+  # cosmetic, so a missing one is harmless.
+  itemTitles = builtins.listToAttrs (
+    map (m: lib.nameValuePair m.id (if m.title == null then "" else m.title)) (
+      lib.concatMap (p: p.workshopMods) (builtins.attrValues cfg.modpacks)
+      ++ lib.concatMap (s: s.workshopMods) (builtins.attrValues cfg.servers)
+    )
+  );
+
   installScript = prepare.mkInstallScript {
     steamcmd = cfg.steamcmd;
     serverAppId = cfg.package.serverAppId or "380870";
     steamAppId = cfg.package.steamAppId or "108600";
     workshopItems = allWorkshopItems;
     betaBranch = installBetaBranch;
+    login = cfg.steamLogin;
+    prune = cfg.prune;
+    failOnMissingMods = cfg.failOnMissingMods;
+    inherit itemTitles;
   };
 
   # ── Per-server start-prep ──────────────────────────────────────────────────
@@ -146,6 +161,7 @@ let
         name = "${srv.serverName}.ini";
       };
       steamAppId = cfg.package.steamAppId or "108600";
+      prune = cfg.prune;
     };
 
   # ── Console backends ───────────────────────────────────────────────────────

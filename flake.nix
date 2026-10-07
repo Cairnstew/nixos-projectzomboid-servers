@@ -136,6 +136,7 @@
             modpack = null;
             workshopMods = [ ];
             mods = [ ];
+            localMods = { };
             map = null;
             baseMap = versions.defaultBaseMap;
             mapOrder = {
@@ -538,6 +539,7 @@
         {
           packages = {
             project-zomboid-server = pkgs.callPackage ./pkgs/project-zomboid-server { };
+            project-zomboid-client-mods = pkgs.callPackage ./pkgs/project-zomboid-client-mods { };
             project-zomboid-runner = mkRunner { srvName = "pz"; };
             inherit (pkgs) steamcmd;
           };
@@ -626,6 +628,50 @@
                 }
               );
             };
+
+            # Steam Workshop helpers over a collection and the catalogue:
+            #   nix run .#pz-workshop -- expand <collection-id>   draft a pack
+            #   nix run .#pz-workshop -- emit <pack>              paste-ready list
+            # There is no "publish" command: Steam has no public write API for
+            # collections. See scripts/pz_workshop.py.
+            pz-workshop = {
+              type = "app";
+              program = lib.getExe (
+                pkgs.writeShellApplication {
+                  name = "pz-workshop";
+                  runtimeInputs = [ pkgs.python3 ];
+                  text = ''
+                    # A pack is Nix data; inject the catalogue as JSON the same
+                    # way `pz-modpack` does, so `emit` needs no Nix interpreter.
+                    export PZ_MODPACKS_JSON=${pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks)}
+                    exec python3 ${./scripts/pz_workshop.py} "$@"
+                  '';
+                }
+              );
+            };
+
+            # Fetch a pack's Workshop mods onto a CLIENT machine. The default
+            # target is the game's local mods folder, which the client loads with
+            # no Steam subscription; `--steam-library` pre-seeds the library
+            # instead (invisible to the client until subscribed). The item ->
+            # local-mod mapping is the same reason the server's snake_case and
+            # camelCase lists are kept apart. See scripts/pz_client_mods.py.
+            pz-client-mods = {
+              type = "app";
+              program = lib.getExe (
+                pkgs.writeShellApplication {
+                  name = "pz-client-mods";
+                  text = ''
+                    # The pack catalogue is Nix data; inject it as JSON so the
+                    # `pz-client-mods <pack>` convenience works. The tool itself
+                    # is the shared package, so the module and this app run one
+                    # implementation.
+                    export PZ_MODPACKS_JSON=${pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks)}
+                    exec ${lib.getExe (pkgs.callPackage ./pkgs/project-zomboid-client-mods { })} "$@"
+                  '';
+                }
+              );
+            };
           }
           # One app per catalogue pack: `nix run .#pz-vanilla-plus -- <name>`.
           #
@@ -680,6 +726,187 @@
               else
                 pkgs.runCommand "pz-modpack-catalogue-check" { } ''
                   echo "modpack catalogue ok: ${lib.concatStringsSep ", " modpackNames}"
+                  touch "$out"
+                '';
+
+            # ── The Workshop helpers behave, offline ───────────────────────────
+            # `expand` is a network tool, so only its PURE parts (child order,
+            # Nix escaping) are exercised here while `emit` runs for real over
+            # the injected catalogue. Nothing in `nix flake check` may hit the
+            # network, or the check becomes a flaky test of Valve's uptime.
+            pz-workshop-helper =
+              pkgs.runCommand "pz-workshop-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                    pkgs.python3
+                  ];
+                  WORKSHOP = ./scripts/pz_workshop.py;
+                  CATALOGUE = pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks);
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  python3 - "$WORKSHOP" "$CATALOGUE" <<'PY' || fail "emit/expand assertions failed"
+                  import importlib.util, json, os, subprocess, sys
+
+                  workshop, catalogue = sys.argv[1], sys.argv[2]
+                  spec = importlib.util.spec_from_file_location("pz_workshop", workshop)
+                  m = importlib.util.module_from_spec(spec)
+                  spec.loader.exec_module(m)
+
+                  # emit must reproduce every pack's item count AND order.
+                  packs = json.load(open(catalogue))
+                  for name, pack in packs.items():
+                      n = len(pack.get("workshopMods", []))
+                      env = dict(os.environ, PZ_MODPACKS_JSON=catalogue)
+                      out = subprocess.run(
+                          [sys.executable, workshop, "emit", name],
+                          capture_output=True, text=True, env=env,
+                      )
+                      if out.returncode != 0:
+                          raise SystemExit("emit " + name + " failed: " + out.stderr)
+                      urls = [l for l in out.stdout.splitlines() if l.startswith("https://")]
+                      if len(urls) != n:
+                          raise SystemExit("emit " + name + ": " + str(len(urls)) + " urls, expected " + str(n))
+                      for i, item in enumerate(pack.get("workshopMods", [])):
+                          if ("id=" + item["id"]) not in urls[i]:
+                              raise SystemExit("emit " + name + ": order wrong at " + str(i))
+
+                  # expand: children come back in sortorder, not API order.
+                  m.post = lambda endpoint, params: {
+                      "result": 1,
+                      "collectiondetails": [{
+                          "result": 1,
+                          "publishedfileid": "9",
+                          "children": [
+                              {"publishedfileid": "b", "sortorder": 1},
+                              {"publishedfileid": "a", "sortorder": 0},
+                          ],
+                      }],
+                  }
+                  ids, _ = m.collection_children("9")
+                  if ids != ["a", "b"]:
+                      raise SystemExit("collection order: " + repr(ids))
+
+                  # A title carrying an interpolation MUST be escaped, or the
+                  # generated pack will not evaluate. Build the marker without
+                  # writing it literally, so this test itself stays Nix-safe.
+                  d = chr(36)
+                  rendered = m.render_pack("9", None, [("a", "A" + d + "{b}", None)], "108600", "p")
+                  if ("\\" + d) not in rendered:
+                      raise SystemExit("render_pack left an unescaped interpolation")
+
+                  print("pz-workshop assertions ok")
+                  PY
+
+                  echo "pz-workshop ok: emit matches the catalogue; expand order and escaping hold"
+                  touch "$out"
+                '';
+
+            # The client downloader's PLAN is offline (no steamcmd, no network),
+            # so the item count, the default local-mods target and the unknown-
+            # pack error are all asserted here.
+            pz-client-mods-plan =
+              pkgs.runCommand "pz-client-mods-plan-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                    pkgs.python3
+                  ];
+                  CLIENT = ./scripts/pz_client_mods.py;
+                  CATALOGUE = pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks);
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  python3 - "$CLIENT" "$CATALOGUE" <<'PY' || fail "client plan assertions failed"
+                  import json, os, subprocess, sys
+
+                  client, catalogue = sys.argv[1], sys.argv[2]
+                  packs = json.load(open(catalogue))
+                  env = dict(os.environ, PZ_MODPACKS_JSON=catalogue)
+                  for name, pack in packs.items():
+                      n = len(pack.get("workshopMods", []))
+                      out = subprocess.run(
+                          [sys.executable, client, "--json", name],
+                          capture_output=True, text=True, env=env,
+                      )
+                      if out.returncode != 0:
+                          raise SystemExit("plan " + name + " failed: " + out.stderr)
+                      if n == 0:
+                          # A pack with no Workshop items is a no-op, so only the
+                          # exit status above is meaningful for it.
+                          continue
+                      plan = json.loads(out.stdout)
+                      if plan["mode"] != "local-mods":
+                          raise SystemExit(name + ": the default target is not local mods")
+                      if len(plan["items"]) != n:
+                          raise SystemExit(
+                              name + ": planned " + str(len(plan["items"])) + " items, expected " + str(n)
+                          )
+                      if plan["target"].rstrip("/").split("/")[-1] != "mods":
+                          raise SystemExit(name + ": local-mods target is not the mods folder")
+
+                  bad = subprocess.run(
+                      [sys.executable, client, "--json", "no-such-pack"],
+                      capture_output=True, text=True, env=env,
+                  )
+                  if bad.returncode == 0:
+                      raise SystemExit("plan accepted an unknown pack")
+
+                  print("client plan ok")
+                  PY
+
+                  echo "pz-client-mods plan ok: counts, default target and unknown-pack all behave"
+                  touch "$out"
+                '';
+
+            # ── The prune helper is pure filesystem work, so it runs for real ──
+            # Workshop mode must delete undeclared NUMERIC entries and leave
+            # everything else; links mode must delete only symlinks — a real
+            # directory a user placed by hand is the one thing that must never
+            # go; --dry-run must change nothing.
+            pz-prune =
+              pkgs.runCommand "pz-prune-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.python3
+                  ];
+                  PRUNE = ./scripts/pz_prune.py;
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+                  root="$TMPDIR/workshop"
+                  mkdir -p "$root/111" "$root/222" "$root/333" "$root/notanid"
+                  touch "$root/111/x"
+
+                  python3 "$PRUNE" workshop --root "$root" --keep 111 --keep 222 >/dev/null 2>&1 \
+                    || fail "workshop prune returned non-zero"
+                  [ -d "$root/111" ] || fail "kept item 111 was removed"
+                  [ -d "$root/222" ] || fail "kept item 222 was removed"
+                  [ ! -e "$root/333" ] || fail "undeclared item 333 survived a shared-root prune"
+                  [ -d "$root/notanid" ] || fail "a non-numeric entry was removed"
+
+                  mkdir -p "$root/444"
+                  python3 "$PRUNE" workshop --root "$root" --keep 111 --dry-run >/dev/null 2>&1 \
+                    || fail "workshop --dry-run returned non-zero"
+                  [ -d "$root/444" ] || fail "--dry-run removed a directory"
+
+                  links="$TMPDIR/links"
+                  mkdir -p "$links"
+                  ln -s "$TMPDIR" "$links/555"
+                  ln -s "$TMPDIR" "$links/666"
+                  mkdir -p "$links/real"
+                  python3 "$PRUNE" links --root "$links" --keep 555 >/dev/null 2>&1 \
+                    || fail "links prune returned non-zero"
+                  [ -L "$links/555" ] || fail "a kept symlink was removed"
+                  [ ! -L "$links/666" ] || fail "an undeclared symlink survived a links prune"
+                  [ -d "$links/real" ] || fail "links mode removed a real directory"
+
+                  echo "pz-prune ok: workshop and links modes keep only what is declared"
                   touch "$out"
                 '';
 
@@ -977,12 +1204,20 @@
                       PVP = true;
                       PauseEmpty = true;
                     };
+                    # A non-Workshop mod: the prep script must symlink it into
+                    # Zomboid/mods, and `Mods=` must gain its folder name.
+                    localMods = {
+                      TestLocalMod = ./modpacks/vanilla-plus.nix;
+                    };
                   }
                 );
+                # prune = true so a dropped workshop item is REMOVED from the
+                # server's link farm rather than merely left dangling.
                 prep = pz-prepare.mkPrepScript {
                   inherit server;
                   iniBase = pz-prepare.mkIniBase { inherit server; };
                   name = "pz-prep-roundtrip";
+                  prune = true;
                 };
               in
               pkgs.runCommand "pz-prep-roundtrip-check"
@@ -1063,9 +1298,122 @@
                   link="$data/$srv/Zomboid/Workshop/content/108600/2625441155"
                   [ -L "$link" ] || fail "no symlink for a downloaded Workshop item"
                   [ -e "$link" ] || fail "the Workshop symlink dangles"
-                  [ ! -e "$stale" ] || fail "a symlink for an undownloaded mod was left behind (would dangle)"
+                  # prune is on: a symlink for an undownloaded UNDECLARED mod
+                  # must be removed outright, not left dangling.
+                  [ ! -L "$stale" ] || fail "prune left a stale symlink behind for a dropped mod"
 
-                  echo "prep roundtrip ok: world identity preserved, config merged, sandbox written, mods linked"
+                  # ── Local (non-Workshop) mods ────────────────────────────────
+                  local_link="$data/$srv/Zomboid/mods/TestLocalMod"
+                  [ -L "$local_link" ] || fail "a declared localMod was not symlinked into Zomboid/mods"
+                  grep -q '^Mods=.*TestLocalMod' "$ini" || fail "a localMod key was not added to Mods="
+
+                  echo "prep roundtrip ok: world identity preserved, config merged, sandbox written, mods linked, prune kept only the declared set"
+                  touch "$out"
+                '';
+
+            # ── The install step is verified, not fire-and-forget ─────────────
+            # Guards the failure mode this feature exists to fix: a Workshop
+            # item steamcmd answers `Access Denied` for was silently skipped and
+            # the servers started with mods missing. PZ_STEAMCMD points the
+            # script at a stub, so the whole flow — batch download, per-item
+            # verification, loud failure naming the missing mod, prune only
+            # AFTER success — runs offline.
+            install-verify-prune =
+              let
+                install = pz-prepare.mkInstallScript {
+                  steamcmd = pkgs.steamcmd;
+                  workshopItems = [
+                    "111"
+                    "222"
+                  ];
+                  prune = true;
+                  itemTitles = {
+                    "111" = "Item One";
+                    "222" = "Item Two";
+                  };
+                  name = "pz-install-check";
+                };
+              in
+              pkgs.runCommand "pz-install-verify-prune-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                  ];
+                  INSTALL = install;
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+                  root="$TMPDIR/pz"
+                  data="$root/data"
+                  server="$root/server"
+                  workshop="$server/steamapps/workshop/content/108600"
+                  mkdir -p "$data" "$workshop/999"
+                  touch "$workshop/999/stale"
+
+                  # A stub steamcmd: `+app_update` is a no-op, and each requested
+                  # `+workshop_download_item <appid> <id>` creates the content
+                  # directory steamcmd would have created — unless the id is in
+                  # FAKE_REFUSE (the Access-Denied case).
+                  cat > "$TMPDIR/fake-steamcmd" <<'FAKE'
+                  #!/bin/sh
+                  state=0
+                  for arg in "$@"; do
+                    case "$state" in
+                      0) [ "$arg" = "+workshop_download_item" ] && state=1 ;;
+                      1) state=2 ;;
+                      2) id="$arg"
+                         case " ''${FAKE_REFUSE:-} " in
+                           *" $id "*) : ;;
+                           *) mkdir -p "$PZ_SERVER_DIR/steamapps/workshop/content/108600/$id"
+                              touch "$PZ_SERVER_DIR/steamapps/workshop/content/108600/$id/contents.txt" ;;
+                         esac
+                         state=0 ;;
+                    esac
+                  done
+                  exit 0
+                  FAKE
+                  chmod +x "$TMPDIR/fake-steamcmd"
+
+                  export PZ_DATA_DIR="$data"
+                  export PZ_SERVER_DIR="$server"
+                  export PZ_STEAMCMD="$TMPDIR/fake-steamcmd"
+                  export FAKE_REFUSE=""
+
+                  PZ_PRUNE=1 "$INSTALL/bin/pz-install-check" \
+                    || fail "a successful install was reported as failed"
+
+                  [ -f "$workshop/111/contents.txt" ] || fail "item 111 was not installed"
+                  [ -f "$workshop/222/contents.txt" ] || fail "item 222 was not installed"
+                  [ ! -e "$workshop/999" ] || fail "prune left an undeclared item in the shared cache"
+
+                  # Now refuse 222 (as a gated item would), recreate a stale
+                  # 999, and assert the install FAILS, names the item, and does
+                  # NOT prune while a download is broken.
+                  rm -rf "$workshop/222"
+                  mkdir -p "$workshop/999"
+                  export FAKE_REFUSE="222"
+                  if msg="$(PZ_PRUNE=1 "$INSTALL/bin/pz-install-check" 2>&1)"; then
+                    fail "install reported success with a Workshop item missing"
+                  fi
+                  echo "$msg" | grep -q '222' || fail "the failure message did not name the missing item"
+                  echo "$msg" | grep -q 'Item Two' || fail "the failure message did not use the mod title"
+                  [ -d "$workshop/999" ] || fail "prune ran while a download was failing — content was deleted"
+
+                  # Lenient mode: the same missing item is logged and SKIPPED,
+                  # the install succeeds, the server would boot — and prune is
+                  # still withheld while something is missing.
+                  if msg="$(PZ_PRUNE=1 PZ_FAIL_ON_MISSING=0 "$INSTALL/bin/pz-install-check" 2>&1)"; then
+                    :
+                  else
+                    fail "lenient install failed instead of skipping"
+                  fi
+                  echo "$msg" | grep -qi 'skipping' || fail "lenient mode did not log the skip"
+                  echo "$msg" | grep -q '222' || fail "lenient mode did not name the skipped item"
+                  [ -d "$workshop/999" ] || fail "lenient+prune removed an item while something was missing"
+                  [ -f "$workshop/111/contents.txt" ] || fail "lenient mode lost a mod that did download"
+
+                  echo "install verify ok: failures are loud and named, prune runs only after every item verifies, lenient logs and skips"
                   touch "$out"
                 '';
 
@@ -1597,6 +1945,7 @@
       # overlay to the module's built-in default.
       overlays.default = final: _prev: {
         project-zomboid-server = final.callPackage ./pkgs/project-zomboid-server { };
+        project-zomboid-client-mods = final.callPackage ./pkgs/project-zomboid-client-mods { };
       };
 
       packages = perSystemAttr "packages";

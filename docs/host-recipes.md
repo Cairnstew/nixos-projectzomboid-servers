@@ -324,6 +324,113 @@ a shell `grep` needs `grep -llx -E "id=$mod[[:cntrl:]]?"`.
 
 ---
 
+## Mods for a client (the player's machine)
+
+A dedicated server downloads its own Workshop mods, but a **client** does not load
+content merely present in the Steam library — Project Zomboid's client enumerates
+mods through Steam's **subscription** list, and there is no public API to
+subscribe on a player's behalf. The one supported way to pre-install a pack
+without clicking through Steam is to install it as **local mods**, which the game
+does load:
+
+```bash
+nix run .#pz-client-mods -- vanilla-plus
+```
+
+That downloads every Workshop item in the pack with `steamcmd` and installs the
+mod(s) each item contains into `~/Zomboid/mods`, keyed by the `mod.info` `id=`
+that the server's `Mods=` list already uses. A pack's non-Workshop `mods` cannot
+be downloaded; they are reported and must be placed by hand.
+
+On a client that runs Home Manager, the same thing is declarative — it installs
+the mods for whatever the NixOS side marked `clientHost.<name>.enable`:
+
+```nix
+services.project-zomboid-servers.home = {
+  installMods = true;
+  steamLogin = "my_steam_account";   # for items anonymous cannot fetch
+};
+```
+
+`installMods` runs the downloader as a systemd user service at login and is
+idempotent, so a repeat is a no-op. `steamLogin` uses SteamCMD's cached token:
+log in once with `steamcmd +login <account>` (it prompts), and the unit reuses it
+without a terminal. **Subscribing is not what this does** — it cannot, and there
+is no API for it — it installs local mods, which the client loads.
+
+Three things bite:
+
+- **Anonymous `steamcmd` cannot fetch every item.** Items that need an account
+  owning Project Zomboid answer `Access Denied` / `File Not Found` anonymously
+  (verified against real item ids — ZombieBuddy and Project Viewpoint download
+  anonymously, Brita's Armor Pack and Ched605's Tooltips do not). Pass
+  `--login <your-steam-name>` to authenticate as an account that owns the game;
+  SteamCMD prompts once for the password / Steam Guard. The prompt is confirmed
+  reachable, but the download that follows needs real credentials and is the one
+  path the repository's checks cannot cover — run it yourself to confirm your
+  account reaches those items.
+- **`--steam-library` writes into the Steam library instead**, pre-seeding bytes
+  that are **not loaded until the player subscribes** — the same caveat as the
+  client-host link. The default, local mods, is the one that loads.
+- **Staging must not be under `/tmp`.** NixOS `steamcmd` runs under `steam-run`,
+  whose sandbox has a private `/tmp`, so a download there reports `Success` and
+  leaves nothing. The default staging is `~/.cache/pz-client-mods`.
+
+`--dry-run` (or `--json`) prints the plan without downloading, and
+`--steam-library` needs Project Zomboid installed via Steam so the library can be
+discovered.
+
+---
+
+## Mods a DEDICATED server cannot download
+
+The same gating affects the server install: anonymous `steamcmd` answers
+`Access Denied` for mature-content or author-restricted Workshop items. The
+module's answer is `steamLogin` — the download authenticates as an account that
+owns the game, so Brita's Armor Pack and friends install like any other mod:
+
+```nix
+services.project-zomboid-servers = {
+  steamLogin = "seanc";              # token cached under dataDir, see below
+  servers.main = { modpack = "vanilla-plus"; };
+};
+```
+
+Log the account in once, because a systemd unit has no terminal and the token is
+reused from then on:
+
+```bash
+sudo -u project-zomboid env HOME=/var/lib/project-zomboid steamcmd +login seanc
+```
+
+The install is now **verified**: every declared Workshop item is checked on disk
+after the batch download (an empty dir counts as a failure), missing items are
+retried once, and if any still fail the unit exits non-zero and names each one —
+servers `Require` the install unit, so they never start with mods missing.
+
+Prefer a running server to a correct one? Set
+`failOnMissingMods = false` on the module, or `--lenient` under `nix run`. The
+missing items are logged with the reason and skipped, the servers boot without
+them (PZ warns at start), and a later install fetches them the moment the
+content becomes reachable.
+
+If an item still cannot be fetched (the author disabled downloads entirely),
+supply it by hand as a **local mod**:
+
+```nix
+services.project-zomboid-servers.servers.main.localMods = {
+  BritasArmorPack = /srv/mods/BritasArmorPack;   # folder containing mod.info
+};
+```
+
+It is symlinked into `Zomboid/mods` and the key is added to `Mods=` on its own.
+
+Switching packs leaves stale downloads and symlinks behind unless you prune. On
+the NixOS side that is `prune = true`; with `nix run` it is `--prune`. Both make
+the installed set match the declaration exactly.
+
+---
+
 ## Spawn points and regions
 
 ```nix

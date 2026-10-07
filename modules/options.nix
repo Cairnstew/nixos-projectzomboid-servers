@@ -395,6 +395,107 @@ in
       '';
     };
 
+    steamLogin = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "seanc";
+      description = ''
+        Steam account name the shared install's steamcmd downloads authenticate
+        as, instead of <literal>anonymous</literal>.
+
+        <emphasis>This is the workaround for Workshop items anonymous cannot
+        fetch.</emphasis> An item gated behind Steam's mature-content check, or
+        restricted by its author, answers <literal>Access Denied</literal> to
+        <literal>+login anonymous</literal> — Brita's Armor Pack is the known
+        example. An account that <emphasis>owns Project Zomboid</emphasis> and
+        has mature content enabled can download them.
+
+        The password is never stored. SteamCMD caches a login token under
+        <envar>HOME</envar>, and the install runs with
+        <literal>HOME=&lt;dataDir&gt;</literal>, so log in once as that user:
+
+        <programlisting>
+        sudo -u project-zomboid env HOME=/var/lib/project-zomboid \
+          steamcmd +login &lt;account&gt;
+        </programlisting>
+
+        That single interactive command answers the password and Steam Guard
+        prompts; every later non-interactive run reuses the token. A systemd unit
+        has no terminal, so a missing or expired token simply fails the install —
+        which is loud and lists exactly which items could not be fetched, rather
+        than starting a server with mods missing.
+
+        If an item still cannot be fetched (its author disabled downloads
+        entirely), supply it by hand through
+        <option>servers.&lt;name&gt;.localMods</option>.
+      '';
+    };
+
+    prune = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Make the installed mod set match what is declared — remove Workshop
+        content that no server or client host asks for any more.
+
+        Off by default because it <emphasis>deletes</emphasis> from the shared
+        install, which every server on that install reads — the same reason
+        <option>mapOrder.dedupe</option> is off. Turn it on for a clean pack
+        switch:
+
+        <itemizedlist>
+          <listitem>
+            <para>
+              the shared <literal>steamapps/workshop/content/&lt;appid&gt;</literal>
+              is pruned to the union of every enabled server's and client host's
+              <option>workshopItems</option>; and
+            </para>
+          </listitem>
+          <listitem>
+            <para>
+              each server's <literal>Zomboid/Workshop/content/&lt;appid&gt;</literal>
+              link farm is pruned to that server's own list, and its
+              <literal>Zomboid/mods</literal> farm to its
+              <option>localMods</option>.
+            </para>
+          </listitem>
+        </itemizedlist>
+
+        This matters beyond disk space: <literal>Map=</literal> is derived by
+        scanning the shared workshop root, so a map shipped by a mod you removed
+        would otherwise keep contributing terrain. Pruning happens only after
+        every declared item has verified as present, so a failing download never
+        triggers a delete.
+
+        Local mods are only ever unlinked when they are symlinks this module
+        made; a directory placed by hand is never touched.
+      '';
+    };
+
+    failOnMissingMods = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Refuse to finish the install when a Workshop item cannot be downloaded
+        (the default), versus logging the item, skipping it, and letting the
+        servers boot anyway.
+
+        True is the "never run modless" behaviour: the servers
+        <literal>Require</literal> the install unit, so an unreachable item — a
+        gated one steamcmd cannot authenticate for, a deleted one, a typo'd id —
+        stops the boot and the failure lists every item.
+
+        Set to <literal>false</literal> for a degraded-but-up server: the
+        missing item is logged with the reason, the skipped count is printed,
+        and the servers start without it. The item stays in
+        <literal>WorkshopItems=</literal>, so PZ itself warns at start, and it
+        is picked up by a later install the moment the content becomes
+        fetchable — nothing needs to be re-declared. Prune is still withheld
+        while anything is missing, so a later re-login can fetch what was
+        skipped rather than find it deleted.
+      '';
+    };
+
     # ── Modpacks ─────────────────────────────────────────────────────────────
 
     modpacks = mkOption {
@@ -513,6 +614,37 @@ in
                 type = types.listOf types.str;
                 default = [ ];
                 description = "Extra local mod folder names, on top of its pack's.";
+              };
+
+              localMods = mkOption {
+                type = types.attrsOf types.path;
+                default = { };
+                example = literalExpression ''
+                  {
+                    # folder name = directory holding the mod (its mod.info)
+                    BritasArmorPack = /srv/mods/BritasArmorPack;
+                  }
+                '';
+                description = ''
+                  Non-Workshop mods, as <literal>folder-name = directory</literal>.
+                  Each directory is symlinked into the server's
+                  <literal>Zomboid/mods</literal>, and the key is added to
+                  <literal>Mods=</literal> automatically — so declaring the
+                  directory here is the only mention it needs.
+
+                  <emphasis>This is the fallback for a mod that cannot be
+                  downloaded</emphasis> — a private or mature-gated Workshop item
+                  (see <option>steamLogin</option>), or a modworkshop.net release.
+                  Download the mod on a client, or obtain its files elsewhere, and
+                  point this at the folder that contains its
+                  <literal>mod.info</literal>. The key must be the mod's
+                  <literal>id=</literal> value, the same string
+                  <literal>Mods=</literal> takes.
+
+                  Only symlinks this module creates are removed when
+                  <option>prune</option> is on; a real directory dropped into
+                  <literal>Zomboid/mods</literal> by hand is never touched.
+                '';
               };
 
               # ── Network ─────────────────────────────────────────────────────

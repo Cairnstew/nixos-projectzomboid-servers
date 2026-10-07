@@ -209,6 +209,9 @@ Most-used options:
 | `package` | package \| null | `null` | Filled in by the flake. Asserted non-null. |
 | `modpacks` | attrsOf submodule | `{}` | Map the catalogue in. |
 | `servers` | attrsOf submodule | `{}` | One service + console socket per entry. |
+| `steamLogin` | str \| null | `null` | Steam account for Workshop items anonymous cannot fetch (e.g. Brita's Armor Pack). Token cached under `dataDir`. |
+| `prune` | bool | `false` | Remove mods no server declares any more — the clean pack switch. Off because it deletes from the shared install. |
+| `failOnMissingMods` | bool | `true` | Refuse to finish the install when a Workshop item can't be downloaded. `false` = log-and-skip so servers boot without it. |
 | `web` | submodule | disabled | ttyd consoles on loopback. |
 | `managementSystem` | submodule | `{ systemd-socket.enable = true; }` | Exactly one of socket / tmux. |
 
@@ -219,6 +222,7 @@ Per server:
 | `name` / `description` | str | attr name | `name` drives the `.ini`, lua files and save folder. |
 | `modpack` | str \| null | `null` | Inline `workshopMods`/`mods` are **appended** to the pack's. |
 | `workshopMods` / `mods` | list | `[]` | Workshop ids vs local mod folder names — not interchangeable. |
+| `localMods` | attrsOf path | `{}` | Private mods: `folder-name = directory`, symlinked into `Zomboid/mods` and added to `Mods=`. |
 | `map` | str \| null | `null` | `null` = derive from installed mods. Semicolon separated. |
 | `baseMap` | str | `Muldraugh, KY` | The vanilla map; always ordered **last**. |
 | `mapOrder` | submodule | `{}` | `enable`, `priority`, `strict`, `dedupe`. |
@@ -372,11 +376,18 @@ Everything else here already assumes the split: the module only ever references
 ## Development
 
 ```bash
-nix flake check            # 11 checks
+nix flake check            # 14 checks
 nix develop                # nixfmt, shellcheck, deadnix, statix, python3
 
 nix run .#pz-modpack -- list
 nix run .#pz-modpack -- show vanilla-plus
+
+# Steam Workshop helpers
+nix run .#pz-workshop -- emit vanilla-plus               # paste-ready URL list
+nix run .#pz-workshop -- expand 3812346398 > draft.nix   # collection -> draft pack
+
+# Put a pack's mods onto a CLIENT machine (local mods the game loads)
+nix run .#pz-client-mods -- vanilla-plus
 ```
 
 Inspect a pack's effective config without downloading anything:
@@ -400,6 +411,8 @@ The checks:
 | `spawn-and-reset` | The dead Build 42 keys are absent (and present under `build41`), spawn lua renders, **is parsed by a real Lua interpreter**, and `--soft-reset` is scoped to the identity keys. |
 | `map-ordering` | Two trees built in opposite orders give identical `Map=`; a non-map directory never leaks in; a duplicate is reported, deterministic and overridable; `--strict` fails; base-map shadowing is an error. |
 | `map-pin-clean` | Pinning `Map=` suppresses detection without passing an empty argument. |
+| `pz-workshop-helper` | `emit` reproduces every pack's Workshop ids in order, and `expand` orders collection children by Steam's own `sortorder` and escapes an interpolation in a title so the draft pack still evaluates. |
+| `pz-client-mods-plan` | The client downloader's `--json` plan matches each pack's item count, defaults to the local-mods target, and rejects an unknown pack — all without touching the network. |
 
 Every one of those bugs is invisible to `nix flake check --no-build` and to
 reading the generated file. `nonflake-entry` is the clearest argument: the

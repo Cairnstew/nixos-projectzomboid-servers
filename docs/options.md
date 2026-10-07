@@ -29,6 +29,9 @@ the [README](../README.md) and [host recipes](host-recipes.md).
 | `updateOnStart` | bool | `true` | steamcmd `validate` before each start. First boot fetches the game; later boots are a fast no-op. |
 | `updateSchedule` | str \| null | `null` | Also validate on a systemd timer, e.g. `"daily"`. Restarts running servers afterwards. |
 | `restartAfterUpdate` | bool | `true` | `try-restart` servers after a timer update, so a stopped one stays stopped. |
+| `steamLogin` | str \| null | `null` | Steam account the shared install's downloads authenticate as, for items anonymous cannot fetch (e.g. Brita's Armor Pack). Token cached under `dataDir`; log in once interactively. See [Steam login](#steam-login). |
+| `prune` | bool | `false` | Remove Workshop content no server or client host declares, and unlink a server's stale mod symlinks. Off because it **deletes** from the shared install; on for a clean pack switch. See [Prune](#prune). |
+| `failOnMissingMods` | bool | `true` | Refuse to finish the install when a Workshop item cannot be downloaded, vs. `false` = log-and-skip so the servers boot without it. See [Steam login and private mods](#steam-login-and-private-mods). |
 | `modpacks` | attrsOf submodule | `{}` | Map the catalogue in. See [modpacks](#modpacksname). |
 | `servers` | attrsOf submodule | `{}` | See [servers.<name>](#serversname). |
 | `managementSystem` | submodule | `{ systemd-socket.enable = true; }` | Default console backend. See [managementSystem](#managementsystem). |
@@ -178,6 +181,15 @@ error.
 | --- | --- | --- | --- |
 | `services.project-zomboid-servers.home.enable` | bool | on exactly when `osConfig` has `clientHosts` | Set `false` to keep the pack rendered but write nothing. |
 | `services.project-zomboid-servers.home.linkSteamWorkshop` | bool | `true` | Symlink the shared SteamCMD download into the client library. Does **not** make the mods load — see [clientHosts](#clienthosts). |
+| `services.project-zomboid-servers.home.installMods` | bool | `false` | Fetch the pack's Workshop items and install them as **local mods** in `~/Zomboid/mods` — the form the client loads with no subscription. A systemd user service does it, idempotently. |
+| `services.project-zomboid-servers.home.steamLogin` | str \| null | `null` | Steam account for the fetch, for items that answer `Access Denied` anonymously. The password is never stored; log in once with `steamcmd +login <account>` to cache a token. |
+
+**Subscribing cannot be automated.** Steam has no public write API for
+subscriptions, `steamcmd` has no subscribe command, and the client's
+`appworkshop_<appid>.acf` carries no `subscribed` flag — so
+`home.installMods` installs **local** mods instead, which the client *does*
+load. A pack's non-Workshop `mods` cannot be downloaded and are reported for
+manual placement.
 
 ---
 
@@ -219,6 +231,7 @@ a matching `.socket` for its console.
 | `modpack` | str \| null | `null` | Inline `workshopMods`/`mods` are **appended** to the pack's, not substituted. |
 | `workshopMods` | listOf submodule | `[]` | Extra Workshop mods, on top of the pack's. Same shape as `modpacks.<name>.workshopMods`. |
 | `mods` | listOf str | `[]` | Extra local folder names, on top of the pack's. |
+| `localMods` | attrsOf path | `{}` | Non-Workshop mods as `folder-name = directory`. Symlinked into `Zomboid/mods` and added to `Mods=` — the fallback for a mod that cannot be downloaded (private/mature-gated Workshop item, or modworkshop.net). See [Private mods](#private-mods-and-steam-login). |
 | `map` | str \| null | `null` | `null` = **derive** from installed mods. Semicolon separated. See [Maps](#maps). |
 | `baseMap` | str | `Muldraugh, KY` | The vanilla map, always placed **last**. |
 | `mapOrder` | submodule | `{}` | See [mapOrder](#maporder). |
@@ -389,6 +402,68 @@ cgroup caps and scheduler niceness for the unit. All `null` = no cap.
 `jvmOpts` and `hardware.memoryMax` are two different caps and both are worth
 setting: the JVM heap is what `-Xmx` bounds, and `memoryMax` is what stops a JVM
 that decides otherwise from taking the host down with it.
+
+---
+
+## Steam login and private mods
+
+Anonymous `steamcmd` can download most Project Zomboid Workshop items but not
+all: an item behind Steam's mature-content check, or restricted by its author,
+answers `Access Denied` / `File Not Found`. Brita's Armor Pack is the known
+example. `steamLogin` fixes it — the install then logs in as an account that
+*owns Project Zomboid* (with mature content enabled).
+
+The password is never stored. SteamCMD caches a login token under `HOME`, and
+the install runs with `HOME = <dataDir>`, so log in once as the server user:
+
+```bash
+sudo -u project-zomboid env HOME=/var/lib/project-zomboid steamcmd +login <account>
+```
+
+One interactive command answers the password and Steam Guard prompts; every
+later non-interactive run reuses the token. A missing or expired token simply
+fails the install, loudly, listing each item that could not be fetched — never
+a silent start with mods missing.
+
+Prefer a degraded-but-up server over no server? Set `failOnMissingMods = false`
+(standalone: `--lenient`). The missing items are **logged with the reason and
+skipped**, the install reports success, and the servers boot without them —
+PZ warns about the missing content at start, and a later install fetches the
+items the moment they become fetchable, with nothing re-declared.
+
+For an item that still cannot be fetched (the author disabled downloads
+entirely), install it as a **local mod**: obtain the mod folder (e.g. from a
+subscribed client), point `servers.<name>.localMods` at it, and it is symlinked
+into the server's `Zomboid/mods` and named in `Mods=` automatically:
+
+```nix
+services.project-zomboid-servers.servers.main.localMods = {
+  BritasArmorPack = /srv/mods/BritasArmorPack;   # folder containing mod.info
+};
+```
+
+The key is the mod's `id=` (the same string `Mods=` takes), and only symlinks
+the module created are ever removed, so a hand-placed directory is safe.
+
+## Prune
+
+Every install and prep step is *additive* — nothing ever subtracts. Switch a
+server from one pack to another and the shared download keeps every mod any
+pack ever asked for, and the server's `Zomboid/Workshop/content/108600` keeps a
+symlink for every mod it ever declared. Neither is merely disk use: `Map=` is
+derived by scanning the shared workshop root, so a map from a removed mod keeps
+being injected into the server config.
+
+`prune = true` makes the config the truth:
+
+- the shared `steamapps/workshop/content/<appid>` is reduced to the union of
+  every enabled server's and client host's `workshopItems`; and
+- each server's workshop link farm is reduced to its own list, and its
+  `Zomboid/mods` farm to its `localMods`.
+
+Prune runs only after every declared item has verified as present, and with the
+environment's `PZ_PRUNE=1` as the standalone runner's equivalent
+(`--prune`). Off by default because it deletes from the shared install.
 
 ---
 

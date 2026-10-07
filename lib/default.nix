@@ -335,6 +335,7 @@ let
         hardware
         javaAgent
         jvmOpts
+        localMods
         managementSystem
         mapOrder
         open
@@ -363,7 +364,13 @@ let
 
       # `Mods=` is a comma-separated list of local mod *folder* names (from each
       # mod's mod.info `id=` value), unlike WorkshopItems which are the ids above.
-      mods = pack.mods ++ srv.mods;
+      #
+      # `localMods` contributes its KEYS: the key is the mod folder name, and
+      # naming it here is what makes declaring the directory its only mention —
+      # otherwise a local mod would have to be listed twice and the two would
+      # drift. Deduplicated so a pack that already lists the id does not get it
+      # twice.
+      mods = lib.unique (pack.mods ++ srv.mods ++ builtins.attrNames srv.localMods);
     };
 
   # `Key=value ...` argv for merge_ini.py. Secrets are deliberately NOT here:

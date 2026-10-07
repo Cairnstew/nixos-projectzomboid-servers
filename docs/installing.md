@@ -135,8 +135,8 @@ A complete, `nix flake check`-able example is in
 | `lib` | `resolveServer`, `renderIniLines`, `renderSandbox`, `mkProxyUpstreams`, `tests.eval`. |
 | `overlays.default` | Adds `pkgs.project-zomboid-server`. |
 | `packages.<system>.project-zomboid-server` | The launcher. |
-| `apps` | `pz-dedicated-server`, `pz-maps`, `pz-modpack`, `pz-<pack>`. |
-| `checks` | Ten checks; `nix flake check` runs them all. |
+| `apps` | `pz-dedicated-server`, `pz-maps`, `pz-modpack`, `pz-workshop`, `pz-client-mods`, `pz-<pack>`. |
+| `checks` | Fourteen checks; `nix flake check` runs them all. |
 
 The overlay is **not required** — the module defaults `package` itself. It exists
 for a non-flake consumer, or to reach the wrapper from your own package set.
@@ -253,6 +253,9 @@ PVP=true
 | `--extra-arg ARG` | Argument for the server command line. Repeatable. |
 | `--admin-user` + `--admin-pass-file` | Create/update the Build 42 admin login. |
 | `--soft-reset` | Discard world identity, generating a fresh world. |
+| `--login NAME` | Steam account for Workshop items anonymous cannot fetch. Token must be cached once under `--data-dir`. |
+| `--prune` | Remove mods no longer declared — the shared cache and the server's link farms. |
+| `--lenient` | Log-and-skip Workshop items that cannot be downloaded instead of failing the install. |
 | `--no-install` | Skip the steamcmd validate — much faster restarts. |
 | `--print-config` | Write and print the config, then exit. |
 
@@ -262,6 +265,14 @@ Other apps:
 nix run .#pz-maps -- --workshop-root ./server/steamapps/workshop/content/108600 --explain
 nix run .#pz-modpack -- list
 nix run .#pz-modpack -- show vanilla-plus
+
+# Steam Workshop: a collection is a source to expand, not something a server reads
+nix run .#pz-workshop -- expand 3812346398 > modpacks/draft.nix
+nix run .#pz-workshop -- emit viewpoint            # paste-ready URLs for Steam
+
+# Put a pack's Workshop mods onto a CLIENT (installs them as local mods)
+nix run .#pz-client-mods -- viewpoint --dry-run
+nix run .#pz-client-mods -- viewpoint
 ```
 
 ### Why one app per pack rather than a `--modpack` flag
@@ -297,6 +308,19 @@ Two things worth knowing before you upgrade a live server:
 - **A PZ beta branch changes the game, not the config.** `betaBranch` is applied
   by the *shared* install, so switching it re-downloads the server for every
   server on that install.
+
+Two things worth knowing when a mod comes or goes:
+
+- **A gated Workshop item needs `steamLogin`.** Brita's Armor Pack and other
+  mature-content/author-restricted items answer `Access Denied` anonymously. Set
+  `steamLogin` and log the account in once (see
+  [host-recipes.md](host-recipes.md#mods-a-dedicated-server-cannot-download)).
+  The install is verified: a mod that fails is named and the install unit fails,
+  so the servers do not start modless.
+- **Switching packs without `prune = true` accumulates.** The shared download
+  and each server's link farm only ever grow; with `prune = true` (or
+  `--prune` under `nix run`) the installed set is reduced to what is declared,
+  so a removed mod's map stops being injected into `Map=` too.
 
 ### Rolling back
 

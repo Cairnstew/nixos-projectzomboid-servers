@@ -97,11 +97,27 @@ rec {
       iniBase,
       mergeIni ? ../scripts/merge_ini.py,
       mapsPy ? ../scripts/pz_maps.py,
+      prunePy ? ../scripts/pz_prune.py,
       # Steam's *join* app id; Workshop content lives under it.
       steamAppId ? "108600",
+      # Drop symlinks for mods no longer declared. The Nix default; PZ_PRUNE
+      # overrides it at runtime for the standalone runner, which has no Nix
+      # server definition to read a default from.
+      prune ? false,
     }:
     let
       sandboxFile = mkSandboxFile { inherit server; };
+
+      # Non-Workshop mods, as `folder-id -> directory`. The directory is
+      # symlinked into the server's `Zomboid/mods`, the folder PZ loads local
+      # mods from, and the id is what `Mods=` already names. This is the
+      # fallback for a mod that cannot be downloaded from the Workshop — a
+      # private or mature-gated item, or a modworkshop.net release.
+      localMods = server.localMods or { };
+
+      # `--keep ID` argv for pz_prune.py, built once for each link farm.
+      keepArgs =
+        ids: concatMapStringsSep "\n" (id: "  keep+=(--keep ${lib.escapeShellArg id})") (lib.unique ids);
 
       # Spawn lua. PZ writes these itself when they are absent, so we own them
       # outright — but only when there is something to say: rendering an empty
@@ -285,6 +301,41 @@ rec {
           '') server.workshopItems
         )}
 
+        # Non-Workshop (local) mods: symlink each declared directory into the
+        # server's `Zomboid/mods`, which PZ loads like any other mod folder. The
+        # folder name is the mod's `mod.info` id, which `Mods=` already lists.
+        # Unlike the Workshop links above, these are NOT unlinked when the source
+        # directory disappears: a store path the user removed is the one case a
+        # missing source can mean, but it is also what a Nix GC of a path still
+        # in use looks like — so a dangling link is left for prune (below) to
+        # drop only when the id itself is undeclared.
+        ${concatStringsSep "\n" (
+          lib.mapAttrsToList (id: path: ''
+            mkdir -p "$server_home/Zomboid/mods"
+            ln -sfn ${lib.escapeShellArg path} "$server_home/Zomboid/mods/${id}"
+          '') localMods
+        )}
+
+        # Prune stale links when asked. `links` mode removes only SYMLINKS, so a
+        # mod directory a user placed by hand is never destroyed and the shared
+        # download is never touched. See scripts/pz_prune.py for why this exists
+        # (derived `Map=` scans whatever is present, so a removed mod must go).
+        if [ "''${PZ_PRUNE:-${if prune then "1" else "0"}}" = "1" ]; then
+          keep=()
+          ${keepArgs server.workshopItems}
+          python3 ${prunePy} links \
+            --root "$server_home/Zomboid/Workshop/content/${steamAppId}" \
+            "''${keep[@]+"''${keep[@]}"}" \
+            || echo "project-zomboid: warning: Workshop link prune failed" >&2
+
+          keep=()
+          ${keepArgs (lib.attrNames localMods)}
+          python3 ${prunePy} links \
+            --root "$server_home/Zomboid/mods" \
+            "''${keep[@]+"''${keep[@]}"}" \
+            || echo "project-zomboid: warning: local mod prune failed" >&2
+        fi
+
         echo "project-zomboid: prepared $pz_name in $server_home"
       '';
     };
@@ -426,17 +477,42 @@ rec {
       # flag must sit BETWEEN app_update and validate, which is why it is
       # interpolated here rather than appended by the caller.
       betaBranch ? null,
+      # Steam account to authenticate the downloads as. null (the default) is
+      # anonymous. Needed for items that answer `Access Denied` anonymously —
+      # mature-content gating, or an author restriction. The token must be cached
+      # once under $PZ_DATA_DIR; see `steamLogin` in modules/options.nix.
+      login ? null,
+      # Remove Workshop items from the SHARED download that no server or client
+      # host declares any more. The Nix default; PZ_PRUNE overrides it at runtime
+      # for the standalone runner, which has no Nix server definition.
+      prune ? false,
+      # Refuse to finish when a Workshop item cannot be downloaded (the default),
+      # or — false — log the item, skip it, and let the servers boot without it.
+      # The skip keeps the item in `WorkshopItems=`, so PZ warns at start and the
+      # mod appears the moment a later install fetches the content.
+      failOnMissingMods ? true,
+      # Workshop id -> human title, for the failure message only.
+      itemTitles ? { },
+      prunePy ? ../scripts/pz_prune.py,
     }:
     let
       # Unique at EVAL time (static data), shell-escaped for the array literal.
-      items = concatMapStringsSep " " lib.escapeShellArg (lib.unique workshopItems);
+      items = lib.unique workshopItems;
+      itemsLiteral = concatMapStringsSep " " lib.escapeShellArg items;
       betaFlag = optionalString (betaBranch != null) "-beta ${betaBranch} ";
+      loginLiteral = if login == null then "" else login;
+      # A bash associative array so a failed item can be named, not just numbered.
+      # Always declared, even when empty, so `title_of` is safe under `set -u`.
+      titlesLiteral = concatMapStringsSep "\n          " (
+        id: "[${lib.escapeShellArg id}]=${lib.escapeShellArg (itemTitles.${id} or "")}"
+      ) (lib.attrNames itemTitles);
     in
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = [
         steamcmd
         pkgs.coreutils
+        pkgs.python3
       ];
       text = ''
         require_env() {
@@ -451,13 +527,34 @@ rec {
         mkdir -p "$PZ_DATA_DIR" "$PZ_SERVER_DIR"
 
         # steamcmd resolves relative paths against HOME unless forced; be explicit
-        # so an ambient HOME cannot land the install somewhere unexpected.
+        # so an ambient HOME cannot land the install somewhere unexpected. It is
+        # ALSO where steamcmd caches an authenticated login, which is why the
+        # one-time `+login` documented for `steamLogin` must use this HOME too.
         export HOME="$PZ_DATA_DIR"
 
+        # An explicit executable, so a check (or an operator pinning a different
+        # steamcmd) can point at one. Defaults to the pinned package.
+        steamcmd_bin="''${PZ_STEAMCMD:-${lib.getExe steamcmd}}"
+
+        # `anonymous` unless an account is configured. The Nix option is the
+        # default; the standalone runner sets PZ_STEAM_LOGIN at runtime.
+        login="''${PZ_STEAM_LOGIN:-${loginLiteral}}"
+        [ -n "$login" ] || login="anonymous"
+
+        # Prune the shared download after a successful install? Nix default,
+        # runtime override.
+        prune="''${PZ_PRUNE:-${if prune then "1" else "0"}}"
+
+        # Hard-fail when a Workshop item cannot be downloaded? Nix default,
+        # runtime override. When 0, a missing item is logged and SKIPPED and the
+        # install still succeeds — the servers boot without it, and PZ warns at
+        # start. Strict (1) refuses to let the servers start modless.
+        fail_on_missing="''${PZ_FAIL_ON_MISSING:-${if failOnMissingMods then "1" else "0"}}"
+
         steamcmd() {
-          ${lib.getExe steamcmd} \
+          "$steamcmd_bin" \
             +force_install_dir "$PZ_SERVER_DIR" \
-            +login anonymous "$@" +quit
+            +login "$login" "$@" +quit
         }
 
         echo "project-zomboid: validating dedicated server (app ${serverAppId}${
@@ -472,19 +569,111 @@ rec {
 
         workshop_root="$PZ_SERVER_DIR/steamapps/workshop/content/${steamAppId}"
 
-        items=(${items})
+        declare -A item_titles=(
+          ${titlesLiteral}
+        )
+        title_of() { printf '%s' "''${item_titles[$1]:-}"; }
+
+        declare -a items=(${itemsLiteral})
         if [ "''${#items[@]}" -eq 0 ]; then
           echo "project-zomboid: no Workshop mods requested"
         fi
 
-        for id in "''${items[@]}"; do
-          if [ -d "$workshop_root/$id" ]; then
-            echo "project-zomboid: Workshop item $id already present"
-            continue
-          fi
-          echo "project-zomboid: downloading Workshop item $id"
-          steamcmd +workshop_download_item ${steamAppId} "$id"
+        # A directory that exists but is EMPTY is a failed download, not an
+        # install — steamcmd can leave one behind — so it counts as missing and
+        # is retried.
+        item_present() {
+          [ -d "$workshop_root/$1" ] && [ -n "$(ls -A "$workshop_root/$1" 2>/dev/null || true)" ]
+        }
+
+        declare -a missing=()
+        for id in "''${items[@]+"''${items[@]}"}"; do
+          item_present "$id" || missing+=("$id")
         done
+
+        download_missing() {
+          [ "''${#missing[@]}" -gt 0 ] || return 0
+          echo "project-zomboid: downloading ''${#missing[@]} Workshop item(s) as $login"
+          local args=()
+          for id in "''${missing[@]}"; do
+            args+=(+workshop_download_item ${steamAppId} "$id")
+          done
+          # NOT fatal under `set -e`: steamcmd's exit status says nothing useful
+          # about an individual item, so a failed batch is judged by what landed
+          # on disk in the verification pass below.
+          steamcmd "''${args[@]}" || true
+        }
+
+        # One batched download, then verify each item actually arrived. The
+        # verification is the point: before this existed, a failed `Access
+        # Denied` item was skipped and the servers started with mods missing.
+        if [ "''${#missing[@]}" -gt 0 ]; then
+          download_missing
+          declare -a still=()
+          for id in "''${missing[@]}"; do
+            item_present "$id" || still+=("$id")
+          done
+          if [ "''${#still[@]}" -gt 0 ]; then
+            echo "project-zomboid: retrying ''${#still[@]} item(s) that did not arrive" >&2
+            missing=("''${still[@]}")
+            download_missing
+            still=()
+            for id in "''${missing[@]}"; do
+              item_present "$id" || still+=("$id")
+            done
+          fi
+          missing=("''${still[@]+"''${still[@]}"}")
+        fi
+
+        if [ "''${#missing[@]}" -gt 0 ]; then
+          echo >&2
+          echo "project-zomboid: ''${#missing[@]} Workshop item(s) could not be installed:" >&2
+          for id in "''${missing[@]}"; do
+            title="$(title_of "$id")"
+            if [ -n "$title" ]; then
+              echo "  - $id  $title" >&2
+            else
+              echo "  - $id" >&2
+            fi
+          done
+          echo >&2
+          if [ "$login" = "anonymous" ]; then
+            echo "SteamCMD answered these as inaccessible. Items behind Steam" >&2
+            echo "mature-content gating or an author restriction need an account" >&2
+            echo "that owns Project Zomboid. Set:" >&2
+            echo "  services.project-zomboid-servers.steamLogin = \"<account>\";" >&2
+          else
+            echo "SteamCMD could not fetch these even as '$login'. Check that the" >&2
+            echo "account owns Project Zomboid and that its token is cached under" >&2
+            echo "HOME=$PZ_DATA_DIR (run the one-time +login there first), or supply" >&2
+            echo "the mod as a local mod ('localMods')." >&2
+          fi
+          if [ "$fail_on_missing" = "1" ]; then
+            echo >&2
+            echo "Refusing to report a successful install: the servers Require this" >&2
+            echo "unit, so starting now would run them with mods missing." >&2
+            echo "Authenticate (steamLogin), supply a localMod, or set" >&2
+            echo "failOnMissingMods = false to log these and boot anyway." >&2
+            exit 1
+          fi
+          echo >&2
+          echo "SKIPPING the ''${#missing[@]} item(s) above: the install continues" >&2
+          echo "and the servers will boot without them. PZ warns about the missing" >&2
+          echo "content at start; re-authenticate and re-run the install" >&2
+          echo "(systemctl restart project-zomboid-install) to fetch it." >&2
+        fi
+
+        # Only when every declared item is present: drop the rest. In skip+log
+        # mode a missing item is the point of the boot — deleting around it would
+        # discard content a later re-login could fetch.
+        if [ "$prune" = "1" ] && [ "''${#missing[@]}" -eq 0 ]; then
+          keep=()
+          ${concatMapStringsSep "\n          " (id: "keep+=(--keep ${lib.escapeShellArg id})") items}
+          python3 ${prunePy} workshop \
+            --root "$workshop_root" \
+            "''${keep[@]+"''${keep[@]}"}" \
+            || echo "project-zomboid: warning: Workshop prune failed" >&2
+        fi
 
         echo "project-zomboid: install ready in $PZ_SERVER_DIR"
       '';
