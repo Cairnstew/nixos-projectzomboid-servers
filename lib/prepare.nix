@@ -302,16 +302,23 @@ rec {
   # Runtime inputs come from the environment, because the client's Zomboid home
   # and Steam library are user-level paths this module cannot know:
   #
-  #   PZ_CLIENT_ZOMBOID    the client's Zomboid home, e.g. ~/Zomboid   (required)
-  #   PZ_SERVER_DIR        the shared steamcmd install (Workshop source)
-  #   PZ_CLIENT_WORKSHOP   the client library's
-  #                        `steamapps/workshop/content/<steamAppId>` directory
+  #   PZ_CLIENT_ZOMBOID        the client's Zomboid home, e.g. ~/Zomboid  (required)
+  #   PZ_SERVER_DIR            the shared steamcmd install (Workshop source)
+  #   PZ_CLIENT_WORKSHOP       the client library's
+  #                            `steamapps/workshop/content/<steamAppId>`. UNSET
+  #                            means DISCOVER it — pz_steam_workshop.py reads
+  #                            `libraryfolders.vdf`, which is what lets a caller
+  #                            enable the client host without writing a path
+  #                            down anywhere.
+  #   PZ_LINK_STEAM_WORKSHOP   `0` to skip the Workshop link entirely
   #
-  # When BOTH of the last two are set, every Workshop item this server needs is
-  # symlinked from the shared install into the client library, so ONE download
-  # serves both hosts. Leaving PZ_CLIENT_WORKSHOP unset skips that and expects the
-  # client to have subscribed on Steam — which is the only thing a hosted world
-  # cannot do for joining players (`WorkshopItems=` makes them download it).
+  # ⚠ THE LINK IS NOT WHAT MAKES THE MODS LOAD. Project Zomboid's CLIENT
+  # enumerates Workshop mods through Steam's subscription list, so content
+  # symlinked into the library is invisible to it however real it is on disk —
+  # only the dedicated server, which scans the directory, sees it. See
+  # GOTCHAS.md. The link is kept for that server-side parity and to spare the
+  # second download's bytes; a hosted world still needs its items SUBSCRIBED in
+  # Steam for the client to load them.
   #
   # `install -m 0644`, never `cp`, for the same reason as the dedicated path: the
   # source is a store file at mode 444 and `cp` would create a read-only
@@ -327,6 +334,7 @@ rec {
       # own Host screen is called (`servertest` by default).
       clientName ? server.serverName,
       mergeIni ? ../scripts/merge_ini.py,
+      steamWorkshop ? ../scripts/pz_steam_workshop.py,
       steamAppId ? "108600",
     }:
     pkgs.writeShellApplication {
@@ -363,22 +371,38 @@ rec {
         install -m 0644 ${mkSandboxFile { inherit server; }} \
           "$server_conf/''${pz_name}_SandboxVars.lua"
 
-        # One download, two hosts. Skipped unless the caller names a client
-        # Workshop directory, so a Steam-subscribed client is left alone.
-        if [ -n "''${PZ_CLIENT_WORKSHOP-}" ]; then
-          require_env PZ_SERVER_DIR
-          mkdir -p "$PZ_CLIENT_WORKSHOP"
-          ${concatStringsSep "\n" (
-            map (id: ''
-              src="$PZ_SERVER_DIR/steamapps/workshop/content/${steamAppId}/${id}"
-              dst="$PZ_CLIENT_WORKSHOP/${id}"
-              if [ -d "$src" ]; then
-                ln -sfn "$src" "$dst"
-              elif [ -L "$dst" ]; then
-                rm -f "$dst"
-              fi
-            '') server.workshopItems
-          )}
+        # One download, two hosts — but read the warning above: this is
+        # server-side parity, not what loads the mods on a client.
+        #
+        # The directory is DISCOVERED when the caller does not name one, so no
+        # host file has to hard-code where Steam put its library. Finding nothing
+        # means not installed via Steam, which is a normal condition — a caller
+        # may be seeding files ahead of the first launch — so it is reported and
+        # skipped, never fatal.
+        if [ "''${PZ_LINK_STEAM_WORKSHOP:-1}" != "0" ]; then
+          if [ -z "''${PZ_CLIENT_WORKSHOP-}" ]; then
+            if PZ_CLIENT_WORKSHOP="$(python3 ${steamWorkshop} --appid ${steamAppId} --home "$HOME")"; then
+              echo "project-zomboid: client Workshop directory discovered at $PZ_CLIENT_WORKSHOP"
+            else
+              PZ_CLIENT_WORKSHOP=""
+              echo "project-zomboid: Project Zomboid is not installed via Steam (no appmanifest_${steamAppId}.acf in any library); skipping the Workshop link" >&2
+            fi
+          fi
+
+          if [ -n "''${PZ_CLIENT_WORKSHOP-}" ] && [ -n "''${PZ_SERVER_DIR-}" ]; then
+            mkdir -p "$PZ_CLIENT_WORKSHOP"
+            ${concatStringsSep "\n" (
+              map (id: ''
+                src="$PZ_SERVER_DIR/steamapps/workshop/content/${steamAppId}/${id}"
+                dst="$PZ_CLIENT_WORKSHOP/${id}"
+                if [ -d "$src" ]; then
+                  ln -sfn "$src" "$dst"
+                elif [ -L "$dst" ]; then
+                  rm -f "$dst"
+                fi
+              '') server.workshopItems
+            )}
+          fi
         fi
 
         echo "project-zomboid: prepared client host $pz_name in $server_conf"

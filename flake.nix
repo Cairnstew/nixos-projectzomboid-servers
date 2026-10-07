@@ -60,6 +60,16 @@
           };
         };
 
+      # ── The Home Manager module, as a let binding ──────────────────────────
+      # Same reason as `pzModule` above: `default` has to be the SAME value as
+      # the named output, and an attrset self-reference needs `rec`.
+      #
+      # This is a plain Home Manager module, not a NixOS one: it reads the pack
+      # back off `osConfig.services.project-zomboid-servers.clientHosts` and
+      # writes the client's `~/Zomboid/Server/<name>.ini`. It is inert under
+      # standalone Home Manager, which has no `osConfig`.
+      pzHomeModule = import ./modules/home.nix;
+
       # ── Per-system outputs ─────────────────────────────────────────────────
       # Emitted FLAT (packages / apps / checks / devShells / formatter merged
       # together) rather than nested under `perSystem`, because `perSystem` is not
@@ -499,8 +509,7 @@
                   oneHost == null || !(lib.hasPrefix "/nix/store/" (toString (oneHost.prepare or "")))
                 ) "clientHosts.viewpoint.prepare is not a store path")
                 (lib.optionalString (
-                  oneHost == null
-                  || !(lib.hasPrefix "/nix/store/" (toString (oneHost.iniFile or "")))
+                  oneHost == null || !(lib.hasPrefix "/nix/store/" (toString (oneHost.iniFile or "")))
                 ) "clientHosts.viewpoint.iniFile is not a store path")
                 (lib.optionalString (
                   oneHost == null || builtins.length (oneHost.workshopItems or [ ]) < 100
@@ -676,6 +685,64 @@
 
             module-eval = moduleEvalResult;
 
+            # ── The Steam library is found, not hard-coded ─────────────────────
+            # The client-host files have to name a Workshop directory, and where
+            # Steam puts it is a property of the machine. Getting this wrong is
+            # silent — the symlinks just do not appear — so it is asserted here
+            # rather than discovered by a user wondering why nothing happened.
+            #
+            # The absent case is asserted to be a STATUS, not an error: the
+            # caller may legitimately be seeding files on a machine where the
+            # game is not installed yet, and a failure there would abort a whole
+            # activation for nothing.
+            steam-workshop-discovery =
+              pkgs.runCommand "pz-steam-workshop-discovery-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                    pkgs.python3
+                  ];
+                  SCRIPT = ./scripts/pz_steam_workshop.py;
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  home="$TMPDIR/home"
+                  lib="$TMPDIR/library"
+                  vdf="$home/.steam/steam/steamapps/libraryfolders.vdf"
+                  mkdir -p "$(dirname "$vdf")" "$lib/steamapps"
+
+                  # A SECOND library, which only the vdf names — the case a
+                  # hard-coded path gets wrong.
+                  printf 'libraryfolders\n{\n\t"0"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n\t"1"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n}\n' \
+                    "$TMPDIR/elsewhere" "$lib" > "$vdf"
+                  : > "$lib/steamapps/appmanifest_108600.acf"
+
+                  got="$(python3 $SCRIPT --home "$home")" \
+                    || fail "discovery failed although the app manifest is present"
+                  [ "$got" = "$lib/steamapps/workshop/content/108600" ] \
+                    || fail "from the vdf: got '$got'"
+
+                  # The default library lives inside the Steam root and is not
+                  # always repeated in its own vdf.
+                  rm -f "$lib/steamapps/appmanifest_108600.acf"
+                  : > "$home/.steam/steam/steamapps/appmanifest_108600.acf"
+                  got="$(python3 $SCRIPT --home "$home")" \
+                    || fail "the Steam root library was not considered"
+                  [ "$got" = "$home/.steam/steam/steamapps/workshop/content/108600" ] \
+                    || fail "from the root: got '$got'"
+
+                  # Not installed via Steam: status 1, no stdout, no stderr.
+                  rm -f "$home/.steam/steam/steamapps/appmanifest_108600.acf"
+                  printed="$(python3 $SCRIPT --home "$home" 2>"$TMPDIR/stderr")" \
+                    && fail "reported success with no app manifest anywhere"
+                  [ -z "$printed" ] || fail "printed '$printed' with no app manifest"
+                  [ ! -s "$TMPDIR/stderr" ] || fail "wrote to stderr: $(cat "$TMPDIR/stderr")"
+
+                  echo "steam discovery ok: vdf library, Steam root, and absent all behave"
+                  touch "$out"
+                '';
+
             # ── The option reference is complete ───────────────────────────────
             # A reference that has silently fallen behind the module is worse than
             # no reference: a consumer reads it, concludes an option does not
@@ -820,8 +887,8 @@
                     )
 
                     (lib.optionalString (
-                      !(nf ? nixosModules && nf ? modpacks && nf ? overlay && nf ? lib)
-                    ) "default.nix is missing one of nixosModules / modpacks / overlay / lib")
+                      !(nf ? nixosModules && nf ? homeModules && nf ? modpacks && nf ? overlay && nf ? lib)
+                    ) "default.nix is missing one of nixosModules / homeModules / modpacks / overlay / lib")
 
                     # An overlay is `final: _prev:` — TWO arguments, because
                     # nixpkgs passes both. Applying one by hand
@@ -843,6 +910,11 @@
                       !(builtins.isFunction nf.nixosModules.default)
                       || !(builtins.isFunction nf.nixosModules.project-zomboid-servers)
                     ) "nixosModules does not expose two module functions")
+
+                    (lib.optionalString (
+                      !(builtins.isFunction nf.homeModules.default)
+                      || !(builtins.isFunction nf.homeModules.project-zomboid-servers)
+                    ) "homeModules does not expose two module functions")
 
                     # `package` defaults to null in modules/options.nix because
                     # that file cannot reach the flake; default.nix is what
@@ -1511,6 +1583,14 @@
         project-zomboid-servers = pzModule;
         # Alias, because `default` is the conventional opt-in name.
         default = pzModule;
+      };
+
+      # The Home Manager half: `clientHosts` are RENDERED by the NixOS module
+      # above, but they live in a user's `~/Zomboid`, so they are INSTALLED here.
+      # See modules/home.nix for why the split exists.
+      homeModules = {
+        project-zomboid-servers = pzHomeModule;
+        default = pzHomeModule;
       };
 
       # Lets `pkgs.project-zomboid-server` resolve for consumers who prefer the

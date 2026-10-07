@@ -119,26 +119,23 @@ server inside the client's process. Both read the same `<name>.ini`, the same
 half of that from the same pack, so the mod list is written down once and cannot
 drift between the two hosts.
 
-Nothing is installed by this module: `~/Zomboid` is a user-level path a system
-module cannot own. Run `prepare` from the client user's own configuration.
+Nothing is installed by the NixOS module: `~/Zomboid` is a user-level path a
+system module cannot own. The flake's **Home Manager** module installs it — see
+[Home Manager](#home-manager).
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `serverName` | str | The client-side name — the `<name>.ini` basename and the save folder. |
-| `prepare` | path | A runnable script that seeds the client's Zomboid home. Takes `PZ_CLIENT_ZOMBOID` (required), `PZ_SERVER_DIR` and `PZ_CLIENT_WORKSHOP` (optional) from the environment. |
+| `prepare` | path | A runnable script that seeds the client's Zomboid home. Takes `PZ_CLIENT_ZOMBOID` (required) and `PZ_SERVER_DIR` from the environment. `PZ_CLIENT_WORKSHOP` overrides the Steam library it links into — **discovered** from Steam when unset; `PZ_LINK_STEAM_WORKSHOP=0` skips the link entirely. |
 | `iniFile` | path | The Nix-rendered base `.ini`, *before* the merge. Hand this to `prepare`; installing it directly would overwrite `Seed`/`ServerPlayerID` on an existing world. |
 | `sandboxFile` | path | The Nix-rendered `<name>_SandboxVars.lua`. |
 | `mods` | listOf str | The resolved `Mods=` list. |
 | `workshopItems` | listOf str | The resolved `WorkshopItems=` list (Steam Workshop ids). |
 
 ```nix
-# A Home Manager activation hook, running as the client user:
-home.activation.pz-client-host = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-  export PZ_CLIENT_ZOMBOID="$HOME/Zomboid"
-  export PZ_SERVER_DIR=/mnt/data/project-zomboid/server
-  export PZ_CLIENT_WORKSHOP="$HOME/.local/share/Steam/steamapps/workshop/content/108600"
-  run ${config.services.project-zomboid-servers.clientHosts.viewpoint.prepare}/bin/project-zomboid-viewpoint-client-host
-'';
+# In the client user's Home Manager configuration — nothing else is needed, and
+# no path has to be written down:
+imports = [ inputs.project-zomboid-servers.homeModules.default ];
 ```
 
 Two behaviours worth knowing:
@@ -149,10 +146,38 @@ Two behaviours worth knowing:
 - Named keys come from the server's resolved settings, so a server defined with
   `public = true` will **overwrite** a client-side `Public=false` in that file.
   Override it in `settings` if the client host should stay private.
-- `PZ_CLIENT_WORKSHOP`, when set together with `PZ_SERVER_DIR`, symlinks every
-  Workshop item from the shared steamcmd download into the client's Steam library
-  — **one 2.6G download serves both hosts** instead of two. Leave it unset to
-  leave a Steam-subscribed client alone.
+- The Steam library is **discovered**, not configured: the script reads
+  `steamapps/libraryfolders.vdf` (`scripts/pz_steam_workshop.py`) to find the
+  library that actually holds Project Zomboid, so no host file hard-codes a path.
+  When `PZ_SERVER_DIR` is also set it symlinks every Workshop item from the
+  shared steamcmd download into that library, so one download serves both hosts.
+  Not-installed-via-Steam is a normal condition — it is reported and skipped,
+  never fatal, so seeding files before the first launch still works.
+- ⚠ **The link is not what makes the mods load.** Project Zomboid's *client*
+  enumerates Workshop mods through Steam's subscription list and never scans the
+  library, so symlinked content is invisible to it — only the dedicated server,
+  which does scan, sees it. A hosted world still needs its items **subscribed**
+  in Steam. `PZ_LINK_STEAM_WORKSHOP=0` skips the link outright.
+
+---
+
+## Home Manager
+
+The flake exports the other half of the module as
+`inputs.project-zomboid-servers.homeModules.default`. It writes the files
+`clientHosts` describes into the client user's `~/Zomboid`, so enabling a client
+host is enough — no `home.activation` hook, and no path written down anywhere.
+
+The pack is read back from `osConfig`, so the mod list, SandboxVars and
+client-side server name stay described exactly once, on the NixOS side, and
+cannot drift from what the dedicated server would have run. Under **standalone**
+Home Manager there is no `osConfig`, and the module is inert rather than an
+error.
+
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `services.project-zomboid-servers.home.enable` | bool | on exactly when `osConfig` has `clientHosts` | Set `false` to keep the pack rendered but write nothing. |
+| `services.project-zomboid-servers.home.linkSteamWorkshop` | bool | `true` | Symlink the shared SteamCMD download into the client library. Does **not** make the mods load — see [clientHosts](#clienthosts). |
 
 ---
 

@@ -27,10 +27,14 @@ All notable changes to this project. Format follows
   world-identity keys came through unchanged while `Mods=`/`WorkshopItems=` were
   filled in.
 
-  Setting `PZ_SERVER_DIR` and `PZ_CLIENT_WORKSHOP` makes the script symlink every
-  Workshop item from the shared steamcmd download into the client's Steam library
-  — **one download serves both hosts** rather than two. Leaving
-  `PZ_CLIENT_WORKSHOP` unset skips it, so a Steam-subscribed client is untouched.
+  Setting `PZ_SERVER_DIR` makes the script symlink every Workshop item from the
+  shared steamcmd download into the client's Steam library — **one download
+  serves both hosts** rather than two. The library is DISCOVERED from
+  `libraryfolders.vdf` when `PZ_CLIENT_WORKSHOP` is unset, so no host file
+  hard-codes where Steam put it; `PZ_LINK_STEAM_WORKSHOP=0` skips it instead.
+  ⚠ Linking is server-side parity and a saved download only — the game CLIENT
+  reads its Workshop items through Steam's subscription list and never scans the
+  library, so a hosted world still needs them subscribed.
   The shared install/update unit now counts a client host's items among those it
   keeps downloaded, so that copy does not go stale the moment the last dedicated
   server is switched off — which is precisely the client-host configuration.
@@ -39,6 +43,26 @@ All notable changes to this project. Format follows
   (e.g. ZombieBuddy) also needs that agent installed in the **client**, which is
   a launch-option change outside any NixOS module and is left to the pack's own
   instructions.
+
+- **A Home Manager half, so enabling a client host writes the files itself.** A
+  new `homeModules.project-zomboid-servers` (alias `homeModules.default`)
+  installs the `clientHosts` files into the client user's `~/Zomboid`, reading
+  the pack back off `osConfig.services.project-zomboid-servers.clientHosts` so it
+  stays described once and cannot drift from the dedicated server's config.
+  Previously every consumer had to hand-write a `home.activation` hook and
+  hard-code both the SteamCMD install path and their Steam library. Inert under
+  standalone Home Manager, which has no `osConfig`.
+  `services.project-zomboid-servers.home.enable = false` turns it off;
+  `…home.linkSteamWorkshop = false` keeps the files but drops the link.
+
+- **The Steam library is discovered rather than hard-coded.**
+  `scripts/pz_steam_workshop.py` finds the library that actually holds Project
+  Zomboid, by reading `steamapps/libraryfolders.vdf` and checking for the app's
+  `appmanifest_108600.acf`, and `mkClientHostScript` calls it when
+  `PZ_CLIENT_WORKSHOP` is unset. A machine with the game in a second library — or
+  not installed via Steam at all — now behaves correctly where a baked-in path
+  silently did nothing; the absent case is reported and skipped, never fatal.
+  Covered by the `steam-workshop-discovery` check.
 
 ### Changed
 

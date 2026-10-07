@@ -27,6 +27,8 @@
 #
 #   nixosModules.default                 the module, with `package` supplied
 #   nixosModules.project-zomboid-servers the same module under a stable name
+#   homeModules.default                  the Home Manager half (writes ~/Zomboid)
+#   homeModules.project-zomboid-servers  the same module under a stable name
 #   modpacks                             the catalogue, as a plain attrset
 #   lib                                  resolveServer / renderIniLines / …
 #   overlay                              adds pkgs.project-zomboid-server
@@ -81,6 +83,19 @@ in
   nixosModules = {
     default = pzModule;
     project-zomboid-servers = pzModule;
+  };
+
+  # The Home Manager half, for the same reason the flake exposes it: the pack is
+  # RENDERED by the NixOS module but INSTALLS into a user's `~/Zomboid`, which no
+  # system module may own.
+  #
+  # A plain Home Manager module — nothing for the caller to supply, unlike
+  # `pzModule` above, which has to fill in `package`. It stays inert until the
+  # NixOS module is imported too, because that is where it reads `clientHosts`
+  # from (`osConfig`).
+  homeModules = {
+    default = import ./modules/home.nix;
+    project-zomboid-servers = import ./modules/home.nix;
   };
 
   # The catalogue, as plain data — no module, no `pkgs`.
