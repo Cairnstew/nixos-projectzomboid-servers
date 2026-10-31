@@ -21,7 +21,9 @@
 # environment in its unit. Callers must provide:
 #
 #   PZ_DATA_DIR      the base data directory
-#   PZ_SERVER_DIR    the steamcmd install
+#   PZ_SERVER_DIR    the steamcmd install (the game binaries)
+#   PZ_WORKSHOP_DIR  the Workshop content directory (defaults, in the module's
+#                    unit environment, to the conventional path under serverDir)
 #   PZ_SERVER_NAME   the Project Zomboid server name
 #
 # Everything else — which keys, which mods, which sandbox vars — IS Nix-side,
@@ -157,6 +159,7 @@ rec {
         }
         require_env PZ_DATA_DIR
         require_env PZ_SERVER_DIR
+        require_env PZ_WORKSHOP_DIR
         require_env PZ_SERVER_NAME
 
         # Runtime, not `server.serverName`: the standalone runner's server name is
@@ -201,7 +204,7 @@ rec {
             [ "$map_dedupe" = "1" ] && dedupe_flag=(--dedupe)
 
             map_value="$(python3 ${mapsPy} \
-              --workshop-root "$PZ_SERVER_DIR/steamapps/workshop/content/${steamAppId}" \
+              --workshop-root "$PZ_WORKSHOP_DIR" \
               --local-mods "$server_home/Zomboid/mods" \
               --base-map "$base_map" \
               "''${priority_args[@]}" "''${strict_flag[@]}" "''${dedupe_flag[@]}"
@@ -290,7 +293,7 @@ rec {
         # removed one is un-linked. Symlinks only, so the shared download is safe.
         ${concatStringsSep "\n" (
           map (id: ''
-            src="$PZ_SERVER_DIR/steamapps/workshop/content/${steamAppId}/${id}"
+            src="$PZ_WORKSHOP_DIR/${id}"
             dst="$server_home/Zomboid/Workshop/content/${steamAppId}/${id}"
             if [ -d "$src" ]; then
               mkdir -p "$(dirname "$dst")"
@@ -347,29 +350,24 @@ rec {
   # the SandboxVars rendering above are shared verbatim — otherwise the mod list
   # would be written down twice and the two would drift.
   #
-  # What differs is only where the files land, and that there is no install or
-  # update step: Steam owns the client's game and updates it on its own schedule.
+  # THIS HALF IS CONFIG ONLY. It writes exactly two kinds of file, both under
+  # `$PZ_CLIENT_ZOMBOID/Server/`:
   #
-  # Runtime inputs come from the environment, because the client's Zomboid home
-  # and Steam library are user-level paths this module cannot know:
+  #   <clientName>.ini               merged, preserving world identity
+  #   <clientName>_SandboxVars.lua   owned outright
   #
-  #   PZ_CLIENT_ZOMBOID        the client's Zomboid home, e.g. ~/Zomboid  (required)
-  #   PZ_SERVER_DIR            the shared steamcmd install (Workshop source)
-  #   PZ_CLIENT_WORKSHOP       the client library's
-  #                            `steamapps/workshop/content/<steamAppId>`. UNSET
-  #                            means DISCOVER it — pz_steam_workshop.py reads
-  #                            `libraryfolders.vdf`, which is what lets a caller
-  #                            enable the client host without writing a path
-  #                            down anywhere.
-  #   PZ_LINK_STEAM_WORKSHOP   `0` to skip the Workshop link entirely
+  # It does not download, copy, symlink or scan a mod, never runs steamcmd, and
+  # never names a Steam library. That is deliberate: with `WorkshopItems=`
+  # populated, the game's Host button fetches every item through Steam into
+  # whichever library owns the PZ install BEFORE it reads `~/Zomboid/mods`, and
+  # the client enumerates mods through Steam's subscription list rather than by
+  # scanning a library directory. A symlink farm under `steamapps/workshop` is
+  # therefore invisible to the client and buys nothing — see
+  # docs/mod-delivery.md.
   #
-  # ⚠ THE LINK IS NOT WHAT MAKES THE MODS LOAD. Project Zomboid's CLIENT
-  # enumerates Workshop mods through Steam's subscription list, so content
-  # symlinked into the library is invisible to it however real it is on disk —
-  # only the dedicated server, which scans the directory, sees it. See
-  # GOTCHAS.md. The link is kept for that server-side parity and to spare the
-  # second download's bytes; a hosted world still needs its items SUBSCRIBED in
-  # Steam for the client to load them.
+  # The only runtime input is:
+  #
+  #   PZ_CLIENT_ZOMBOID   the client's Zomboid home, e.g. ~/Zomboid  (required)
   #
   # `install -m 0644`, never `cp`, for the same reason as the dedicated path: the
   # source is a store file at mode 444 and `cp` would create a read-only
@@ -385,8 +383,6 @@ rec {
       # own Host screen is called (`servertest` by default).
       clientName ? server.serverName,
       mergeIni ? ../scripts/merge_ini.py,
-      steamWorkshop ? ../scripts/pz_steam_workshop.py,
-      steamAppId ? "108600",
     }:
     pkgs.writeShellApplication {
       inherit name;
@@ -422,41 +418,12 @@ rec {
         install -m 0644 ${mkSandboxFile { inherit server; }} \
           "$server_conf/''${pz_name}_SandboxVars.lua"
 
-        # One download, two hosts — but read the warning above: this is
-        # server-side parity, not what loads the mods on a client.
-        #
-        # The directory is DISCOVERED when the caller does not name one, so no
-        # host file has to hard-code where Steam put its library. Finding nothing
-        # means not installed via Steam, which is a normal condition — a caller
-        # may be seeding files ahead of the first launch — so it is reported and
-        # skipped, never fatal.
-        if [ "''${PZ_LINK_STEAM_WORKSHOP:-1}" != "0" ]; then
-          if [ -z "''${PZ_CLIENT_WORKSHOP-}" ]; then
-            if PZ_CLIENT_WORKSHOP="$(python3 ${steamWorkshop} --appid ${steamAppId} --home "$HOME")"; then
-              echo "project-zomboid: client Workshop directory discovered at $PZ_CLIENT_WORKSHOP"
-            else
-              PZ_CLIENT_WORKSHOP=""
-              echo "project-zomboid: Project Zomboid is not installed via Steam (no appmanifest_${steamAppId}.acf in any library); skipping the Workshop link" >&2
-            fi
-          fi
-
-          if [ -n "''${PZ_CLIENT_WORKSHOP-}" ] && [ -n "''${PZ_SERVER_DIR-}" ]; then
-            mkdir -p "$PZ_CLIENT_WORKSHOP"
-            ${concatStringsSep "\n" (
-              map (id: ''
-                src="$PZ_SERVER_DIR/steamapps/workshop/content/${steamAppId}/${id}"
-                dst="$PZ_CLIENT_WORKSHOP/${id}"
-                if [ -d "$src" ]; then
-                  ln -sfn "$src" "$dst"
-                elif [ -L "$dst" ]; then
-                  rm -f "$dst"
-                fi
-              '') server.workshopItems
-            )}
-          fi
-        fi
-
-        echo "project-zomboid: prepared client host $pz_name in $server_conf"
+        # Nothing else. Every file above is under `$PZ_CLIENT_ZOMBOID/Server/`.
+        # If PZ strips `SelfManagedMods` while rewriting the file from its Host
+        # screen, the next run of this script (every activation) puts it back —
+        # that is the only drift this half repairs, and it is not a fight with
+        # the game.
+        echo "project-zomboid: prepared client host $pz_name in $server_conf (config only; the Host flow fetches the mods)"
       '';
     };
 
@@ -482,9 +449,9 @@ rec {
       # mature-content gating, or an author restriction. The token must be cached
       # once under $PZ_DATA_DIR; see `steamLogin` in modules/options.nix.
       login ? null,
-      # Remove Workshop items from the SHARED download that no server or client
-      # host declares any more. The Nix default; PZ_PRUNE overrides it at runtime
-      # for the standalone runner, which has no Nix server definition.
+      # Remove Workshop items from the SHARED download that no enabled dedicated
+      # server declares any more. The Nix default; PZ_PRUNE overrides it at
+      # runtime for the standalone runner, which has no Nix server definition.
       prune ? false,
       # Refuse to finish when a Workshop item cannot be downloaded (the default),
       # or — false — log the item, skip it, and let the servers boot without it.
@@ -523,8 +490,9 @@ rec {
         }
         require_env PZ_DATA_DIR
         require_env PZ_SERVER_DIR
+        require_env PZ_WORKSHOP_DIR
 
-        mkdir -p "$PZ_DATA_DIR" "$PZ_SERVER_DIR"
+        mkdir -p "$PZ_DATA_DIR" "$PZ_SERVER_DIR" "$PZ_WORKSHOP_DIR"
 
         # steamcmd resolves relative paths against HOME unless forced; be explicit
         # so an ambient HOME cannot land the install somewhere unexpected. It is
@@ -551,23 +519,49 @@ rec {
         # start. Strict (1) refuses to let the servers start modless.
         fail_on_missing="''${PZ_FAIL_ON_MISSING:-${if failOnMissingMods then "1" else "0"}}"
 
-        steamcmd() {
+        # `steamcmd` always installs Workshop content under
+        # `<force_install_dir>/steamapps/workshop/content/<appid>`, so the
+        # configurable workshop directory is expressed as the LIBRARY ROOT that
+        # contains it. The shape is checked rather than guessed: a path that does
+        # not end in the expected suffix would silently download somewhere else.
+        workshop_suffix="/steamapps/workshop/content/${steamAppId}"
+        case "$PZ_WORKSHOP_DIR" in
+          *"$workshop_suffix") workshop_lib_root="''${PZ_WORKSHOP_DIR%"$workshop_suffix"}" ;;
+          *)
+            echo "project-zomboid: PZ_WORKSHOP_DIR must end with $workshop_suffix," >&2
+            echo "  got: $PZ_WORKSHOP_DIR" >&2
+            exit 1
+            ;;
+        esac
+        if [ -z "$workshop_lib_root" ]; then
+          echo "project-zomboid: PZ_WORKSHOP_DIR has no library root before $workshop_suffix" >&2
+          exit 1
+        fi
+
+        # The game binaries and the Workshop content may live in different Steam
+        # libraries, so each invocation names its own force_install_dir.
+        steamcmd_server() {
           "$steamcmd_bin" \
             +force_install_dir "$PZ_SERVER_DIR" \
+            +login "$login" "$@" +quit
+        }
+        steamcmd_workshop() {
+          "$steamcmd_bin" \
+            +force_install_dir "$workshop_lib_root" \
             +login "$login" "$@" +quit
         }
 
         echo "project-zomboid: validating dedicated server (app ${serverAppId}${
           optionalString (betaBranch != null) ", beta ${betaBranch}"
         })"
-        steamcmd +app_update ${serverAppId} ${betaFlag}validate
+        steamcmd_server +app_update ${serverAppId} ${betaFlag}validate
 
         # The *join* app id goes in steam_appid.txt, not the dedicated-server one.
         # Exactly one line: a stale multi-id file aborts Build 42 with
         # "Assertion Failed: Illegal termination of worker thread".
         printf '%s\n' '${steamAppId}' > "$PZ_SERVER_DIR/steam_appid.txt"
 
-        workshop_root="$PZ_SERVER_DIR/steamapps/workshop/content/${steamAppId}"
+        workshop_root="$PZ_WORKSHOP_DIR"
 
         declare -A item_titles=(
           ${titlesLiteral}
@@ -601,7 +595,7 @@ rec {
           # NOT fatal under `set -e`: steamcmd's exit status says nothing useful
           # about an individual item, so a failed batch is judged by what landed
           # on disk in the verification pass below.
-          steamcmd "''${args[@]}" || true
+          steamcmd_workshop "''${args[@]}" || true
         }
 
         # One batched download, then verify each item actually arrived. The
@@ -675,7 +669,8 @@ rec {
             || echo "project-zomboid: warning: Workshop prune failed" >&2
         fi
 
-        echo "project-zomboid: install ready in $PZ_SERVER_DIR"
+        echo "project-zomboid: game install ready in $PZ_SERVER_DIR"
+        echo "project-zomboid: Workshop content ready in $PZ_WORKSHOP_DIR"
       '';
     };
 }

@@ -82,6 +82,23 @@ let
       "${srv.name}: map is null (auto-detect) but mapOrder.enable is false and baseMap is empty, so Map= would never be set"
   ) (lib.attrValues resolved);
 
+  # ── Dedicated Workshop directory ───────────────────────────────────────────
+  # The install script derives the steamcmd library root by stripping this
+  # suffix, so a path that does not have it would either download elsewhere or
+  # refuse at run time. Catching it at evaluation is the difference between a
+  # readable error and a failed oneshot unit.
+  workshopSuffix = "/steamapps/workshop/content/${
+    if cfg.package == null then "108600" else cfg.package.steamAppId
+  }";
+  badWorkshopDirs =
+    let
+      dir = toString cfg.workshopDir;
+    in
+    lib.optional (!(lib.hasPrefix "/" dir)) "workshopDir is not absolute: ${dir}"
+    ++ lib.optional (
+      !(lib.hasSuffix workshopSuffix dir)
+    ) "workshopDir must end with ${workshopSuffix}: ${dir}";
+
   # ── Beta branch coherence ──────────────────────────────────────────────────
   # The shared install unit applies ONE branch, so servers on the same install
   # disagreeing about it means one of them silently gets the wrong build.
@@ -204,6 +221,19 @@ in
         }
 
         {
+          assertion = badWorkshopDirs == [ ];
+          message = ''
+            services.project-zomboid-servers: invalid workshopDir.
+            ${lib.concatStringsSep "\n" (map (b: "  - ${b}") badWorkshopDirs)}
+
+            SteamCMD installs Workshop content under a Steam library root, at
+            `<library>/steamapps/workshop/content/<appid>`. Point workshopDir at
+            that final directory (it must be absolute), and the module derives
+            the library root to pass to steamcmd.
+          '';
+        }
+
+        {
           assertion = betaMismatch == null;
           message = ''
             services.project-zomboid-servers: servers disagree on `betaBranch`.
@@ -235,25 +265,28 @@ in
       # or start with `Failed to determine credentials for user
       # 'project-zomboid': Unknown user` (status=217/USER). Caught on the first
       # host to enable the console after servers were already running.
-      users = lib.recursiveUpdate
-        (lib.optionalAttrs (cfg.user == "project-zomboid") {
-          users.project-zomboid = {
-            isSystemUser = true;
-            group = cfg.group;
-            home = cfg.dataDir;
-            createHome = true;
-            homeMode = "0770";
-            description = "Project Zomboid dedicated server";
-          };
-          groups.project-zomboid = { };
-        })
-        (lib.optionalAttrs cfg.web.enable {
-          users.${cfg.web.user} = {
-            isSystemUser = true;
-            group = cfg.group;
-            shell = pkgs.bashInteractive;
-          };
-        });
+      users =
+        lib.recursiveUpdate
+          (lib.optionalAttrs (cfg.user == "project-zomboid") {
+            users.project-zomboid = {
+              isSystemUser = true;
+              group = cfg.group;
+              home = cfg.dataDir;
+              createHome = true;
+              homeMode = "0770";
+              description = "Project Zomboid dedicated server";
+            };
+            groups.project-zomboid = { };
+          })
+          (
+            lib.optionalAttrs cfg.web.enable {
+              users.${cfg.web.user} = {
+                isSystemUser = true;
+                group = cfg.group;
+                shell = pkgs.bashInteractive;
+              };
+            }
+          );
 
       # The data dir must exist before any unit writes into it. tmpfiles rather
       # than createHome alone, because a server's Zomboid home is created
