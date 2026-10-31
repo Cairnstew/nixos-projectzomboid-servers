@@ -23,6 +23,7 @@ the [README](../README.md) and [host recipes](host-recipes.md).
 | `group` | str | `project-zomboid` | |
 | `dataDir` | path | `/var/lib/project-zomboid` | Each server's `Zomboid` home lives at `<dataDir>/<name>`. **Saves grow without bound** — put this on a large disk. |
 | `serverDir` | path | `<dataDir>/server` | Shared SteamCMD install (app 380870). One per host serves every server. |
+| `workshopDir` | path | `<serverDir>/steamapps/workshop/content/108600` | **Dedicated-server** Workshop content. Must be absolute and end in `/steamapps/workshop/content/108600`; the module derives the Steam library root to pass to steamcmd. A client host never reads it. |
 | `runDir` | path | `/run/project-zomboid-servers` | Console FIFOs. tmpfs, gone on reboot. |
 | `steamcmd` | package | `pkgs.steamcmd` | Unfree. |
 | `steamRun` | package | `pkgs.steam-run` | Unfree. Supplies the FHS environment the server binary needs. |
@@ -30,7 +31,7 @@ the [README](../README.md) and [host recipes](host-recipes.md).
 | `updateSchedule` | str \| null | `null` | Also validate on a systemd timer, e.g. `"daily"`. Restarts running servers afterwards. |
 | `restartAfterUpdate` | bool | `true` | `try-restart` servers after a timer update, so a stopped one stays stopped. |
 | `steamLogin` | str \| null | `null` | Steam account the shared install's downloads authenticate as, for items anonymous cannot fetch (e.g. Brita's Armor Pack). Token cached under `dataDir`; log in once interactively. See [Steam login](#steam-login). |
-| `prune` | bool | `false` | Remove Workshop content no server or client host declares, and unlink a server's stale mod symlinks. Off because it **deletes** from the shared install; on for a clean pack switch. See [Prune](#prune). |
+| `prune` | bool | `false` | Remove dedicated Workshop content no enabled server declares, and unlink a server's stale mod symlinks. Off because it **deletes** from the shared install; on for a clean pack switch. See [Prune](#prune). |
 | `failOnMissingMods` | bool | `true` | Refuse to finish the install when a Workshop item cannot be downloaded, vs. `false` = log-and-skip so the servers boot without it. See [Steam login and private mods](#steam-login-and-private-mods). |
 | `modpacks` | attrsOf submodule | `{}` | Map the catalogue in. See [modpacks](#modpacksname). |
 | `servers` | attrsOf submodule | `{}` | See [servers.<name>](#serversname). |
@@ -129,7 +130,7 @@ system module cannot own. The flake's **Home Manager** module installs it — se
 | Field | Type | Notes |
 | --- | --- | --- |
 | `serverName` | str | The client-side name — the `<name>.ini` basename and the save folder. |
-| `prepare` | path | A runnable script that seeds the client's Zomboid home. Takes `PZ_CLIENT_ZOMBOID` (required) and `PZ_SERVER_DIR` from the environment. `PZ_CLIENT_WORKSHOP` overrides the Steam library it links into — **discovered** from Steam when unset; `PZ_LINK_STEAM_WORKSHOP=0` skips the link entirely. |
+| `prepare` | path | A runnable, **config-only** script: `PZ_CLIENT_ZOMBOID=~/Zomboid /nix/store/…-client-host`. It writes `Server/<name>.ini` and `Server/<name>_SandboxVars.lua` and nothing else. It never runs steamcmd and never references a Steam library. |
 | `iniFile` | path | The Nix-rendered base `.ini`, *before* the merge. Hand this to `prepare`; installing it directly would overwrite `Seed`/`ServerPlayerID` on an existing world. |
 | `sandboxFile` | path | The Nix-rendered `<name>_SandboxVars.lua`. |
 | `mods` | listOf str | The resolved `Mods=` list. |
@@ -141,7 +142,7 @@ system module cannot own. The flake's **Home Manager** module installs it — se
 imports = [ inputs.project-zomboid-servers.homeModules.default ];
 ```
 
-Two behaviours worth knowing:
+Behaviours worth knowing:
 
 - The `.ini` is **merged, not rewritten**, so `Seed`, `ServerPlayerID` and
   `LastModified` survive — the same reason the dedicated server merges. Re-running
@@ -149,18 +150,14 @@ Two behaviours worth knowing:
 - Named keys come from the server's resolved settings, so a server defined with
   `public = true` will **overwrite** a client-side `Public=false` in that file.
   Override it in `settings` if the client host should stay private.
-- The Steam library is **discovered**, not configured: the script reads
-  `steamapps/libraryfolders.vdf` (`scripts/pz_steam_workshop.py`) to find the
-  library that actually holds Project Zomboid, so no host file hard-codes a path.
-  When `PZ_SERVER_DIR` is also set it symlinks every Workshop item from the
-  shared steamcmd download into that library, so one download serves both hosts.
-  Not-installed-via-Steam is a normal condition — it is reported and skipped,
-  never fatal, so seeding files before the first launch still works.
-- ⚠ **The link is not what makes the mods load.** Project Zomboid's *client*
-  enumerates Workshop mods through Steam's subscription list and never scans the
-  library, so symlinked content is invisible to it — only the dedicated server,
-  which does scan, sees it. A hosted world still needs its items **subscribed**
-  in Steam. `PZ_LINK_STEAM_WORKSHOP=0` skips the link outright.
+- The game's Host screen rewrites `<name>.ini` and **strips
+  `SelfManagedMods=true`**. The module does not fight that: every Home Manager
+  activation re-runs the merge and puts the key back. Treat it as a client-side
+  quirk, not a config the game honours.
+- No mods are installed, linked or copied by this half. With
+  `WorkshopItems=` populated, the Host button fetches everything through Steam
+  into the library that owns the PZ install, before it reads `~/Zomboid/mods`.
+  See [mod delivery](mod-delivery.md).
 
 ---
 
@@ -180,16 +177,22 @@ error.
 | Option | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `services.project-zomboid-servers.home.enable` | bool | on exactly when `osConfig` has `clientHosts` | Set `false` to keep the pack rendered but write nothing. |
-| `services.project-zomboid-servers.home.linkSteamWorkshop` | bool | `true` | Symlink the shared SteamCMD download into the client library. Does **not** make the mods load — see [clientHosts](#clienthosts). |
-| `services.project-zomboid-servers.home.installMods` | bool | `false` | Fetch the pack's Workshop items and install them as **local mods** in `~/Zomboid/mods` — the form the client loads with no subscription. A systemd user service does it, idempotently. |
-| `services.project-zomboid-servers.home.steamLogin` | str \| null | `null` | Steam account for the fetch, for items that answer `Access Denied` anonymously. The password is never stored; log in once with `steamcmd +login <account>` to cache a token. |
+| `services.project-zomboid-servers.home.installMods` | bool | `false` | **Deprecated.** Fetch the pack's Workshop items and install them as **local mods** in `~/Zomboid/mods`. Isolated from Steam (own HOME/staging under `~/.cache/pz-client-mods`); it cannot write `libraryfolders.vdf`. |
+| `services.project-zomboid-servers.home.steamLogin` | str \| null | `null` | Steam account for the deprecated fetch, for items that answer `Access Denied` anonymously. Log in once with `HOME=~/.cache/pz-client-mods/home steamcmd +login <account>`. |
+
+**The link-sharing option is gone.** `home.linkSteamWorkshop` used to symlink the
+dedicated download into the client's Steam library. It was removed because the
+client enumerates Workshop mods through Steam's subscription list and never
+scans that directory, so the links were invisible to the game. Set
+`WorkshopItems=` (which the pack already does) and let the Host flow fetch the
+items.
 
 **Subscribing cannot be automated.** Steam has no public write API for
 subscriptions, `steamcmd` has no subscribe command, and the client's
-`appworkshop_<appid>.acf` carries no `subscribed` flag — so
-`home.installMods` installs **local** mods instead, which the client *does*
-load. A pack's non-Workshop `mods` cannot be downloaded and are reported for
-manual placement.
+`appworkshop_<appid>.acf` carries no `subscribed` flag. `home.installMods` is
+therefore a deprecated local-mods escape hatch, not the supported client path.
+A pack's non-Workshop `mods` cannot be downloaded and are reported for manual
+placement.
 
 ---
 
@@ -286,11 +289,16 @@ installed at all.
 | `name` | str | `"servertest"` | The client-side server name. PZ names both `<name>.ini` and `Saves/Multiplayer/<name>` after it — so changing it makes a **new world** rather than reusing the existing one. `servertest` is what the Host screen uses by default. |
 
 The `.ini` is merged rather than rewritten (see
-[`clientHosts`](#clienthosts)), and `PZ_CLIENT_WORKSHOP` shares one Workshop
-download between the dedicated server and the client. Note that the client half
-of a Java-mod pack needs its JVM agent installed **in the client**, which is a
-launch-option (or `ProjectZomboid64.json`) change outside this module — see the
-pack's own instructions.
+[`clientHosts`](#clienthosts)), and the mods are delivered by the Host flow:
+the game fetches `WorkshopItems=` through Steam, into the library that owns the
+PZ install. This module does not install, copy or link mods for the client. Note
+that the client half of a Java-mod pack needs its JVM agent installed **in the
+client**, which is a launch-option (or `ProjectZomboid64.json`) change outside
+this module — see the pack's own instructions.
+
+**This renders even with `enable = false`.** A client host is not a dedicated
+server, so the master switch off means no install unit, no steamcmd and no
+`project-zomboid` user — just the two config files.
 
 ### Maps
 
@@ -456,10 +464,13 @@ being injected into the server config.
 
 `prune = true` makes the config the truth:
 
-- the shared `steamapps/workshop/content/<appid>` is reduced to the union of
-  every enabled server's and client host's `workshopItems`; and
+- `workshopDir` is reduced to the union of every enabled server's
+  `workshopItems`; and
 - each server's workshop link farm is reduced to its own list, and its
   `Zomboid/mods` farm to its `localMods`.
+
+Client hosts are not part of either set: they do not read this directory and do
+not get a link farm.
 
 Prune runs only after every declared item has verified as present, and with the
 environment's `PZ_PRUNE=1` as the standalone runner's equivalent

@@ -326,59 +326,38 @@ a shell `grep` needs `grep -llx -E "id=$mod[[:cntrl:]]?"`.
 
 ## Mods for a client (the player's machine)
 
-A dedicated server downloads its own Workshop mods, but a **client** does not load
-content merely present in the Steam library — Project Zomboid's client enumerates
-mods through Steam's **subscription** list, and there is no public API to
-subscribe on a player's behalf. The one supported way to pre-install a pack
-without clicking through Steam is to install it as **local mods**, which the game
-does load:
+The supported way is **not** a second download. A client does not load content
+merely present in the Steam library — Project Zomboid enumerates Workshop mods
+through Steam's **subscription** list — so the pack's `WorkshopItems=` is what
+matters. With it populated, the game's **Host** button fetches every item through
+Steam into the library that owns the PZ install, before it reads `~/Zomboid/mods`.
 
-```bash
-nix run .#pz-client-mods -- vanilla-plus
-```
-
-That downloads every Workshop item in the pack with `steamcmd` and installs the
-mod(s) each item contains into `~/Zomboid/mods`, keyed by the `mod.info` `id=`
-that the server's `Mods=` list already uses. A pack's non-Workshop `mods` cannot
-be downloaded; they are reported and must be placed by hand.
-
-On a client that runs Home Manager, the same thing is declarative — it installs
-the mods for whatever the NixOS side marked `clientHost.<name>.enable`:
+A client host on Home Manager is therefore config only:
 
 ```nix
-services.project-zomboid-servers.home = {
-  installMods = true;
-  steamLogin = "my_steam_account";   # for items anonymous cannot fetch
-};
+imports = [ inputs.project-zomboid-servers.homeModules.default ];
 ```
 
-`installMods` runs the downloader as a systemd user service at login and is
-idempotent, so a repeat is a no-op. `steamLogin` uses SteamCMD's cached token:
-log in once with `steamcmd +login <account>` (it prompts), and the unit reuses it
-without a terminal. **Subscribing is not what this does** — it cannot, and there
-is no API for it — it installs local mods, which the client loads.
+That writes `~/Zomboid/Server/<name>.ini` and `_SandboxVars.lua`. It never
+downloads, copies or links a mod, never runs steamcmd, and never writes a Steam
+directory. Subscribe to the pack in Steam, then host the world. See
+[mod delivery](mod-delivery.md).
 
-Three things bite:
+`home.installMods` still exists as a **deprecated** escape hatch for a client
+that cannot subscribe. It installs a second copy as **local mods** in
+`~/Zomboid/mods`, keyed by each `mod.info` `id=`. Its steamcmd runs with an
+isolated HOME and staging directory under `~/.cache/pz-client-mods`, so it cannot
+read or write `~/.local/share/Steam` and cannot rewrite `libraryfolders.vdf`.
+Log in once for gated items with:
 
-- **Anonymous `steamcmd` cannot fetch every item.** Items that need an account
-  owning Project Zomboid answer `Access Denied` / `File Not Found` anonymously
-  (verified against real item ids — ZombieBuddy and Project Viewpoint download
-  anonymously, Brita's Armor Pack and Ched605's Tooltips do not). Pass
-  `--login <your-steam-name>` to authenticate as an account that owns the game;
-  SteamCMD prompts once for the password / Steam Guard. The prompt is confirmed
-  reachable, but the download that follows needs real credentials and is the one
-  path the repository's checks cannot cover — run it yourself to confirm your
-  account reaches those items.
-- **`--steam-library` writes into the Steam library instead**, pre-seeding bytes
-  that are **not loaded until the player subscribes** — the same caveat as the
-  client-host link. The default, local mods, is the one that loads.
-- **Staging must not be under `/tmp`.** NixOS `steamcmd` runs under `steam-run`,
-  whose sandbox has a private `/tmp`, so a download there reports `Success` and
-  leaves nothing. The default staging is `~/.cache/pz-client-mods`.
+```bash
+HOME=~/.cache/pz-client-mods/home steamcmd +login <account>
+```
 
-`--dry-run` (or `--json`) prints the plan without downloading, and
-`--steam-library` needs Project Zomboid installed via Steam so the library can be
-discovered.
+**Subscribing cannot be automated.** Steam has no public write API,
+`steamcmd` has no subscribe command, and the client's `appworkshop_<appid>.acf`
+carries no `subscribed` flag. That is why the Host flow, not a downloader, is the
+client path.
 
 ---
 

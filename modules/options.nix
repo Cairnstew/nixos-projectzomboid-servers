@@ -359,6 +359,31 @@ in
       '';
     };
 
+    workshopDir = mkOption {
+      type = types.path;
+      default = "${config.services.project-zomboid-servers.serverDir}/steamapps/workshop/content/108600";
+      defaultText = literalExpression ''
+        "''${services.project-zomboid-servers.serverDir}/steamapps/workshop/content/108600"
+      '';
+      example = "/mnt/data/project-zomboid/server/steamapps/workshop/content/108600";
+      description = ''
+        Where the <emphasis>dedicated</emphasis> server keeps its Steam Workshop
+        content. Defaults under <option>serverDir</option>; set it explicitly so
+        the dedicated half never depends on a path being derivable, and so it can
+        live in a Steam library the client also uses (or not).
+
+        Must be absolute and must end in
+        <literal>/steamapps/workshop/content/108600</literal>: SteamCMD installs
+        Workshop content relative to a library root, and the module derives that
+        root from this path. Evaluation fails otherwise rather than downloading
+        somewhere unexpected.
+
+        This is <emphasis>only</emphasis> the dedicated-server copy. A client
+        host never reads it, and the module never downloads into a client's Steam
+        library — see <option>servers.&lt;name&gt;.clientHost</option>.
+      '';
+    };
+
     # ── Install / update ─────────────────────────────────────────────────────
 
     updateOnStart = mkOption {
@@ -436,7 +461,7 @@ in
       default = false;
       description = ''
         Make the installed mod set match what is declared — remove Workshop
-        content that no server or client host asks for any more.
+        content that no enabled dedicated server asks for any more.
 
         Off by default because it <emphasis>deletes</emphasis> from the shared
         install, which every server on that install reads — the same reason
@@ -446,9 +471,8 @@ in
         <itemizedlist>
           <listitem>
             <para>
-              the shared <literal>steamapps/workshop/content/&lt;appid&gt;</literal>
-              is pruned to the union of every enabled server's and client host's
-              <option>workshopItems</option>; and
+              <option>workshopDir</option> is pruned to the union of every
+              enabled server's <option>workshopItems</option>; and
             </para>
           </listitem>
           <listitem>
@@ -1321,21 +1345,26 @@ in
             prepare = mkOption {
               type = types.path;
               description = ''
-                A runnable script that seeds the client's Project Zomboid home
-                from this server's config. Takes its paths from the environment:
+                A runnable script that writes the client's Project Zomboid config
+                from this server's config. It is <emphasis>config only</emphasis>
+                and takes a single environment variable:
 
                 <programlisting>
                 PZ_CLIENT_ZOMBOID=~/Zomboid \
-                PZ_SERVER_DIR=/mnt/data/project-zomboid/server \
-                PZ_CLIENT_WORKSHOP=~/.local/share/Steam/steamapps/workshop/content/108600 \
                   /nix/store/…-project-zomboid-&lt;name&gt;-client-host
                 </programlisting>
 
-                <literal>PZ_CLIENT_ZOMBOID</literal> is required;
-                <literal>PZ_SERVER_DIR</literal> and
-                <literal>PZ_CLIENT_WORKSHOP</literal> are optional and, when both
-                are set, symlink the shared Workshop download into the client's
-                Steam library so the mods are not downloaded twice.
+                It writes only
+                <literal>$PZ_CLIENT_ZOMBOID/Server/&lt;name&gt;.ini</literal> and
+                <literal>…/&lt;name&gt;_SandboxVars.lua</literal>. It never runs
+                SteamCMD, never references a Steam library, never touches
+                <literal>~/.local/share/Steam</literal> and never writes
+                <literal>~/Zomboid/mods</literal>.
+
+                With <literal>WorkshopItems=</literal> populated, the game's Host
+                button downloads the items through Steam into whichever library
+                owns the PZ install. That is the whole client-side mod flow; see
+                <filename>docs/mod-delivery.md</filename>.
               '';
             };
             iniFile = mkOption {
@@ -1380,6 +1409,13 @@ in
         user-level path (`~/Zomboid`) that a system module cannot own. Run
         <option>prepare</option> from wherever the client user is configured —
         e.g. a Home Manager <literal>home.activation</literal> hook.
+
+        <emphasis>This renders without <option>enable</option>.</emphasis> A
+        client host is a config target, not a dedicated server: with the master
+        switch off, a configuration that only sets
+        <literal>servers.&lt;name&gt;.clientHost.enable = true</literal> creates
+        no install unit, no server user and no SteamCMD invocation. The mods
+        themselves arrive through Steam when the Host button starts the world.
       '';
     };
 

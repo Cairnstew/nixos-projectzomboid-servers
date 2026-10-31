@@ -271,10 +271,17 @@ nix run .#pz-workshop -- expand 3812346398 > modpacks/draft.nix   # mods prefill
 nix run .#pz-workshop -- resolve collection 3812346398            # internal Mod IDs + Mods=/WorkshopItems=
 nix run .#pz-workshop -- emit viewpoint            # paste-ready URLs for Steam
 
-# Put a pack's Workshop mods onto a CLIENT (installs them as local mods)
+# Deprecated: install a pack as local mods in ~/Zomboid/mods
+# (the supported client path is the Host flow — see docs/mod-delivery.md)
 nix run .#pz-client-mods -- viewpoint --dry-run
 nix run .#pz-client-mods -- viewpoint
 ```
+
+The three mod delivery modes — dedicated server, client-hosted server, and
+singleplayer — are covered in [mod delivery](mod-delivery.md). In short: a
+dedicated server downloads into `workshopDir`; a client host is **config only**
+and lets the game's Host button fetch the items through Steam; local mods are a
+separate, manual mechanism.
 
 ### Why one app per pack rather than a `--modpack` flag
 
@@ -293,7 +300,7 @@ run.
 
 ```bash
 nix flake update project-zomboid-servers   # or pin a rev by hand
-nix flake check                             # ten checks before you rebuild
+nix flake check                             # the full check suite, before you rebuild
 nixos-rebuild switch --flake .#myhost
 ```
 

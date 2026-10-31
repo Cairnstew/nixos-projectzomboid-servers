@@ -11,12 +11,16 @@
 # the client-side server name are still described exactly ONCE, on the NixOS
 # side, and cannot drift from what the dedicated server would have used.
 #
-# It also owns getting the MODS onto the machine (`home.installMods`). That is
-# deliberately here and not on the NixOS side: it writes into the user's
-# `~/Zomboid/mods` and Steam area. Note it INSTALLS LOCAL MODS rather than
-# subscribing — Steam subscriptions are not scriptable (no public API, no
-# `steamcmd` command, no local file), so a client that loads a pack without
-# clicking Subscribe in Steam does it as local mods.
+# The activation writes CONFIG ONLY, into `~/Zomboid/Server/`. It never touches
+# a Steam library and never runs steamcmd: the game's Host button downloads the
+# Workshop items through Steam into whichever library owns the PZ install. The
+# old "link the shared server download into the client library" option is gone,
+# because the client enumerates mods through Steam's subscription list and never
+# scans that directory — see docs/mod-delivery.md.
+#
+# `home.installMods` remains only as a deprecated escape hatch for a client that
+# cannot subscribe, and is isolated from Steam (its own HOME/staging under
+# ~/.cache) so it cannot rewrite `libraryfolders.vdf`.
 #
 # Standalone Home Manager (no NixOS system around it) has no `osConfig`, so this
 # module is inert there rather than an error.
@@ -81,40 +85,26 @@ in
       '';
     };
 
-    linkSteamWorkshop = mkOption {
-      type = types.bool;
-      default = true;
-      description = ''
-        Symlink the shared SteamCMD download into the client's Steam library, so
-        the same Workshop items are not downloaded twice.
-
-        <warning>
-          <para>
-            This does <emphasis>not</emphasis> make the mods load in the game
-            client: Project Zomboid's client enumerates Workshop mods through
-            Steam's subscription list and never scans the library, so symlinked
-            content is invisible to it. It is parity with the dedicated server
-            plus a saved download. To make the client actually load a pack
-            without subscribing, use <option>installMods</option>. See
-            <filename>GOTCHAS.md</filename> in the consumer's repo.
-          </para>
-        </warning>
-      '';
-    };
-
     installMods = mkOption {
       type = types.bool;
       default = false;
       description = ''
-        Fetch the pack's Workshop items and install them as <emphasis>local
-        mods</emphasis> in <filename>~/Zomboid/mods</filename> — the form
-        Project Zomboid's client loads with no Steam subscription.
+        <emphasis>Deprecated.</emphasis> Fetch the pack's Workshop items and
+        install them as <emphasis>local mods</emphasis> in
+        <filename>~/Zomboid/mods</filename>.
 
-        Steam subscriptions cannot be scripted: there is no public API, no
-        <command>steamcmd</command> command, and no local file that encodes one
-        (verified — the client's <filename>appworkshop_&lt;appid&gt;.acf</filename>
-        has no <literal>subscribed</literal> flag). Installing the mods locally is
-        the supported way to make a client load a pack it is not subscribed to.
+        This is no longer how a client-hosted world gets its mods. With
+        <literal>WorkshopItems=</literal> populated, the game's own Host button
+        downloads the items through Steam into the library that owns the PZ
+        install. Use that, and subscribe to the pack in Steam, rather than
+        keeping a second copy in <filename>~/Zomboid/mods</filename>.
+
+        Kept only as an escape hatch for a client that cannot subscribe. The
+        downloader now runs <command>steamcmd</command> with its own isolated
+        <envar>HOME</envar> and staging directory under
+        <filename>~/.cache/pz-client-mods</filename>, so it cannot read or write
+        <filename>~/.local/share/Steam</filename> and cannot rewrite
+        <filename>libraryfolders.vdf</filename>. It never writes a Steam library.
 
         A systemd user service does the fetch. It is <emphasis>idempotent</emphasis>
         — an already-installed mod is skipped — so re-running is cheap, and it is
@@ -133,16 +123,22 @@ in
       default = null;
       example = "my_steam_account";
       description = ''
-        Steam account to log in as when fetching mods — needed for items that
-        answer <literal>Access Denied</literal> / <literal>File Not Found</literal>
-        anonymously.
+        Steam account to log in as when <option>installMods</option> fetches
+        items — needed for items that answer <literal>Access Denied</literal> /
+        <literal>File Not Found</literal> anonymously.
 
         The password is <emphasis>never</emphasis> stored: SteamCMD must have
-        logged in once already
-        (<command>steamcmd +login <replaceable>account</replaceable></command>),
-        which caches a token under <envar>HOME</envar> that later non-interactive
-        runs reuse. A systemd unit has no terminal, so it cannot answer a password
-        prompt — an unauthenticated run simply fails and is visible in
+        logged in once already, with the same isolated HOME the service uses:
+
+        <programlisting>
+        HOME=~/.cache/pz-client-mods/home steamcmd +login <replaceable>account</replaceable>
+        </programlisting>
+
+        That caches a token under the isolated <envar>HOME</envar>, which later
+        non-interactive runs reuse and which cannot see
+        <filename>~/.local/share/Steam</filename>. A systemd unit has no
+        terminal, so it cannot answer a password prompt — an unauthenticated run
+        simply fails and is visible in
         <command>journalctl --user -u project-zomboid-client-mods</command>.
       '';
     };
@@ -156,8 +152,6 @@ in
           mapAttrsToList (_name: host: ''
             (
               export PZ_CLIENT_ZOMBOID="$HOME/Zomboid"
-              export PZ_SERVER_DIR="${osCfg.serverDir}"
-              ${optionalString (!cfg.home.linkSteamWorkshop) "export PZ_LINK_STEAM_WORKSHOP=0"}
               run ${lib.getExe host.prepare}
             )
           '') hosts
@@ -166,33 +160,44 @@ in
     })
 
     # ── The mods themselves, fetched once at login ──────────────────────────
-    (mkIf (cfg.home.installMods && hosts != { }) {
-      systemd.user.services.project-zomboid-client-mods = {
-        Unit = {
-          Description = "Fetch the Project Zomboid pack's Workshop mods as local mods";
-        };
-        Service = {
-          Type = "oneshot";
-          # Not a lock: "active" means the last run finished. An installed mod is
-          # skipped, so a repeat is a fast no-op rather than a re-download.
-          RemainAfterExit = true;
-          ExecStart = lib.getExe (
-            pkgs.writeShellApplication {
-              name = "project-zomboid-client-mods";
-              runtimeInputs = [ clientMods ];
-              text = ''
-                exec ${lib.getExe clientMods} \
-                  --ids ${lib.escapeShellArg (concatStringsSep "," workshopIds)} \
-                  --zomboid "$HOME/Zomboid" \
-                  ${optionalString (
-                    cfg.home.steamLogin != null
-                  ) "--login ${lib.escapeShellArg cfg.home.steamLogin}"}
-              '';
-            }
-          );
-        };
-        Install.WantedBy = [ "default.target" ];
-      };
-    })
+    # Deprecated, and deliberately warned about at evaluation time. The Host
+    # flow is the supported path; this exists only for a client that cannot
+    # subscribe, and it is isolated from Steam (see the option docs).
+    (mkIf (cfg.home.installMods && hosts != { }) (
+      lib.warn
+        ''
+          services.project-zomboid-servers.home.installMods is deprecated: a
+          client-hosted world gets its mods through the game's Host flow, which
+          downloads WorkshopItems= through Steam. This option installs a second
+          copy as local mods. Remove it unless you specifically cannot subscribe.''
+        {
+          systemd.user.services.project-zomboid-client-mods = {
+            Unit = {
+              Description = "Fetch the Project Zomboid pack's Workshop mods as local mods";
+            };
+            Service = {
+              Type = "oneshot";
+              # Not a lock: "active" means the last run finished. An installed mod is
+              # skipped, so a repeat is a fast no-op rather than a re-download.
+              RemainAfterExit = true;
+              ExecStart = lib.getExe (
+                pkgs.writeShellApplication {
+                  name = "project-zomboid-client-mods";
+                  runtimeInputs = [ clientMods ];
+                  text = ''
+                    exec ${lib.getExe clientMods} \
+                      --ids ${lib.escapeShellArg (concatStringsSep "," workshopIds)} \
+                      --zomboid "$HOME/Zomboid" \
+                      ${optionalString (
+                        cfg.home.steamLogin != null
+                      ) "--login ${lib.escapeShellArg cfg.home.steamLogin}"}
+                  '';
+                }
+              );
+            };
+            Install.WantedBy = [ "default.target" ];
+          };
+        }
+    ))
   ];
 }

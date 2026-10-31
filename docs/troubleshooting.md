@@ -263,6 +263,51 @@ the whitelist is a table in `Zomboid/db/<servername>.db`.
 
 ---
 
+## Steam and mod delivery
+
+### `Staging library folder not found`
+
+This is a **Steam client** error, not a module error. Steam records its libraries
+in `<steam root>/steamapps/libraryfolders.vdf`; when that registration and the
+real mount disagree — a moved library, a library on a disk that is not mounted
+when Steam starts, or a `libraryfolders.vdf` rewritten by something else — Steam
+cannot find its staging folder.
+
+The module neither causes nor fixes it:
+
+- a client host is **config only** and never touches `libraryfolders.vdf`, a
+  Steam library, or `~/Zomboid/mods`;
+- the deprecated `home.installMods` downloader runs steamcmd with an isolated
+  HOME (`~/.cache/pz-client-mods/home`), so it cannot rewrite the user's Steam
+  registration;
+- `workshopDir` is a plain directory the module owns, not a Steam library Steam
+  itself needs to know about.
+
+Check that the library is still registered in Steam (Settings → Storage), that
+its mount exists and is **writable when Steam starts**, and that
+`libraryfolders.vdf` names the path that actually exists.
+
+### A client host has no mods
+
+`~/Zomboid/Server/<name>.ini` should contain a populated `WorkshopItems=`. If it
+does, the game's Host button fetches the items through Steam; if it does not, the
+pack rendered no Workshop ids. See [mod delivery](mod-delivery.md). The module
+does not install or link mods on the client side.
+
+### `SelfManagedMods=true` disappears from a client host's `.ini`
+
+The game's Host flow rewrites the file and strips the key. The module does not
+fight it; the next Home Manager activation re-merges the file and puts it back.
+On a dedicated server the key is honoured normally.
+
+### A dedicated server's mods are older than the client's
+
+The client gets the current Steam build; a dedicated server with
+`updateOnStart = false` keeps the copy steamcmd last downloaded. Re-run
+`project-zomboid-install` (or leave `updateOnStart = true`) to refresh it.
+
+---
+
 ## Checks and CI
 
 ### A check fails with `expected a list but found a string`

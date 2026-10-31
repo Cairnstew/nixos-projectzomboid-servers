@@ -91,20 +91,18 @@ let
     in
     "${agent}${srv.jvmOpts}";
 
-  # Every Workshop item ANY consumer needs, de-duplicated at EVAL time — two
-  # consumers sharing a pack must not trigger two downloads of the same item.
-  # This is static data, so it belongs in Nix rather than a shell pipeline.
+  # Every Workshop item the DEDICATED install unit must keep downloaded,
+  # de-duplicated at EVAL time — two servers sharing a pack must not trigger two
+  # downloads of the same item. This is static data, so it belongs in Nix rather
+  # than a shell pipeline.
   #
-  # Client hosts are included deliberately. They are not servers, but they read
-  # the same Workshop content, and the install unit is the only thing that keeps
-  # that shared download current — so omitting them would let the copy a client
-  # host symlinks from go stale the moment the last dedicated server was turned
-  # off, which is exactly the configuration a client host is for.
+  # Client hosts are deliberately EXCLUDED. A client host downloads its own mods
+  # through Steam when the game's Host button runs, into the library that owns
+  # the PZ install; it never reads this install. Including its ids here was the
+  # last coupling between the two paths and made a client-only configuration
+  # fetch content no unit on the host would ever use.
   allWorkshopItems = sort (a: b: a < b) (
-    unique (
-      concatMap (srv: srv.workshopItems) (lib.attrValues resolved)
-      ++ concatMap (srv: srv.workshopItems) (lib.attrValues clientResolved)
-    )
+    unique (concatMap (srv: srv.workshopItems) (lib.attrValues resolved))
   );
 
   # One install serves one branch, so the shared install unit takes the first
@@ -352,6 +350,7 @@ let
           # standalone runner.
           "PZ_DATA_DIR=${cfg.dataDir}"
           "PZ_SERVER_DIR=${cfg.serverDir}"
+          "PZ_WORKSHOP_DIR=${cfg.workshopDir}"
           "PZ_SERVER_NAME=${srv.serverName}"
           # Quoted so systemd keeps this as ONE assignment. Without the quotes
           # its parser splits the value on whitespace and logs
@@ -569,140 +568,150 @@ in
   # Defining no units at all when `package` is missing lets evaluation finish, so
   # the one message that says what to do is the one that gets reported. The
   # resulting state (units absent) is already what the config asked for.
-  config = mkIf (cfg.enable && cfg.package != null) {
-    # One place for every unit, so nothing can shadow or duplicate.
-    systemd.services = mkMerge [
-      # The install unit the servers require. Defined HERE, in the same file, so
-      # `Requires=` can never dangle.
-      (mkIf cfg.updateOnStart {
-        "${installUnit}" = {
-          description = "Project Zomboid install/update (steamcmd app 380870 + Workshop mods)";
-          wantedBy = [ "multi-user.target" ];
-          serviceConfig = {
-            Type = "oneshot";
-            # RemainAfterExit so N servers requiring this unit trigger ONE
-            # install at boot rather than N.
-            RemainAfterExit = true;
-            User = cfg.user;
-            Group = cfg.group;
-            WorkingDirectory = cfg.dataDir;
-            # lib/prepare.nix takes the directories from the environment, which is
-            # what lets the standalone runner reuse the same script with a
-            # runtime --data-dir.
-            Environment = [
-              "PZ_DATA_DIR=${cfg.dataDir}"
-              "PZ_SERVER_DIR=${cfg.serverDir}"
-            ];
-            ExecStart = lib.getExe installScript;
-            # A first install pulls the whole game over the network.
-            TimeoutStartSec = "45min";
+  #
+  # The client-host half is a separate element of this merge ON PURPOSE. It is
+  # config for a user's `~/Zomboid`, not a unit, and it must render even when no
+  # dedicated server exists — which is the common case. Keeping it inside the
+  # `enable` gate made a client-only configuration turn on the install unit, a
+  # steamcmd run and the `project-zomboid` system user just to emit two files.
+  config = mkMerge [
+    {
+      # Plain data + a runnable script, exactly like `webConsoleUpstreams`: this
+      # module does not own `~/Zomboid`, so it renders and hands over. Consumed
+      # by the client user's own configuration (see the `clientHosts` docs).
+      services.project-zomboid-servers.clientHosts = lib.mapAttrs (
+        name: srv:
+        let
+          clientName = srv.clientHost.name;
+          iniBase = prepare.mkIniBase {
+            server = srv;
+            name = "${clientName}.ini";
           };
-        };
-      })
+        in
+        {
+          inherit (srv) mods workshopItems;
+          serverName = clientName;
+          iniFile = iniBase;
+          sandboxFile = prepare.mkSandboxFile {
+            server = srv;
+            name = "${clientName}_SandboxVars.lua";
+          };
+          prepare = prepare.mkClientHostScript {
+            name = "${unitName name}-client-host";
+            server = srv;
+            inherit iniBase clientName;
+          };
+        }
+      ) clientResolved;
+    }
 
-      (lib.mapAttrs' mkServerService resolved)
+    (mkIf (cfg.enable && cfg.package != null) {
+      # One place for every unit, so nothing can shadow or duplicate.
+      systemd.services = mkMerge [
+        # The install unit the servers require. Defined HERE, in the same file, so
+        # `Requires=` can never dangle.
+        (mkIf cfg.updateOnStart {
+          "${installUnit}" = {
+            description = "Project Zomboid install/update (steamcmd app 380870 + Workshop mods)";
+            wantedBy = [ "multi-user.target" ];
+            serviceConfig = {
+              Type = "oneshot";
+              # RemainAfterExit so N servers requiring this unit trigger ONE
+              # install at boot rather than N.
+              RemainAfterExit = true;
+              User = cfg.user;
+              Group = cfg.group;
+              WorkingDirectory = cfg.dataDir;
+              # lib/prepare.nix takes the directories from the environment, which is
+              # what lets the standalone runner reuse the same script with a
+              # runtime --data-dir.
+              Environment = [
+                "PZ_DATA_DIR=${cfg.dataDir}"
+                "PZ_SERVER_DIR=${cfg.serverDir}"
+                "PZ_WORKSHOP_DIR=${cfg.workshopDir}"
+              ];
+              ExecStart = lib.getExe installScript;
+              # A first install pulls the whole game over the network.
+              TimeoutStartSec = "45min";
+            };
+          };
+        })
 
-      # Timer-driven update. Separate from the boot-time install unit because
-      # that unit's RemainAfterExit would make a second ExecStart a no-op.
-      (mkIf (cfg.updateSchedule != null) {
+        (lib.mapAttrs' mkServerService resolved)
+
+        # Timer-driven update. Separate from the boot-time install unit because
+        # that unit's RemainAfterExit would make a second ExecStart a no-op.
+        (mkIf (cfg.updateSchedule != null) {
+          "project-zomboid-update" = {
+            description = "Project Zomboid update on a schedule, restarting running servers";
+            after = [ "network-online.target" ];
+            wants = [ "network-online.target" ];
+            serviceConfig = {
+              Type = "oneshot";
+              User = "root";
+              Environment = [
+                "PZ_DATA_DIR=${cfg.dataDir}"
+                "PZ_SERVER_DIR=${cfg.serverDir}"
+                "PZ_WORKSHOP_DIR=${cfg.workshopDir}"
+              ];
+              ExecStart = lib.getExe mkUpdateTimer;
+              TimeoutStartSec = "45min";
+            };
+          };
+        })
+
+        # `lib.mapAttrs'` (not `map`): it turns the { name, value; } pairs into a
+        # real attrset. `mkMerge` cannot merge a LIST of pairs, and passing one
+        # fails with "A definition for option `systemd.services' is not of type
+        # `attribute set of (submodule)'".
+        # The `_:` adapter makes the arity explicit: `mapAttrs'` passes
+        # (name, value) but the builder only needs the name. Relying on partial
+        # application here instead produced an inscrutable "attempt to call
+        # something which is not a function but a set" from `listToAttrs`.
+        (mkIf cfg.web.enable (lib.mapAttrs' (name: _: mkWebService name) webServers))
+      ];
+
+      # Console FIFOs are `systemd.sockets` units, NOT `systemd.services`:
+      # ListenFIFO/SocketMode are socketConfig options, and putting them on a
+      # service fails with "The option systemd.services.<name>.socketConfig does
+      # not exist".
+      # Filtered, not merely disabled: a server on the tmux backend should have NO
+      # console socket unit declared at all, rather than an inert one that still
+      # shows up in `systemctl list-unit-files` and in any config that reads
+      # `systemd.sockets`.
+      # The `_:` adapter makes the arity explicit — see the note on the web
+      # consoles below for why partial application here is a trap.
+      systemd.sockets = lib.mapAttrs' (name: srv: mkConsoleSocket name srv) (
+        lib.filterAttrs (_: srv: srv.managementSystem.systemd-socket.enable) resolved
+      );
+
+      systemd.timers = mkIf (cfg.updateSchedule != null) {
         "project-zomboid-update" = {
-          description = "Project Zomboid update on a schedule, restarting running servers";
-          after = [ "network-online.target" ];
-          wants = [ "network-online.target" ];
-          serviceConfig = {
-            Type = "oneshot";
-            User = "root";
-            Environment = [
-              "PZ_DATA_DIR=${cfg.dataDir}"
-              "PZ_SERVER_DIR=${cfg.serverDir}"
-            ];
-            ExecStart = lib.getExe mkUpdateTimer;
-            TimeoutStartSec = "45min";
+          description = "Timer for Project Zomboid server updates";
+          wantedBy = [ "timers.target" ];
+          timerConfig = {
+            OnCalendar = cfg.updateSchedule;
+            Persistent = true;
           };
-        };
-      })
-
-      # `lib.mapAttrs'` (not `map`): it turns the { name, value; } pairs into a
-      # real attrset. `mkMerge` cannot merge a LIST of pairs, and passing one
-      # fails with "A definition for option `systemd.services' is not of type
-      # `attribute set of (submodule)'".
-      # The `_:` adapter makes the arity explicit: `mapAttrs'` passes
-      # (name, value) but the builder only needs the name. Relying on partial
-      # application here instead produced an inscrutable "attempt to call
-      # something which is not a function but a set" from `listToAttrs`.
-      (mkIf cfg.web.enable (lib.mapAttrs' (name: _: mkWebService name) webServers))
-    ];
-
-    # Console FIFOs are `systemd.sockets` units, NOT `systemd.services`:
-    # ListenFIFO/SocketMode are socketConfig options, and putting them on a
-    # service fails with "The option systemd.services.<name>.socketConfig does
-    # not exist".
-    # Filtered, not merely disabled: a server on the tmux backend should have NO
-    # console socket unit declared at all, rather than an inert one that still
-    # shows up in `systemctl list-unit-files` and in any config that reads
-    # `systemd.sockets`.
-    # The `_:` adapter makes the arity explicit — see the note on the web
-    # consoles below for why partial application here is a trap.
-    systemd.sockets = lib.mapAttrs' (name: srv: mkConsoleSocket name srv) (
-      lib.filterAttrs (_: srv: srv.managementSystem.systemd-socket.enable) resolved
-    );
-
-    # ── Client-host files (the in-game Host button) ──────────────────────────
-    # Plain data + a runnable script, exactly like `webConsoleUpstreams`: this
-    # module does not own `~/Zomboid`, so it renders and hands over. Consumed by
-    # the client user's own configuration (see the `clientHosts` option docs).
-    services.project-zomboid-servers.clientHosts = lib.mapAttrs (
-      name: srv:
-      let
-        clientName = srv.clientHost.name;
-        iniBase = prepare.mkIniBase {
-          server = srv;
-          name = "${clientName}.ini";
-        };
-      in
-      {
-        inherit (srv) mods workshopItems;
-        serverName = clientName;
-        iniFile = iniBase;
-        sandboxFile = prepare.mkSandboxFile {
-          server = srv;
-          name = "${clientName}_SandboxVars.lua";
-        };
-        prepare = prepare.mkClientHostScript {
-          name = "${unitName name}-client-host";
-          server = srv;
-          inherit iniBase clientName;
-          steamAppId = cfg.package.steamAppId or "108600";
-        };
-      }
-    ) clientResolved;
-
-    systemd.timers = mkIf (cfg.updateSchedule != null) {
-      "project-zomboid-update" = {
-        description = "Timer for Project Zomboid server updates";
-        wantedBy = [ "timers.target" ];
-        timerConfig = {
-          OnCalendar = cfg.updateSchedule;
-          Persistent = true;
         };
       };
-    };
 
-    # The console fifos live in a tmpfs-backed directory created by tmpfiles,
-    # because the .socket unit needs the directory to exist before any service
-    # runs.
-    systemd.tmpfiles.rules = [ "d '${cfg.runDir}' 0755 ${cfg.user} ${cfg.group} - -" ];
+      # The console fifos live in a tmpfs-backed directory created by tmpfiles,
+      # because the .socket unit needs the directory to exist before any service
+      # runs.
+      systemd.tmpfiles.rules = [ "d '${cfg.runDir}' 0755 ${cfg.user} ${cfg.group} - -" ];
 
-    # ── Firewall ────────────────────────────────────────────────────────────
-    networking.firewall.allowedUDPPorts = concatMap (
-      srv: optionals srv.openFirewall (pz.udpPortsOf srv)
-    ) (lib.attrValues resolved);
+      # ── Firewall ────────────────────────────────────────────────────────────
+      networking.firewall.allowedUDPPorts = concatMap (
+        srv: optionals srv.openFirewall (pz.udpPortsOf srv)
+      ) (lib.attrValues resolved);
 
-    # `lib.optionals`, not `mkIf`: mkIf yields a `{ _type = "if"; … }` set that is
-    # only valid as a whole option definition, so using it as an operand of `++`
-    # fails with "expected a list but found a set".
-    networking.firewall.allowedTCPPorts =
-      concatMap (srv: optional (srv.rconPort != 0) srv.rconPort) (lib.attrValues resolved)
-      ++ lib.optionals cfg.web.openFirewall (map (name: webPort name) (builtins.attrNames webServers));
-  };
+      # `lib.optionals`, not `mkIf`: mkIf yields a `{ _type = "if"; … }` set that is
+      # only valid as a whole option definition, so using it as an operand of `++`
+      # fails with "expected a list but found a set".
+      networking.firewall.allowedTCPPorts =
+        concatMap (srv: optional (srv.rconPort != 0) srv.rconPort) (lib.attrValues resolved)
+        ++ lib.optionals cfg.web.openFirewall (map (name: webPort name) (builtins.attrNames webServers));
+    })
+  ];
 }

@@ -16,13 +16,26 @@ cache folder, and it names SteamCMD as the way to obtain the files. So this
 tool's default is to download each Workshop item with SteamCMD and install the
 mod(s) it contains into `~/Zomboid/mods` — which the game then loads.
 
-Two modes:
+ONE MODE: LOCAL MODS
+--------------------
+Everything goes to `<zomboid>/mods` (or an explicit `--dest`). There is no
+"seed the Steam library" mode: Project Zomboid's client enumerates Workshop
+content through Steam's subscription list, so bytes placed in
+`steamapps/workshop/content/108600/` are invisible until the item is subscribed —
+and this tool cannot subscribe. A client-hosted world uses the game's own Host
+flow instead (populated `WorkshopItems=` makes Steam fetch the items); this tool
+is the deprecated escape hatch for a client that cannot subscribe, plus the
+singleplayer "manual local installation" path.
 
-    (default)          local mods -> <zomboid>/mods     LOADED by the client
-    --steam-library    the Steam library workshop dir   NOT loaded until the
-                                                         user SUBSCRIBES; a
-                                                         pre-seed for someone
-                                                         who will
+ISOLATED FROM THE USER'S STEAM INSTALL
+--------------------------------------
+SteamCMD runs with its OWN `HOME` (`$HOME/.cache/pz-client-mods/home`) and stages
+under `$HOME/.cache/pz-client-mods`. It therefore cannot read or write
+`~/.local/share/Steam`, `~/.steam`, or `libraryfolders.vdf`. That isolation is
+deliberate: pointing steamcmd at a real Steam library let it rewrite
+`libraryfolders.vdf` and break Steam's staging ("Staging library folder not
+found"). `PZ_CLIENT_MODS_HOME` overrides the isolated home (for tests and for a
+deliberate separate cache).
 
 ANONYMOUS STEAMCMD IS NOT ENOUGH FOR EVERY ITEM
 -----------------------------------------------
@@ -34,8 +47,8 @@ Brita's Armor Pack does not. Pass `--login <your-steam-name>` to authenticate as
 an account that owns the game (SteamCMD prompts for the password / Steam Guard).
 The prompt is confirmed reachable, but the authenticated download itself needs
 real credentials and is the one path the repository's checks cannot cover.
-SteamCMD caches that login under `$HOME`, which is why this tool does NOT
-override HOME the way the server installer does.
+SteamCMD caches that login under the ISOLATED home above, so log in once with:
+`HOME=~/.cache/pz-client-mods/home steamcmd +login <account>`.
 
 WHY A RECURSIVE INSTALL
 -----------------------
@@ -63,8 +76,7 @@ missing or an item failed to download; 2 for usage.
 USAGE
 -----
     pz_client_mods.py <pack> [--catalogue FILE] [--zomboid DIR]
-                       [--steam-library] [--dest DIR] [--login NAME]
-                       [--dry-run] [--json]
+                       [--dest DIR] [--login NAME] [--dry-run] [--json]
     pz_client_mods.py --ids 2625441155,2625840413 [--dry-run]
 """
 
@@ -97,23 +109,18 @@ def load_catalogue(path):
         return json.load(fh)
 
 
-def discover_library(helper, appid, home=None, steam_root=None):
-    """Return the Steam library root holding Project Zomboid, or None."""
-    if not helper or not os.path.isfile(helper):
-        return None
-    cmd = [sys.executable, helper, "--appid", appid, "--library-root"]
-    if home:
-        cmd += ["--home", home]
-    if steam_root:
-        cmd += ["--steam-root", steam_root]
-    try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if out.returncode != 0:
-        return None
-    lib = out.stdout.strip()
-    return lib or None
+def client_mods_home():
+    """The isolated HOME SteamCMD runs under.
+
+    Deliberately NOT the user's real HOME: steamcmd there can see
+    `~/.local/share/Steam` and rewrite `libraryfolders.vdf`, which broke Steam's
+    staging on 2026-10-07. `PZ_CLIENT_MODS_HOME` makes the location explicit for
+    a test or an operator who wants a different cache.
+    """
+    home = os.environ.get("PZ_CLIENT_MODS_HOME")
+    if not home:
+        home = os.path.join(os.path.expanduser("~"), ".cache", "pz-client-mods", "home")
+    return home
 
 
 def mod_roots(item_dir):
@@ -171,7 +178,7 @@ def default_staging():
     return tempfile.mkdtemp(prefix="staging-", dir=base)
 
 
-def steamcmd_download(steamcmd, install_dir, appid, item_ids, login):
+def steamcmd_download(steamcmd, install_dir, appid, item_ids, login, home):
     """Download every item in ONE steamcmd invocation, streaming its output.
 
     One invocation, not one per item: with `--login` that means the password /
@@ -179,13 +186,18 @@ def steamcmd_download(steamcmd, install_dir, appid, item_ids, login):
     rather than captured — a captured prompt is an invisible one — and success
     is judged by the content directory afterwards, because steamcmd's exit code
     says nothing useful about an individual `workshop_download_item`.
+
+    `home` is the ISOLATED SteamCMD home. Passing it through the environment is
+    what stops steamcmd from discovering — and rewriting — the user's real Steam
+    library registration.
     """
     cmd = [steamcmd, "+force_install_dir", install_dir, "+login", login or "anonymous"]
     for item_id in item_ids:
         cmd += ["+workshop_download_item", appid, item_id]
     cmd.append("+quit")
+    env = dict(os.environ, HOME=home)
     try:
-        subprocess.run(cmd)
+        subprocess.run(cmd, env=env)
     except OSError as exc:
         print(f"pz-client-mods: cannot run steamcmd ({steamcmd}): {exc}", file=sys.stderr)
 
@@ -199,27 +211,14 @@ def main(argv=None):
     parser.add_argument("--ids", default=None, help="comma-separated Workshop ids instead of a pack")
     parser.add_argument("--catalogue", default=None, help=f"catalogue JSON (default: ${CATALOGUE_ENV})")
     parser.add_argument("--zomboid", default=os.path.expanduser("~/Zomboid"), help="client Zomboid home (default: ~/Zomboid)")
-    parser.add_argument(
-        "--steam-library",
-        action="store_true",
-        help="write into the Steam library's workshop content instead of local mods "
-        "(NOT loaded by the client until subscribed)",
-    )
-    parser.add_argument("--dest", default=None, help="explicit target (local mods dir, or library root with --steam-library)")
+    parser.add_argument("--dest", default=None, help="explicit local-mods target directory")
     parser.add_argument("--appid", default="108600", help="Project Zomboid app id (default: 108600)")
-    parser.add_argument("--home", default=None, help="HOME to probe for Steam (default: the real one)")
-    parser.add_argument("--steam-root", default=None, help="Steam root to probe")
     parser.add_argument("--steamcmd", default=os.environ.get("PZ_STEAMCMD", "steamcmd"), help="steamcmd executable")
     parser.add_argument(
         "--login",
         default=None,
         help="Steam account to log in as instead of anonymous. Needed for items "
         "that answer 'Access Denied' anonymously; SteamCMD prompts for the password.",
-    )
-    parser.add_argument(
-        "--workshop-helper",
-        default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "pz_steam_workshop.py"),
-        help="path to pz_steam_workshop.py, used to discover the Steam library",
     )
     parser.add_argument("--staging", default=None, help="download staging dir (default: a temp dir)")
     parser.add_argument("--force", action="store_true", help="reinstall mods that are already present")
@@ -261,29 +260,20 @@ def main(argv=None):
         return 0
 
     # ── Where they land ─────────────────────────────────────────────────────
-    if args.dest:
-        target = args.dest
-    elif args.steam_library:
-        lib = discover_library(args.workshop_helper, args.appid, args.home, args.steam_root)
-        if lib is None:
-            print(
-                "pz-client-mods: Project Zomboid is not installed via Steam "
-                "(no appmanifest in any library), so there is no library to write into",
-                file=sys.stderr,
-            )
-            return 1
-        target = lib
-    else:
-        target = os.path.join(args.zomboid, "mods")
-
-    mode = "steam-library" if args.steam_library else "local-mods"
+    # Local mods only. A Steam library target is deliberately not offered: the
+    # client does not load it until subscribed, and pointing steamcmd at a real
+    # library is what let it rewrite libraryfolders.vdf.
+    target = args.dest or os.path.join(args.zomboid, "mods")
+    mode = "local-mods"
     login_label = args.login or "anonymous"
+    steam_home = client_mods_home()
 
     plan = {
         "pack": label,
         "mode": mode,
         "target": target,
         "login": login_label,
+        "steamHome": steam_home,
         "items": [{"id": i, "title": titles.get(i)} for i in items],
         "localMods": local_mods,
     }
@@ -296,6 +286,7 @@ def main(argv=None):
             print(f"  mode:    {mode} -> {target}")
             print(f"  login:   {login_label}")
             print(f"  steamcmd: {args.steamcmd}")
+            print(f"  steamcmd HOME: {steam_home} (isolated from ~/.local/share/Steam)")
             print("  would download:")
             for i in items:
                 print(f"    {i}  {titles.get(i, '')}".rstrip())
@@ -303,14 +294,10 @@ def main(argv=None):
                 print(f"  NOTE: {len(local_mods)} non-Workshop mod(s) must be supplied by hand:")
                 for m in local_mods:
                     print(f"    {m}")
-        if mode == "steam-library":
-            print(
-                "  NOTE: the client will NOT load these until the items are SUBSCRIBED in Steam.",
-                file=sys.stderr,
-            )
         return 0
 
     # ── Download ────────────────────────────────────────────────────────────
+    os.makedirs(steam_home, exist_ok=True)
     staging = args.staging or default_staging()
     if staging.startswith(("/tmp/", "/var/tmp/")):
         print(
@@ -318,13 +305,13 @@ def main(argv=None):
             "(it runs in a steam-run sandbox with a private /tmp); downloads may vanish",
             file=sys.stderr,
         )
-    install_dir = target if mode == "steam-library" else staging
+    install_dir = staging
 
     print(
         f"pz-client-mods: downloading {len(items)} item(s) via steamcmd ({login_label})",
         file=sys.stderr,
     )
-    steamcmd_download(args.steamcmd, install_dir, args.appid, items, args.login)
+    steamcmd_download(args.steamcmd, install_dir, args.appid, items, args.login, steam_home)
 
     content_root = os.path.join(install_dir, "steamapps", "workshop", "content", args.appid)
     report = []
@@ -336,15 +323,11 @@ def main(argv=None):
             failed += 1
             report.append((item_id, None, "DOWNLOAD FAILED"))
             continue
-        if mode == "steam-library":
-            report.append((item_id, None, "placed in the Steam library (subscribe to load)"))
-            continue
         os.makedirs(target, exist_ok=True)
         installed += install_local(item_dir, target, item_id, args.force, report)
 
     # ── Summary ─────────────────────────────────────────────────────────────
-    if mode == "local-mods":
-        print(f"pz-client-mods: {label}: {len(installed)} mod(s) installed to {target}")
+    print(f"pz-client-mods: {label}: {len(installed)} mod(s) installed to {target}")
     for item_id, mid, what in report:
         if what not in ("installed",):
             print(f"  {item_id}  {mid or ''}  {what}".rstrip())
@@ -360,12 +343,6 @@ def main(argv=None):
             f"{os.path.join(args.zomboid, 'mods')}: {', '.join(local_mods)}",
             file=sys.stderr,
         )
-    if mode == "steam-library":
-        print(
-            "  NOTE: subscribe to the items in Steam, or the client will not load them.",
-            file=sys.stderr,
-        )
-
     if args.staging is None:
         shutil.rmtree(staging, ignore_errors=True)
     return 1 if failed else 0

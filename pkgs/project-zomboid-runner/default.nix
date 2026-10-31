@@ -91,6 +91,7 @@ stdenvNoCC.mkDerivation {
     server_name=""
     data_dir="$PWD/pz-data"
     server_dir=""
+    workshop_dir=""
     port="${toString resolvedServer.defaultPort}"
     udp_port="${toString resolvedServer.udpPort}"
     rcon_port="${toString resolvedServer.rconPort}"
@@ -138,6 +139,7 @@ stdenvNoCC.mkDerivation {
     Options:
       --data-dir PATH      base directory        (default: $PWD/pz-data)
       --server-dir PATH    steamcmd install      (default: <data-dir>/server)
+      --workshop-dir PATH  Workshop content      (default: <server-dir>/steamapps/workshop/content/${steamAppId})
       --port N             game port             (default: ${toString resolvedServer.defaultPort})
       --udp-port N         direct-connection UDP (default: ${toString resolvedServer.udpPort})
       --rcon-port N        RCON TCP port, 0=off  (default: ${toString resolvedServer.rconPort})
@@ -175,6 +177,7 @@ stdenvNoCC.mkDerivation {
       case "$1" in
         --data-dir)   data_dir="$2";   shift 2 ;;
         --server-dir) server_dir="$2"; shift 2 ;;
+        --workshop-dir) workshop_dir="$2"; shift 2 ;;
         --port)       port="$2";       shift 2 ;;
         --udp-port)   udp_port="$2";   shift 2 ;;
         --rcon-port)  rcon_port="$2";  shift 2 ;;
@@ -224,8 +227,10 @@ stdenvNoCC.mkDerivation {
     fi
 
     : "''${server_dir:=$data_dir/server}"
+    : "''${workshop_dir:=$server_dir/steamapps/workshop/content/${steamAppId}}"
     export PZ_DATA_DIR="$data_dir"
     export PZ_SERVER_DIR="$server_dir"
+    export PZ_WORKSHOP_DIR="$workshop_dir"
     # The prep script is shared with the NixOS module and reads the server name
     # from here, because it is a runtime argument rather than Nix data.
     export PZ_SERVER_NAME="$server_name"
@@ -265,6 +270,7 @@ stdenvNoCC.mkDerivation {
     printf 'project-zomboid: modpack   %s\n' "''${modpack:-none}"
     printf 'project-zomboid: data-dir  %s\n' "$PZ_DATA_DIR"
     printf 'project-zomboid: install   %s\n' "$PZ_SERVER_DIR"
+    printf 'project-zomboid: workshop  %s\n' "$PZ_WORKSHOP_DIR"
     printf 'project-zomboid: ports     %s (udp) / %s (udp) / %s (rcon)\n' \
       "$port" "$udp_port" "$rcon_port"
 
@@ -278,7 +284,7 @@ stdenvNoCC.mkDerivation {
         ${installScript}/bin/project-zomboid-install
       fi
       exec ${lib.getExe pkgs.python3} ${mapsPy} \
-        --workshop-root "$PZ_SERVER_DIR/steamapps/workshop/content/${steamAppId}" \
+        --workshop-root "$PZ_WORKSHOP_DIR" \
         --local-mods "$PZ_DATA_DIR/$server_name/Zomboid/mods" \
         --base-map "$base_map" \
         "''${map_priority_argv[@]+''${map_priority_argv[@]}}" \
