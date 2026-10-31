@@ -8,6 +8,23 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`workshopDir` — the dedicated server's Workshop directory is explicit.**
+  Defaults to `<serverDir>/steamapps/workshop/content/108600`, is asserted
+  absolute and asserted to end in that suffix (SteamCMD installs relative to a
+  library root, which the module derives from it), and is passed to both
+  steamcmd and the prep/map/launcher path as `PZ_WORKSHOP_DIR`. A dedicated
+  install no longer assumes the content lives under `serverDir`.
+- **A client host renders with the dedicated half switched off.** `clientHosts`
+  moved out of the `enable` gate, so a configuration that only sets
+  `servers.<name>.clientHost.enable = true` produces no install unit, no
+  steamcmd run and no `project-zomboid` user. That is now covered by
+  `module-eval`'s client-only scenario.
+- **New checks.** `client-host-prepare` proves the client script writes only
+  `~/Zomboid/Server/`, contains no Steam/steamcmd/mod path, and restores
+  `SelfManagedMods` after the game strips it. `pz-client-mods-isolation` proves
+  the deprecated downloader receives an isolated HOME and has no Steam-library
+  mode. `module-eval` gained a custom-`workshopDir` scenario.
+
 - **Workshop items are resolved before any download.** `pz-workshop expand` now
   pre-fills the draft pack's `mods` list from each item's description `Mod ID:`
   declaration (the Steam Web API returns the description text, so no HTML
@@ -39,10 +56,10 @@ All notable changes to this project. Format follows
   `servers.<name>.localMods` takes `folder-name = directory`, symlinks each into
   the server's `Zomboid/mods`, and adds the key to `Mods=` automatically — so a
   private or modworkshop.net mod is declared once instead of hunted by hand.
-- **`prune` — a clean pack switch.** With `prune = true` the shared
-  `steamapps/workshop/content/<appid>` is reduced to the union of what enabled
-  servers and client hosts declare, and each server's Workshop and local-mod link
-  farms to its own declared list. Prune runs only after every item verifies, and
+- **`prune` — a clean pack switch.** With `prune = true` `workshopDir` is reduced
+  to the union of what enabled dedicated servers declare, and each server's
+  Workshop and local-mod link farms to its own declared list. Prune runs only
+  after every item verifies, and
   `links` mode touches only symlinks the module made — a hand-placed directory is
   never deleted. Under `nix run` the same is `--prune`. Newly tested by
   `scripts/pz_prune.py` and offline install/prep checks.
@@ -73,17 +90,13 @@ All notable changes to this project. Format follows
   world-identity keys came through unchanged while `Mods=`/`WorkshopItems=` were
   filled in.
 
-  Setting `PZ_SERVER_DIR` makes the script symlink every Workshop item from the
-  shared steamcmd download into the client's Steam library — **one download
-  serves both hosts** rather than two. The library is DISCOVERED from
-  `libraryfolders.vdf` when `PZ_CLIENT_WORKSHOP` is unset, so no host file
-  hard-codes where Steam put it; `PZ_LINK_STEAM_WORKSHOP=0` skips it instead.
-  ⚠ Linking is server-side parity and a saved download only — the game CLIENT
-  reads its Workshop items through Steam's subscription list and never scans the
-  library, so a hosted world still needs them subscribed.
-  The shared install/update unit now counts a client host's items among those it
-  keeps downloaded, so that copy does not go stale the moment the last dedicated
-  server is switched off — which is precisely the client-host configuration.
+  The script is **config only** and takes exactly one environment variable,
+  `PZ_CLIENT_ZOMBOID`. It writes only
+  `~/Zomboid/Server/<name>.ini` and `_SandboxVars.lua`; it never runs steamcmd,
+  never references a Steam library, and never writes `~/Zomboid/mods`. With
+  `WorkshopItems=` populated, the game's Host button fetches every item through
+  Steam into the library that owns the PZ install. The shared install unit no
+  longer downloads a client host's items: the two paths are independent.
 
   Note this is the *config* only. A pack whose mods need a JVM agent
   (e.g. ZombieBuddy) also needs that agent installed in the **client**, which is
@@ -95,20 +108,10 @@ All notable changes to this project. Format follows
   installs the `clientHosts` files into the client user's `~/Zomboid`, reading
   the pack back off `osConfig.services.project-zomboid-servers.clientHosts` so it
   stays described once and cannot drift from the dedicated server's config.
-  Previously every consumer had to hand-write a `home.activation` hook and
-  hard-code both the SteamCMD install path and their Steam library. Inert under
-  standalone Home Manager, which has no `osConfig`.
-  `services.project-zomboid-servers.home.enable = false` turns it off;
-  `…home.linkSteamWorkshop = false` keeps the files but drops the link.
-
-- **The Steam library is discovered rather than hard-coded.**
-  `scripts/pz_steam_workshop.py` finds the library that actually holds Project
-  Zomboid, by reading `steamapps/libraryfolders.vdf` and checking for the app's
-  `appmanifest_108600.acf`, and `mkClientHostScript` calls it when
-  `PZ_CLIENT_WORKSHOP` is unset. A machine with the game in a second library — or
-  not installed via Steam at all — now behaves correctly where a baked-in path
-  silently did nothing; the absent case is reported and skipped, never fatal.
-  Covered by the `steam-workshop-discovery` check.
+  Previously every consumer had to hand-write a `home.activation` hook. It now
+  needs no path at all: the activation exports only `PZ_CLIENT_ZOMBOID` and runs
+  the config-only script. Inert under standalone Home Manager, which has no
+  `osConfig`. `services.project-zomboid-servers.home.enable = false` turns it off.
 
 - **Two Steam Workshop CLIs, for moving between a collection and a pack.**
   `nix run .#pz-workshop -- expand <collection-id>` reads a Steam Workshop
@@ -122,35 +125,70 @@ All notable changes to this project. Format follows
   the `Mods=` local-mod ids. Covered by the `pz-workshop-helper` check, whose
   offline half asserts child ordering and Nix-safe escaping.
 
-- **`nix run .#pz-client-mods -- <pack>` fetches a pack's mods onto a CLIENT.**
+- **`nix run .#pz-client-mods -- <pack>` (deprecated) installs local mods.**
   It downloads each Workshop item with `steamcmd` and installs the mod(s) it
   contains as **local mods** in `~/Zomboid/mods` — the one form Project Zomboid's
   client loads with no Steam subscription, per the upstream wiki's "manual local
   installation". The install keys each folder by its `mod.info` `id=`, the same
-  id the server's `Mods=` list uses. `--steam-library` pre-seeds the Steam
-  library instead (inert until subscribed, the client-host caveat); `--login`
-  is for items that answer `Access Denied` anonymously (verified: some do, some
-  do not; the authenticated download needs real credentials and is the one path
-  the checks cannot cover). Staging defaults under `~/.cache` because NixOS
-  `steamcmd` runs under `steam-run`, whose private `/tmp` silently swallows a
-  download.
-  Covered by the `pz-client-mods-plan` check.
+  id the server's `Mods=` list uses. `--login` is for items that answer
+  `Access Denied` anonymously. SteamCMD now runs with an isolated HOME and
+  staging directory under `~/.cache/pz-client-mods`, so it cannot read or write
+  `~/.local/share/Steam` or rewrite `libraryfolders.vdf`; the old
+  `--steam-library` target was removed, because the client does not load library
+  bytes until subscribed and pointing steamcmd at a real library was the cause of
+  a `libraryfolders.vdf` clobber. Covered by the `pz-client-mods-plan` and
+  `pz-client-mods-isolation` checks.
 
-- **A Home Manager option so a client gets the pack's mods declaratively.**
-  `services.project-zomboid-servers.home.installMods` runs the downloader as an
-  idempotent systemd user service at login, installing the mods for whatever the
-  NixOS side marked `clientHost.<name>.enable`. It deliberately does not
-  "subscribe": that is not possible — Steam has no public write API for
-  subscriptions, `steamcmd` answers `Command not found: workshop_subscribe`, and
-  the client's `appworkshop_<appid>.acf` carries no `subscribed` flag (all
-  checked) — so it installs **local mods** in `~/Zomboid/mods`, the form the
-  client actually loads. The new `home.steamLogin` covers items that answer
-  `Access Denied` anonymously, reusing a SteamCMD token cached by a one-time
-  `steamcmd +login` because a unit has no terminal to prompt on. The downloader
-  became a package (`pkgs.project-zomboid-client-mods`) shared by the
-  `pz-client-mods` app and this module, so the two cannot drift.
+- **A Home Manager option so a client gets the pack's mods declaratively
+  (deprecated).** `services.project-zomboid-servers.home.installMods` runs the
+  downloader as an idempotent systemd user service at login. It is no longer the
+  supported client-host path: the Host flow fetches `WorkshopItems=` through
+  Steam, and enabling this option now emits an evaluation warning. It is kept
+  only for a client that cannot subscribe, and its steamcmd is isolated from the
+  user's Steam tree (see above). `home.steamLogin` covers items that answer
+  `Access Denied` anonymously; log in once with
+  `HOME=~/.cache/pz-client-mods/home steamcmd +login <account>` because a unit
+  has no terminal to prompt on.
+
+### Deprecated
+
+- **`services.project-zomboid-servers.home.installMods`** (client local-mod
+  installation). It remains off by default and now emits an evaluation warning
+  pointing at the Host flow. Its steamcmd runs with an isolated HOME/staging dir
+  under `~/.cache/pz-client-mods`, so it cannot touch the user's Steam library
+  registration; `home.steamLogin` follows the same isolated token.
+- **`nix run .#pz-client-mods`** is the same escape hatch in CLI form. It still
+  installs local mods, but no longer offers a Steam-library target.
+
+### Removed
+
+- **`services.project-zomboid-servers.home.linkSteamWorkshop`.** It symlinked the
+  dedicated download into the client's Steam library. The client enumerates
+  Workshop mods through Steam's subscription list and never scans that directory,
+  so the links were invisible to the game and only added a second directory to
+  keep in sync. Set `WorkshopItems=` and let the Host flow fetch the items.
+- **`scripts/pz_steam_workshop.py` and the `steam-workshop-discovery` check.**
+  They existed only to find the library for that link (and for the removed
+  `--steam-library` target).
+- **`pz-client-mods --steam-library` / `--home` / `--steam-root`.** Pre-seeding a
+  Steam library is inert until the item is subscribed, and pointing steamcmd at a
+  real library is what let it rewrite `libraryfolders.vdf`. The downloader now
+  writes local mods only.
+- **A client host's Workshop ids no longer feed the dedicated install unit.**
+  `allWorkshopItems` is the union of enabled dedicated servers only. A client
+  host downloads for itself through Steam; the dedicated unit does not fetch on
+  its behalf.
 
 ### Changed
+
+- **The client-host prepare is config-only, and documented as such.** It takes
+  only `PZ_CLIENT_ZOMBOID`; `PZ_SERVER_DIR`, `PZ_CLIENT_WORKSHOP` and
+  `PZ_LINK_STEAM_WORKSHOP` are gone. `docs/mod-delivery.md` (new) explains the
+  three delivery modes and the version-drift consequence. The game's Host flow
+  rewrites `~/Zomboid/Server/<name>.ini` and strips `SelfManagedMods=true`; the
+  module re-merges on every activation rather than fighting it.
+- **The standalone runner gained `--workshop-dir`** and exports
+  `PZ_WORKSHOP_DIR`, matching the module's explicit option.
 
 - **Web-console unit control now uses polkit instead of sudoers.** The scoped
   `security.sudo.extraRules` entry for the console user was unreachable on any

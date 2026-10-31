@@ -25,6 +25,7 @@ the closest equivalent for Minecraft server fleets.
 | --- | --- |
 | **[docs/installing.md](docs/installing.md)** | Requirements, the three ways to consume this, pinning, upgrading. **Start here.** |
 | **[docs/options.md](docs/options.md)** | Every option, with type and default. Completeness-checked in CI. |
+| **[docs/mod-delivery.md](docs/mod-delivery.md)** | The three mod delivery modes, version drift, and `SelfManagedMods`. |
 | **[docs/host-recipes.md](docs/host-recipes.md)** | Fleets, web consoles, your own modpack, secrets, hardening. |
 | **[docs/troubleshooting.md](docs/troubleshooting.md)** | Symptom → cause → fix, including every bug this project has actually shipped. |
 | [examples/single-server](examples/single-server) | A complete, `nix flake check`-able one-server configuration. |
@@ -93,6 +94,37 @@ that is deliberate: see below.
 
 Prefer no flakes, or want to try it without a host? There are three consumption
 paths in [docs/installing.md](docs/installing.md).
+
+---
+
+## Mod delivery
+
+Three modes, deliberately kept apart. Full detail in
+[docs/mod-delivery.md](docs/mod-delivery.md).
+
+| Mode | Fetches the mods | Where they land |
+| --- | --- | --- |
+| **Dedicated server** | this module's `project-zomboid-install` unit (`steamcmd`) | `workshopDir` (default `<serverDir>/steamapps/workshop/content/108600`) |
+| **Client-hosted server** (Host button) | the PZ client, through Steam | the Steam library that owns the PZ install |
+| **Singleplayer** | Steam subscriptions | the same library, plus optional `~/Zomboid/mods` (out of scope) |
+
+- A **client host** is **config only**: the module writes
+  `~/Zomboid/Server/<name>.ini` and `_SandboxVars.lua`, never downloads, copies
+  or links a mod, never runs steamcmd, and never writes into a Steam directory.
+  With `WorkshopItems=` populated the Host button fetches the items before it
+  reads `~/Zomboid/mods`.
+- The client **cannot** load from the dedicated server's `workshopDir`: it
+  enumerates Workshop mods through Steam's subscription list rather than scanning
+  a library directory. That is why the old "link the server download into the
+  client library" option was removed.
+- The dedicated `workshopDir` is explicit and asserted. The install unit still
+  verifies every item, retries once, and fails loudly naming the ids (or skips
+  them with `failOnMissingMods = false`).
+- **Version drift:** the client gets the current Steam build; a dedicated server
+  with `updateOnStart = false` keeps its last steamcmd copy. Keep updates on, or
+  re-run the install, if that matters.
+- The game's Host flow strips `SelfManagedMods=true`. The module does not fight
+  it; the next activation puts it back.
 
 ---
 
@@ -206,6 +238,7 @@ Most-used options:
 | `enable` | bool | `false` | Master switch. |
 | `dataDir` | path | `/var/lib/project-zomboid` | Per-server homes live here. |
 | `serverDir` | path | `<dataDir>/server` | Shared SteamCMD install. One per host. |
+| `workshopDir` | path | `<serverDir>/steamapps/workshop/content/108600` | **Dedicated** Workshop content; must be absolute and have that suffix. |
 | `package` | package \| null | `null` | Filled in by the flake. Asserted non-null. |
 | `modpacks` | attrsOf submodule | `{}` | Map the catalogue in. |
 | `servers` | attrsOf submodule | `{}` | One service + console socket per entry. |
@@ -376,7 +409,7 @@ Everything else here already assumes the split: the module only ever references
 ## Development
 
 ```bash
-nix flake check            # 14 checks
+nix flake check            # 17 checks
 nix develop                # nixfmt, shellcheck, deadnix, statix, python3
 
 nix run .#pz-modpack -- list
@@ -387,7 +420,8 @@ nix run .#pz-workshop -- emit vanilla-plus               # paste-ready URL list
 nix run .#pz-workshop -- resolve pack vanilla-plus       # internal Mod IDs + Mods=/WorkshopItems=
 nix run .#pz-workshop -- expand 3812346398 > draft.nix   # collection -> draft pack (mods prefilled)
 
-# Put a pack's mods onto a CLIENT machine (local mods the game loads)
+# Deprecated: put a pack's mods into ~/Zomboid/mods as local mods
+# (the supported client path is the game's Host flow — see docs/mod-delivery.md)
 nix run .#pz-client-mods -- vanilla-plus
 ```
 
@@ -403,17 +437,19 @@ The checks:
 | --- | --- |
 | `launcher` | The wrapper builds — `writeShellApplication` runs shellcheck at build time, so a shell error fails the build. |
 | `modpack-catalogue` | Every pack in `modpacks/` is well-formed plain data. |
-| `module-eval` | Two configurations (one plain, one with web consoles + tmux) produce the right units, ports and Exec paths. |
+| `module-eval` | Four configurations — plain, web consoles + tmux, **client-host-only** (no install unit/steamcmd/user), and a custom `workshopDir` — produce the right units, ports, Exec paths and environment. |
 | `nonflake-entry` | `default.nix` really is usable by a consumer without flakes: an attrset, supplies `package`, produces working units. |
 | `options-documented` | Every option in `modules/options.nix` appears in `docs/options.md`. |
 | `prep-roundtrip` | Runs the real prep script against a seeded world: the merge preserves world identity, runtime overrides win, SandboxVars is written, mods are linked and stale ones unlinked. |
+| `client-host-prepare` | The client-host script writes only `~/Zomboid/Server/` — never `mods/`, never a Steam/steamcmd path — and a re-run restores `SelfManagedMods` after the game strips it. |
+| `pz-client-mods-isolation` | The deprecated client downloader runs steamcmd with an isolated HOME and has no Steam-library target, so it cannot rewrite `libraryfolders.vdf`. |
 | `secrets-not-in-store` | No secret value appears in any rendered store file, and `secretFileArgs` references paths only. |
 | `secret-guard` | The assertion actually **fires** — on a secret in `settings`, in `sandbox`, in a modpack's `defaultSettings` and in its `defaultSandbox` — and stays silent for a config using `secretFiles`. |
 | `spawn-and-reset` | The dead Build 42 keys are absent (and present under `build41`), spawn lua renders, **is parsed by a real Lua interpreter**, and `--soft-reset` is scoped to the identity keys. |
 | `map-ordering` | Two trees built in opposite orders give identical `Map=`; a non-map directory never leaks in; a duplicate is reported, deterministic and overridable; `--strict` fails; base-map shadowing is an error. |
 | `map-pin-clean` | Pinning `Map=` suppresses detection without passing an empty argument. |
 | `pz-workshop-helper` | `emit` reproduces every pack's Workshop ids in order, `expand` orders collection children by Steam's own `sortorder`, escapes an interpolation in a title so the draft pack still evaluates, and parses each item's description `Mod ID:` (HTML/bbcode artifacts included) so the draft's `mods` list is prefilled and deduplicated. |
-| `pz-client-mods-plan` | The client downloader's `--json` plan matches each pack's item count, defaults to the local-mods target, and rejects an unknown pack — all without touching the network. |
+| `pz-client-mods-plan` | The deprecated client downloader's `--json` plan matches each pack's item count, defaults to the local-mods target, and rejects an unknown pack — all without touching the network. |
 
 Every one of those bugs is invisible to `nix flake check --no-build` and to
 reading the generated file. `nonflake-entry` is the clearest argument: the

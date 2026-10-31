@@ -182,6 +182,10 @@
             };
             webConsole = false;
             port = null;
+            clientHost = {
+              enable = false;
+              name = "servertest";
+            };
             enable = true;
           };
 
@@ -400,6 +404,53 @@
                 (lib.optionalString (
                   !(cfg.modpacks ? vanilla-plus) || !(cfg.modpacks ? survival-hard)
                 ) "the catalogue was not merged into modpacks")
+                # The dedicated install and the prep step must both be pointed at
+                # the SAME explicit Workshop directory, or map detection and the
+                # download disagree about what is installed.
+                (lib.optionalString (
+                  !hasEnv "project-zomboid-install" "PZ_WORKSHOP_DIR=${cfg.workshopDir}"
+                ) "the install unit does not carry PZ_WORKSHOP_DIR=${cfg.workshopDir}")
+                (lib.optionalString (
+                  !hasEnv "project-zomboid-alpha" "PZ_WORKSHOP_DIR=${cfg.workshopDir}"
+                ) "a server unit does not carry PZ_WORKSHOP_DIR=${cfg.workshopDir}")
+              ];
+
+              # ── Fourth scenario: an explicit workshopDir ────────────────────
+              # The option must actually reach the units; asserting only the
+              # default would pass with the value hard-coded in Nix.
+              workshopEval = eval-config {
+                inherit pkgs;
+                config.services.project-zomboid-servers = {
+                  enable = true;
+                  dataDir = "/var/lib/project-zomboid";
+                  workshopDir = "/mnt/pz-workshop/steamapps/workshop/content/108600";
+                  modpacks = self.modpacks;
+                  servers.only = {
+                    modpack = "vanilla-plus";
+                    defaultPort = 16261;
+                    udpPort = 16262;
+                  };
+                };
+              };
+
+              workshopServices = workshopEval.config.systemd.services;
+              workshopCfg = workshopEval.config.services.project-zomboid-servers;
+              workshopEnv = workshopServices.project-zomboid-install.serviceConfig.Environment or [ ];
+              workshopHasEnv =
+                unit: prefix:
+                builtins.any (e: lib.hasPrefix prefix e) (
+                  workshopServices.${unit}.serviceConfig.Environment or [ ]
+                );
+              workshopFailures = [
+                (lib.optionalString (
+                  workshopCfg.workshopDir != "/mnt/pz-workshop/steamapps/workshop/content/108600"
+                ) "workshopDir option did not evaluate to the configured path")
+                (lib.optionalString (
+                  !(builtins.elem "PZ_WORKSHOP_DIR=/mnt/pz-workshop/steamapps/workshop/content/108600" workshopEnv)
+                ) "the install unit did not receive the configured workshopDir")
+                (lib.optionalString (
+                  !workshopHasEnv "project-zomboid-only" "PZ_WORKSHOP_DIR=/mnt/pz-workshop/steamapps/workshop/content/108600"
+                ) "the server unit did not receive the configured workshopDir")
               ];
 
               # ── Second scenario: web consoles + the tmux backend ────────────
@@ -478,7 +529,10 @@
               clientEval = eval-config {
                 inherit pkgs;
                 config.services.project-zomboid-servers = {
-                  enable = true;
+                  # The DEDICATED half is OFF. This is the whole point: a client
+                  # host must render without an install unit, a steamcmd run, a
+                  # service user — or even the master switch.
+                  enable = false;
                   dataDir = "/var/lib/project-zomboid";
                   modpacks = self.modpacks;
                   servers.viewpoint = {
@@ -503,6 +557,15 @@
                 (lib.optionalString (
                   clientSvcs ? project-zomboid-viewpoint
                 ) "a server with enable = false still produced a dedicated server unit")
+                # A client host is config, not a dedicated server. With the
+                # master switch off there must be no install unit to run
+                # steamcmd and no service user to own an install.
+                (lib.optionalString (
+                  clientSvcs ? project-zomboid-install
+                ) "a client-host-only config produced project-zomboid-install (steamcmd)")
+                (lib.optionalString (
+                  clientEval.config.users.users ? project-zomboid
+                ) "a client-host-only config created the project-zomboid service user")
                 (lib.optionalString (
                   oneHost == null || oneHost.serverName != "servertest"
                 ) "clientHosts.viewpoint.serverName is not the default \"servertest\"")
@@ -521,7 +584,12 @@
               ];
 
               failures = lib.filter (s: s != null && s != "") (
-                perServer ++ staticFailures ++ assertionFailures ++ webFailures ++ clientFailures
+                perServer
+                ++ staticFailures
+                ++ assertionFailures
+                ++ webFailures
+                ++ clientFailures
+                ++ workshopFailures
               );
             in
             if failures == [ ] then
@@ -946,61 +1014,144 @@
 
             module-eval = moduleEvalResult;
 
-            # ── The Steam library is found, not hard-coded ─────────────────────
-            # The client-host files have to name a Workshop directory, and where
-            # Steam puts it is a property of the machine. Getting this wrong is
-            # silent — the symlinks just do not appear — so it is asserted here
-            # rather than discovered by a user wondering why nothing happened.
+            # ── The client-host prepare writes CONFIG ONLY ─────────────────────
+            # The whole point of the split: this script must never acquire a
+            # steamcmd or Steam-library path, and must write only under
+            # `$PZ_CLIENT_ZOMBOID/Server/`. A regression here is silent in
+            # production (the files still appear), so it is checked structurally
+            # AND by running the real script.
             #
-            # The absent case is asserted to be a STATUS, not an error: the
-            # caller may legitimately be seeding files on a machine where the
-            # game is not installed yet, and a failure there would abort a whole
-            # activation for nothing.
-            steam-workshop-discovery =
-              pkgs.runCommand "pz-steam-workshop-discovery-check"
+            # It also proves the `SelfManagedMods` drift repair: the game's Host
+            # screen strips the key when it rewrites the `.ini`; re-running the
+            # prepare (which Home Manager does on every activation) restores it.
+            client-host-prepare =
+              let
+                evaluated = eval-config {
+                  inherit pkgs;
+                  config.services.project-zomboid-servers = {
+                    enable = false;
+                    modpacks = self.modpacks;
+                    servers.viewpoint = {
+                      enable = false;
+                      modpack = "viewpoint";
+                      clientHost.enable = true;
+                    };
+                  };
+                };
+                host = evaluated.config.services.project-zomboid-servers.clientHosts.viewpoint;
+              in
+              pkgs.runCommand "pz-client-host-prepare-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                  ];
+                  PREPARE = lib.getExe host.prepare;
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  # Structural: the generated script must not name a Steam path
+                  # or a mod-delivery mechanism. Comments in the script are fine,
+                  # so the patterns are the ones that would actually act.
+                  forbidden='steamcmd|steamapps|libraryfolders|PZ_SERVER_DIR|PZ_CLIENT_WORKSHOP|PZ_LINK_STEAM_WORKSHOP|Zomboid/mods'
+                  if grep -Eq "$forbidden" "$PREPARE"; then
+                    fail "the client-host prepare script references a Steam/mod path: $(grep -En "$forbidden" "$PREPARE" | head -5)"
+                  fi
+
+                  zomboid="$TMPDIR/client/Zomboid"
+                  export PZ_CLIENT_ZOMBOID="$zomboid"
+
+                  "$PREPARE"
+                  ini="$zomboid/Server/servertest.ini"
+                  sandbox="$zomboid/Server/servertest_SandboxVars.lua"
+
+                  [ -f "$ini" ] || fail "no servertest.ini written"
+                  [ -f "$sandbox" ] || fail "no servertest_SandboxVars.lua written"
+                  grep -qx 'SelfManagedMods=true' "$ini" || fail "SelfManagedMods is absent"
+                  grep -q '^WorkshopItems=.\+' "$ini" || fail "WorkshopItems did not reach the client ini"
+                  grep -q '^Mods=.\+' "$ini" || fail "Mods did not reach the client ini"
+
+                  # Only Server/ may be created. In particular no `mods/`, no
+                  # Workshop link farm, and no Saves directory.
+                  top="$(find "$zomboid" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')"
+                  [ "$top" = "Server " ] || fail "client prepare created more than Server/: $top"
+                  [ ! -e "$zomboid/mods" ] || fail "client prepare created ~/Zomboid/mods"
+
+                  # The game strips SelfManagedMods when it rewrites the file.
+                  # A second run must put it back — and must not reset world
+                  # identity while doing so.
+                  printf 'Seed=keep-this\n' >> "$ini"
+                  grep -v '^SelfManagedMods=' "$ini" > "$ini.stripped"
+                  mv "$ini.stripped" "$ini"
+                  ! grep -q '^SelfManagedMods=' "$ini" || fail "could not simulate the game stripping SelfManagedMods"
+                  "$PREPARE"
+                  grep -qx 'SelfManagedMods=true' "$ini" || fail "a re-run did not restore SelfManagedMods"
+                  grep -qx 'Seed=keep-this' "$ini" || fail "a re-run reset the world identity"
+
+                  echo "client-host prepare ok: config only, no mod paths, SelfManagedMods restored on re-run"
+                  touch "$out"
+                '';
+
+            # ── The client mod fetch is isolated from Steam ─────────────────────
+            # `home.installMods` is deprecated but still ships, so its steamcmd
+            # must run with its own HOME. If it ever inherits the user's, steamcmd
+            # can discover and rewrite `~/.local/share/Steam/.../libraryfolders.vdf`
+            # — the failure that broke Steam's staging on 2026-10-07.
+            pz-client-mods-isolation =
+              pkgs.runCommand "pz-client-mods-isolation-check"
                 {
                   nativeBuildInputs = [
                     pkgs.coreutils
                     pkgs.python3
                   ];
-                  SCRIPT = ./scripts/pz_steam_workshop.py;
+                  CLIENT = ./scripts/pz_client_mods.py;
                 }
                 ''
                   fail() { echo "FAIL: $1" >&2; exit 1; }
 
-                  home="$TMPDIR/home"
-                  lib="$TMPDIR/library"
-                  vdf="$home/.steam/steam/steamapps/libraryfolders.vdf"
-                  mkdir -p "$(dirname "$vdf")" "$lib/steamapps"
+                  python3 - "$CLIENT" <<'PY' || fail "client isolation assertions failed"
+                  import importlib.util, os, stat, subprocess, sys, tempfile
 
-                  # A SECOND library, which only the vdf names — the case a
-                  # hard-coded path gets wrong.
-                  printf 'libraryfolders\n{\n\t"0"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n\t"1"\n\t{\n\t\t"path"\t\t"%s"\n\t}\n}\n' \
-                    "$TMPDIR/elsewhere" "$lib" > "$vdf"
-                  : > "$lib/steamapps/appmanifest_108600.acf"
+                  client = sys.argv[1]
+                  spec = importlib.util.spec_from_file_location("pz_client_mods", client)
+                  m = importlib.util.module_from_spec(spec)
+                  spec.loader.exec_module(m)
 
-                  got="$(python3 $SCRIPT --home "$home")" \
-                    || fail "discovery failed although the app manifest is present"
-                  [ "$got" = "$lib/steamapps/workshop/content/108600" ] \
-                    || fail "from the vdf: got '$got'"
+                  # The default isolated HOME is under the cache, never under a
+                  # Steam root. Point `~` at a temp dir so the test is hermetic.
+                  tmp = tempfile.mkdtemp()
+                  os.environ.pop("PZ_CLIENT_MODS_HOME", None)
+                  os.environ["HOME"] = tmp
+                  home = m.client_mods_home()
+                  want = os.path.join(tmp, ".cache", "pz-client-mods", "home")
+                  if home != want:
+                      raise SystemExit("isolated HOME is " + home + ", expected " + want)
 
-                  # The default library lives inside the Steam root and is not
-                  # always repeated in its own vdf.
-                  rm -f "$lib/steamapps/appmanifest_108600.acf"
-                  : > "$home/.steam/steam/steamapps/appmanifest_108600.acf"
-                  got="$(python3 $SCRIPT --home "$home")" \
-                    || fail "the Steam root library was not considered"
-                  [ "$got" = "$home/.steam/steam/steamapps/workshop/content/108600" ] \
-                    || fail "from the root: got '$got'"
+                  # steamcmd must RECEIVE that HOME. A fake records it.
+                  fake = os.path.join(tmp, "fake-steamcmd")
+                  out = os.path.join(tmp, "seen-home")
+                  with open(fake, "w") as fh:
+                      fh.write("#!/bin/sh\nprintf '%s\\n' \"$HOME\" > " + out + "\n")
+                  os.chmod(fake, os.stat(fake).st_mode | stat.S_IEXEC)
 
-                  # Not installed via Steam: status 1, no stdout, no stderr.
-                  rm -f "$home/.steam/steam/steamapps/appmanifest_108600.acf"
-                  printed="$(python3 $SCRIPT --home "$home" 2>"$TMPDIR/stderr")" \
-                    && fail "reported success with no app manifest anywhere"
-                  [ -z "$printed" ] || fail "printed '$printed' with no app manifest"
-                  [ ! -s "$TMPDIR/stderr" ] || fail "wrote to stderr: $(cat "$TMPDIR/stderr")"
+                  m.steamcmd_download(fake, os.path.join(tmp, "stage"), "108600", ["1"], None, home)
+                  seen = open(out).read().strip()
+                  if seen != home:
+                      raise SystemExit("steamcmd ran with HOME=" + seen + ", expected " + home)
+                  if "Steam" in seen or ".steam" in seen:
+                      raise SystemExit("steamcmd HOME points into a Steam tree: " + seen)
 
-                  echo "steam discovery ok: vdf library, Steam root, and absent all behave"
+                  # The Steam-library target mode is gone, not merely defaulted
+                  # off: there is no code path that can write into a library.
+                  src = open(client).read()
+                  for needle in ("--steam-library", "discover_library", "--workshop-helper"):
+                      if needle in src:
+                          raise SystemExit("client downloader still offers " + needle)
+
+                  print("client isolation ok: isolated HOME, steamcmd receives it, no library mode")
+                  PY
+
                   touch "$out"
                 '';
 
@@ -1297,6 +1448,7 @@
 
                   export PZ_DATA_DIR="$data"
                   export PZ_SERVER_DIR="$server_root"
+                  export PZ_WORKSHOP_DIR="$server_root/steamapps/workshop/content/108600"
                   export PZ_SERVER_NAME="$srv"
 
                   # Runtime overrides, exactly as the runner passes them.
@@ -1381,16 +1533,20 @@
                   root="$TMPDIR/pz"
                   data="$root/data"
                   server="$root/server"
-                  workshop="$server/steamapps/workshop/content/108600"
+                  # DELIBERATELY outside serverDir: this is the option's whole
+                  # purpose. steamcmd is told the library root that contains it.
+                  workshop="$root/workshop-lib/steamapps/workshop/content/108600"
                   mkdir -p "$data" "$workshop/999"
                   touch "$workshop/999/stale"
 
                   # A stub steamcmd: `+app_update` is a no-op, and each requested
                   # `+workshop_download_item <appid> <id>` creates the content
                   # directory steamcmd would have created — unless the id is in
-                  # FAKE_REFUSE (the Access-Denied case).
+                  # FAKE_REFUSE (the Access-Denied case). Every argument is logged
+                  # so the force_install_dir actually passed can be asserted.
                   cat > "$TMPDIR/fake-steamcmd" <<'FAKE'
                   #!/bin/sh
+                  printf '%s\n' "$@" >> "$FAKE_LOG"
                   state=0
                   for arg in "$@"; do
                     case "$state" in
@@ -1399,8 +1555,8 @@
                       2) id="$arg"
                          case " ''${FAKE_REFUSE:-} " in
                            *" $id "*) : ;;
-                           *) mkdir -p "$PZ_SERVER_DIR/steamapps/workshop/content/108600/$id"
-                              touch "$PZ_SERVER_DIR/steamapps/workshop/content/108600/$id/contents.txt" ;;
+                           *) mkdir -p "$PZ_WORKSHOP_DIR/$id"
+                              touch "$PZ_WORKSHOP_DIR/$id/contents.txt" ;;
                          esac
                          state=0 ;;
                     esac
@@ -1411,7 +1567,9 @@
 
                   export PZ_DATA_DIR="$data"
                   export PZ_SERVER_DIR="$server"
+                  export PZ_WORKSHOP_DIR="$workshop"
                   export PZ_STEAMCMD="$TMPDIR/fake-steamcmd"
+                  export FAKE_LOG="$TMPDIR/steamcmd.log"
                   export FAKE_REFUSE=""
 
                   PZ_PRUNE=1 "$INSTALL/bin/pz-install-check" \
@@ -1420,6 +1578,13 @@
                   [ -f "$workshop/111/contents.txt" ] || fail "item 111 was not installed"
                   [ -f "$workshop/222/contents.txt" ] || fail "item 222 was not installed"
                   [ ! -e "$workshop/999" ] || fail "prune left an undeclared item in the shared cache"
+
+                  # The configurable directory must reach steamcmd as the library
+                  # root that contains it, not as a second app install.
+                  grep -qx -- "$root/workshop-lib" "$FAKE_LOG" \
+                    || fail "steamcmd was not given the workshopDir's library root: $(tr '\n' ' ' < "$FAKE_LOG")"
+                  grep -qx -- "$server" "$FAKE_LOG" \
+                    || fail "steamcmd was not given serverDir for app_update: $(tr '\n' ' ' < "$FAKE_LOG")"
 
                   # Now refuse 222 (as a gated item would), recreate a stale
                   # 999, and assert the install FAILS, names the item, and does
@@ -1480,6 +1645,7 @@
                   mkdir -p "$data/$srv/Zomboid/Server"
                   export PZ_DATA_DIR="$data"
                   export PZ_SERVER_DIR="$root/server"
+                  export PZ_WORKSHOP_DIR="$root/server/steamapps/workshop/content/108600"
                   export PZ_SERVER_NAME="$srv"
 
                   # No maps installed at all, so detection would find nothing and
@@ -1700,6 +1866,7 @@
 
                   export PZ_DATA_DIR="$data"
                   export PZ_SERVER_DIR="$root/server"
+                  export PZ_WORKSHOP_DIR="$root/server/steamapps/workshop/content/108600"
                   export PZ_SERVER_NAME="$srv"
 
                   ${prep}/bin/pz-prep-spawn
