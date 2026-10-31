@@ -33,8 +33,12 @@
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
     { id = "3809306528"; title = "Project Viewpoint"; }
+    { id = "3811256204"; title = "Project Viewpoint QOL"; }
     { id = "3810302175"; title = "6244 3D models for Viewpoint [sour_kisel]"; }
     { id = "3811472160"; title = "3d Blood VFX for Viewpoint (experimental)"; }
+    { id = "3779201168"; title = "[B42]Mod Folders"; }
+    { id = "3816324722"; title = "Attachments UI [B42]"; }
+    { id = "3817413313"; title = "Project Viewpoint - Immersive Driving"; }
     { id = "3803984183"; title = "Project A-Life [ALIFE NPCS]"; }
     { id = "3661336777"; title = "Horse Mod [B42.20+/MP]"; }
     { id = "3461415167"; title = "[B42.20+/MP] Bicycle!"; }
@@ -75,6 +79,13 @@
     { id = "2625625421"; title = "Containers!"; }
     { id = "3330403100"; title = "Trailers!"; }
     { id = "3670064951"; title = "Campers!"; }
+    { id = "3508537032"; title = "NeatUI Framework"; }
+    { id = "3502080466"; title = "Neat Crafting"; }
+    { id = "3536052310"; title = "Neat Building"; }
+    { id = "3540503606"; title = "Neat Crafting & Neat Building - XP & Mod Display"; }
+    { id = "3565691335"; title = "Fuel Side Indicator"; }
+    { id = "3075292772"; title = "PZQuickActions"; }
+    { id = "2685168362"; title = "More Info Tooltip"; }
     { id = "2932547723"; title = "'93 Lincoln Town Car + Limo"; }
     { id = "3088951320"; title = "'93 Ford Taurus"; }
     { id = "3001592312"; title = "'93 Ford Mustang"; }
@@ -287,6 +298,7 @@
     "PZVoxelStudioViewpoint"
     "Parkour"
     "ProjectALifeNPCs"
+    "ProjectViewpointQOL"
     "REORDER_THE_HOTBAR"
     "RET_LethalStealth"
     "RainCleansBlood"
@@ -311,6 +323,17 @@
     "isoContainers"
     "stanks_suicide"
     "tsarslib"
+    "NeatUI_Framework"
+    "Neat_Crafting"
+    "Neat_Building"
+    "Neat_Crafting_AddonXP"
+    "Neat_Building_AddonXP"
+    "FuelSideIndicator"
+    "PZQuickActions"
+    "MoreInfoTooltip"
+    "ModFolders"
+    "AttachmentsUI"
+    "ImmersiveDriving"
   ];
 
   # .ini keys any server on this pack inherits; a server's own `settings` win.
