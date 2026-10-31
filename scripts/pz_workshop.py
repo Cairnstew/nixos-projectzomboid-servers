@@ -92,13 +92,81 @@ DETAILS_BATCH = 100
 # `pz-modpack`), because a pack is Nix data and this is not a Nix interpreter.
 CATALOGUE_ENV = "PZ_MODPACKS_JSON"
 
+# A FILE holding the Steam Web API key — NOT the key itself, so the secret never
+# reaches `ps` output or a store path, the same rule `passwordFile` follows for
+# the admin password. Unset = anonymous, which is what has always worked.
+API_KEY_FILE_ENV = "PZ_STEAM_API_KEY_FILE"
+
+# Steam's per-item `result` for "server busy", which is what an anonymous caller
+# gets when it has outrun its rate budget. It looks IDENTICAL to "no such item"
+# from the outside — same empty title, no fields — but the two need opposite
+# responses, so it is named here rather than compared as a bare integer.
+RESULT_OK = 1
+RESULT_BUSY = 9
+
+
+def api_key():
+    """The Steam Web API key from `PZ_STEAM_API_KEY_FILE`, or "".
+
+    A missing, unreadable or empty file is NOT fatal: every endpoint this tool
+    calls works anonymously, and the key only buys a higher rate budget. So the
+    unkeyed path is kept working unchanged rather than becoming a hard dependency
+    on a secret existing.
+    """
+    path = os.environ.get(API_KEY_FILE_ENV)
+    if not path:
+        return ""
+    try:
+        with open(path) as fh:
+            return fh.read().strip()
+    except OSError as exc:
+        print(
+            f"pz-workshop: warning: cannot read {API_KEY_FILE_ENV}={path} ({exc.strerror});"
+            " continuing anonymously",
+            file=sys.stderr,
+        )
+        return ""
+
 
 def post(endpoint, params):
     """POST form-encoded params and return the decoded `response` object."""
+    # Added only when present, so an anonymous call is byte-for-byte what it was
+    # before this existed — the endpoints below take no `key` at all in Valve's
+    # documented parameters, and sending one they do not expect is not the fix.
+    key = api_key()
+    if key:
+        params = dict(params, key=key)
     body = urllib.parse.urlencode(params, doseq=True).encode()
     req = urllib.request.Request(f"{API}/{endpoint}", data=body)
     with urllib.request.urlopen(req, timeout=30) as fh:
         return json.load(fh).get("response", {})
+
+
+def warn_throttled(items):
+    """Explain a `RESULT_BUSY` batch, which reads as "no such item" but is not.
+
+    Without this, a throttled call silently yields `title=None` for everything,
+    which `expand` then reports as "NOT FOUND or removed upstream" — advice that
+    sends you to delete mods that are perfectly alive. Observed in practice:
+    every item of a real catalogue coming back `result=9` with an empty title.
+    """
+    if not items:
+        return
+    print(
+        f"pz-workshop: warning: {len(items)} item(s) came back"
+        f" result={RESULT_BUSY} (Steam's 'busy'), which is a RATE LIMIT, not a"
+        " missing item:",
+        file=sys.stderr,
+    )
+    for pid in sorted(items):
+        print(f"  - {pid}", file=sys.stderr)
+    print(
+        "pz-workshop: these are almost certainly fine. Wait a minute and retry."
+        " If it persists, set a Steam Web API key in the file named by"
+        f" {API_KEY_FILE_ENV} (https://steamcommunity.com/dev/apikey) for a"
+        " higher budget:",
+        file=sys.stderr,
+    )
 
 
 def collection_children(collection_id):
@@ -116,7 +184,12 @@ def collection_children(collection_id):
     if not details:
         return [], None
     detail = details[0]
-    if detail.get("result") != 1:
+    if detail.get("result") != RESULT_OK:
+        # A throttled collection read reports the same shape as a private or
+        # nonexistent one — no children — so name the difference before the
+        # caller turns it into "the collection does not exist".
+        if detail.get("result") == RESULT_BUSY:
+            warn_throttled([collection_id])
         return [], None
     children = [(c["publishedfileid"], c.get("sortorder", 0)) for c in detail.get("children", [])]
     children.sort(key=lambda pair: (pair[1], pair[0]))
@@ -132,6 +205,7 @@ def published_details(ids):
     for no visible reason).
     """
     out = {}
+    throttled = []
     for start in range(0, len(ids), DETAILS_BATCH):
         chunk = ids[start : start + DETAILS_BATCH]
         params = {"itemcount": len(chunk)}
@@ -140,7 +214,12 @@ def published_details(ids):
         resp = post("GetPublishedFileDetails/v1/", params)
         for item in resp.get("publishedfiledetails", []):
             pid = item.get("publishedfileid")
-            if item.get("result") != 1:
+            if item.get("result") == RESULT_BUSY:
+                # Collected across ALL batches before reporting, so a rate limit
+                # that hit the first batch and not the last is still described
+                # as one throttling event rather than a few stray items.
+                throttled.append(pid)
+            if item.get("result") != RESULT_OK:
                 out[pid] = {"title": None, "file_type": None, "consumer_app_id": None, "banned": False}
                 continue
             out[pid] = {
@@ -152,6 +231,9 @@ def published_details(ids):
                 # ID; it must ride along for `expand`'s prefill / `resolve`.
                 "description": item.get("description"),
             }
+    # One report per call, not per item, and only when something was actually
+    # throttled — a genuinely removed item must stay quiet.
+    warn_throttled(throttled)
     return out
 
 

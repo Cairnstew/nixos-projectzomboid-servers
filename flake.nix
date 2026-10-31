@@ -645,6 +645,20 @@
                     # A pack is Nix data; inject the catalogue as JSON the same
                     # way `pz-modpack` does, so `emit` needs no Nix interpreter.
                     export PZ_MODPACKS_JSON=${pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks)}
+
+                    # A Steam Web API key, as a FILE PATH, for a higher rate budget
+                    # on the item lookups. Deliberately NOT a NixOS module option:
+                    # nothing on a server ever reads it (Workshop CONTENT still
+                    # authenticates as an account via `steamLogin`), and this app
+                    # runs on a workstation, where `nix run` never evaluates the
+                    # module — so an option there would be config that reads
+                    # nothing. The env var also passes through on its own, so this
+                    # is only a notice. Never the key itself: the value is read at
+                    # run time, keeping it out of the store path and `ps`.
+                    if [ -n "''${PZ_STEAM_API_KEY_FILE-}" ]; then
+                      echo "pz-workshop: using the Web API key from $PZ_STEAM_API_KEY_FILE" >&2
+                    fi
+
                     exec python3 ${./scripts/pz_workshop.py} "$@"
                   '';
                 }
@@ -749,7 +763,7 @@
                   fail() { echo "FAIL: $1" >&2; exit 1; }
 
                   python3 - "$WORKSHOP" "$CATALOGUE" <<'PY' || fail "emit/expand assertions failed"
-                  import importlib.util, json, os, subprocess, sys
+                  import importlib.util, io, json, os, subprocess, sys
 
                   workshop, catalogue = sys.argv[1], sys.argv[2]
                   spec = importlib.util.spec_from_file_location("pz_workshop", workshop)
@@ -830,6 +844,117 @@
                       raise SystemExit("render_pack lost the mods list")
                   if "no `Mod ID:` in its description" not in rendered:
                       raise SystemExit("render_pack missing the unresolved-item flag")
+
+                  # The Web API key: read from a FILE, and added to the request
+                  # only when the file yields one. An unreadable path must stay a
+                  # warning rather than an error, because every endpoint here
+                  # works anonymously and the key only buys a rate budget.
+                  import tempfile
+                  keyfile = tempfile.NamedTemporaryFile("w", suffix=".key", delete=False)
+                  # A single backslash: Nix indented strings pass \ through
+                  # literally, so Python is what reads this as a newline. The
+                  # surrounding spaces are the point — a real secret file has a
+                  # trailing newline and is stripped.
+                  keyfile.write("  SECRET123 \n")
+                  keyfile.close()
+
+                  os.environ.pop(m.API_KEY_FILE_ENV, None)
+                  if m.api_key() != "":
+                      raise SystemExit("api_key without the env var must be empty")
+
+                  os.environ[m.API_KEY_FILE_ENV] = keyfile.name
+                  if m.api_key() != "SECRET123":
+                      raise SystemExit("api_key did not read/strip the file")
+
+                  os.environ[m.API_KEY_FILE_ENV] = "/nonexistent/steam-key"
+                  if m.api_key() != "":
+                      raise SystemExit("an unreadable key file must fall back to anonymous")
+
+                  # The key must reach the REQUEST BODY. This has to drive the
+                  # real `post`, not a stubbed one: the injection lives inside
+                  # `post` itself, and an earlier assertion here has already
+                  # replaced `m.post` with a fake to test collection ordering —
+                  # so capture the pristine function at import time and observe
+                  # the encoded form through a stubbed `urlopen`.
+                  import io as _io
+                  import urllib.request as _urlreq
+
+                  # An earlier assertion here replaced `m.post` with a fake to
+                  # test collection ordering, so drive a FRESH module instance:
+                  # asserting against that stub would pass without exercising the
+                  # key injection this is meant to cover.
+                  spec2 = importlib.util.spec_from_file_location("pz_workshop_fresh", workshop)
+                  fresh = importlib.util.module_from_spec(spec2)
+                  spec2.loader.exec_module(fresh)
+
+                  sent = {}
+                  class _FakeResp(_io.BytesIO):
+                      def __enter__(self):
+                          return self
+                      def __exit__(self, *_):
+                          return False
+                  real_urlopen = _urlreq.urlopen
+                  def fake_urlopen(req, timeout=None):
+                      sent["body"] = req.data.decode()
+                      return _FakeResp(json.dumps({"response": {}}).encode())
+                  _urlreq.urlopen = fake_urlopen
+                  try:
+                      # Point back at the real file: the assertion above left the
+                      # env var on the unreadable path on purpose.
+                      os.environ[fresh.API_KEY_FILE_ENV] = keyfile.name
+                      fresh.post("GetPublishedFileDetails/v1/", {"itemcount": 1})
+                      if "key=SECRET123" not in sent["body"]:
+                          raise SystemExit(
+                              "keyed request body lacked the key: " + sent["body"]
+                          )
+                      os.environ.pop(fresh.API_KEY_FILE_ENV, None)
+                      sent.clear()
+                      fresh.post("GetPublishedFileDetails/v1/", {"itemcount": 1})
+                      if "key" in sent["body"]:
+                          raise SystemExit(
+                              "an anonymous request must not send a key: " + sent["body"]
+                          )
+                  finally:
+                      _urlreq.urlopen = real_urlopen
+                  os.unlink(keyfile.name)
+
+                  # result=9 is Steam's RATE LIMIT and looks exactly like a
+                  # missing item (empty title, no fields). It must be reported as
+                  # throttling, or `expand` tells the user to verify mods that are
+                  # alive — so the diagnostic is asserted, not just hoped for.
+                  m.post = lambda endpoint, params: {
+                      "publishedfiledetails": [
+                          {"publishedfileid": "1", "result": 9},
+                          {"publishedfileid": "2", "result": 9},
+                          {"publishedfileid": "3", "result": 1, "title": "Real",
+                           "description": "Mod ID: Real", "file_type": 0,
+                           "consumer_app_id": 108600},
+                      ],
+                  }
+                  err = io.StringIO()
+                  real_stderr, sys.stderr = sys.stderr, err
+                  try:
+                      got = m.published_details(["1", "2", "3"])
+                  finally:
+                      sys.stderr = real_stderr
+                  if got["3"]["title"] != "Real":
+                      raise SystemExit("a good item was lost alongside throttled ones")
+                  if m.warn_throttled.__doc__ is None:
+                      raise SystemExit("warn_throttled lost its docstring")
+                  said = err.getvalue()
+                  if "RATE LIMIT" not in said or "9" not in said:
+                      raise SystemExit("a throttled item was not reported: " + repr(said))
+                  if "- 1" not in said or "- 2" not in said:
+                      raise SystemExit("the throttled ids were not named: " + repr(said))
+                  # A genuinely absent item must NOT be called a rate limit.
+                  err = io.StringIO()
+                  real_stderr, sys.stderr = sys.stderr, err
+                  try:
+                      m.warn_throttled([])
+                  finally:
+                      sys.stderr = real_stderr
+                  if err.getvalue():
+                      raise SystemExit("warn_throttled spoke with nothing throttled")
 
                   print("pz-workshop assertions ok")
                   PY

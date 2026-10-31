@@ -391,6 +391,34 @@ nix run .#pz-workshop -- expand 3812346398 > draft.nix   # collection -> draft p
 nix run .#pz-client-mods -- vanilla-plus
 ```
 
+#### Steam Web API key (optional, and not a `steamLogin` replacement)
+
+`expand` and `resolve` query `api.steampowered.com` anonymously by default, which
+works but has a tight rate budget. Overrunning it does not fail loudly — Steam
+answers `result=9` ("busy") with an empty title, which is indistinguishable from
+the item not existing. The tool now reports that case by name, so a throttled
+call no longer reads as "verify these mods, they may be removed upstream".
+
+If you hit that, point the helpers at a key file for a higher budget:
+
+```bash
+# a FILE, never the key itself — the value is read at run time, so it stays out
+# of the store path and `ps`. Unset = anonymous, which is what always worked.
+export PZ_STEAM_API_KEY_FILE=~/.config/pz/steam-api-key   # key at steamcommunity.com/dev/apikey
+nix run .#pz-workshop -- resolve pack vanilla-plus
+```
+
+⚠️ **This is not a substitute for `steamLogin`, and cannot become one.** The two
+are unrelated mechanisms: the key authenticates read-only API queries, while
+Workshop *content* downloads authenticate as a Steam account through
+`steamcmd +login`. Brita's Armor Pack and every other mature-gated or
+author-restricted item still needs `steamLogin`; no key can fetch those bytes.
+
+This is deliberately **not** a NixOS module option: no server unit reads it, and
+these helpers run on a workstation where `nix run` never evaluates the module — an
+option there would be config that reads nothing. Nor can an `/run/agenix` secret
+help here, since it decrypts on the machine that declares it, not yours.
+
 Inspect a pack's effective config without downloading anything:
 
 ```bash
@@ -412,7 +440,7 @@ The checks:
 | `spawn-and-reset` | The dead Build 42 keys are absent (and present under `build41`), spawn lua renders, **is parsed by a real Lua interpreter**, and `--soft-reset` is scoped to the identity keys. |
 | `map-ordering` | Two trees built in opposite orders give identical `Map=`; a non-map directory never leaks in; a duplicate is reported, deterministic and overridable; `--strict` fails; base-map shadowing is an error. |
 | `map-pin-clean` | Pinning `Map=` suppresses detection without passing an empty argument. |
-| `pz-workshop-helper` | `emit` reproduces every pack's Workshop ids in order, `expand` orders collection children by Steam's own `sortorder`, escapes an interpolation in a title so the draft pack still evaluates, and parses each item's description `Mod ID:` (HTML/bbcode artifacts included) so the draft's `mods` list is prefilled and deduplicated. |
+| `pz-workshop-helper` | `emit` reproduces every pack's Workshop ids in order, `expand` orders collection children by Steam's own `sortorder`, escapes an interpolation in a title so the draft pack still evaluates, and parses each item's description `Mod ID:` (HTML/bbcode artifacts included) so the draft's `mods` list is prefilled and deduplicated. Also: a Web API key is read from a file and reaches the request body **only** when the file yields one (an unreadable path degrades to anonymous with a warning), and `result=9` — Steam's rate limit, which looks exactly like a missing item — is reported as throttling rather than passed off as a removed mod. |
 | `pz-client-mods-plan` | The client downloader's `--json` plan matches each pack's item count, defaults to the local-mods target, and rejects an unknown pack — all without touching the network. |
 
 Every one of those bugs is invisible to `nix flake check --no-build` and to

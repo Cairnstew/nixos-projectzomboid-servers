@@ -8,6 +8,22 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **An optional Steam Web API key for the Workshop catalogue helpers.**
+  `pz-workshop expand` / `resolve` query `api.steampowered.com` anonymously by
+  default, which works but has a tight rate budget. Set
+  `PZ_STEAM_API_KEY_FILE` to a file holding a key
+  (`steamcommunity.com/dev/apikey`) for a higher budget — a *path*, never the
+  key itself, so the value is read at run time and stays out of the store path
+  and `ps`. Unset keeps the anonymous path unchanged, and an unreadable file
+  warns rather than failing.
+
+  Deliberately **not** a `steamLogin` replacement, and it cannot be one: the key
+  authenticates read-only API queries, while Workshop *content* downloads
+  authenticate as a Steam account via `steamcmd +login`, so mature-gated and
+  author-restricted items still need `steamLogin`. Nor a module option — no
+  server unit reads it, and the helpers run on a workstation where `nix run`
+  never evaluates the module.
+
 - **Workshop items are resolved before any download.** `pz-workshop expand` now
   pre-fills the draft pack's `mods` list from each item's description `Mod ID:`
   declaration (the Steam Web API returns the description text, so no HTML
@@ -165,6 +181,13 @@ All notable changes to this project. Format follows
   than before and works under either hardening posture.
 
 ### Fixed
+
+- **`result=9` is reported as a rate limit, not a missing mod.** Exceeding the
+  anonymous budget makes Steam answer `result=9` ("busy") with an empty title,
+  which is indistinguishable from the item not existing — so `expand` reported
+  live mods as "NOT FOUND or removed upstream", advice that sends you to delete
+  mods that are perfectly alive. Throttled items are now collected across all
+  batches and reported once, naming the ids; a genuinely absent item stays quiet.
 
 - **`autoStart = false` did not stop the server starting at boot.** The console
   FIFO socket declared `requires = [ "<unit>.service" ]` unconditionally, and a
