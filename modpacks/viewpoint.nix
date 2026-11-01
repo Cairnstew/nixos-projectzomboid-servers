@@ -3,8 +3,14 @@
 # "Project Viewpoint Vanilla+" — the Steam Workshop collection by OwenOasis
 # (collection id 3812346398), reproduced here as a pack.
 #
-# 122 of the collection's 123 items. The one omission is deliberate and
-# explained under the NOTE below.
+# The collection's 122 included items, plus a small QoL block added here.
+# The one collection omission is deliberate and explained under the NOTE below.
+#
+# NOTE Fuel Side Indicator (3565691335) is also deliberately absent. That
+# Workshop id no longer exists (Steam returns FileNotFound), and the mod is
+# Build 41-only — Build 42 ships the feature in vanilla. Listing it made the
+# in-game host die with a NullPointerException in
+# GameServerWorkshopItems.Install instead of starting.
 #
 # Order is the COLLECTION's own order, and it is load-bearing: ZombieBuddy
 # (first) is the JVM agent every Java mod here requires via
@@ -28,7 +34,7 @@
 #   is supplied through the consumer's `javaAgent` option instead, which is
 #   the supported hook (see modules/options.nix).
 {
-  description = "Project Viewpoint Vanilla+ (122 of the collection's 123 Workshop items).";
+  description = "Project Viewpoint Vanilla+ (132 Workshop items: the 122-item OwenOasis collection plus 10 QoL additions).";
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
@@ -83,9 +89,8 @@
     { id = "3502080466"; title = "Neat Crafting"; }
     { id = "3536052310"; title = "Neat Building"; }
     { id = "3540503606"; title = "Neat Crafting & Neat Building - XP & Mod Display"; }
-    { id = "3565691335"; title = "Fuel Side Indicator"; }
-    { id = "3075292772"; title = "PZQuickActions"; }
-    { id = "2685168362"; title = "More Info Tooltip"; }
+    { id = "3082160142"; title = "Quick Actions"; }
+    { id = "3494474677"; title = "[B42] More Item Information"; }
     { id = "2932547723"; title = "'93 Lincoln Town Car + Limo"; }
     { id = "3088951320"; title = "'93 Ford Taurus"; }
     { id = "3001592312"; title = "'93 Ford Mustang"; }
@@ -172,7 +177,7 @@
   # server still boots and listens, which is what makes it easy to miss).
   #
   # These are each mod's mod.info `id=`, not the Workshop id, comma-separated.
-  # 147 ids from the pack's 122 Workshop items — several KI5 items ship
+  # 158 ids from the pack's 132 Workshop items — several KI5 items ship
   # more than one mod (variants), which is why the counts differ.
   mods = [
     "49powerWagon"
@@ -328,9 +333,8 @@
     "Neat_Building"
     "Neat_Crafting_AddonXP"
     "Neat_Building_AddonXP"
-    "FuelSideIndicator"
-    "PZQuickActions"
-    "MoreInfoTooltip"
+    "QuickActions"
+    "MoreItemInformation"
     "ModFolders"
     "AttachmentsUI"
     "ImmersiveDriving"

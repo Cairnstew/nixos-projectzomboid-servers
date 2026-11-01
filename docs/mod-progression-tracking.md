@@ -3,8 +3,8 @@
 This document tracks what each mod in the `viewpoint` pack adds in terms of progression avenues - skills, recipes, items, vehicles, mechanics, etc. Use this to understand the full scope of content and plan gameplay progression.
 
 **Pack:** `viewpoint` (Project Viewpoint Vanilla+)  
-**Last Updated:** 2026-10-31  
-**Total Mods:** 122 Workshop items + extras
+**Last Updated:** 2026-11-01  
+**Total Mods:** 132 Workshop items + extras
 
 ## Progression Categories
 
@@ -103,7 +103,6 @@ The pack has extensive KI5 vehicle mods (50+ vehicles). Each adds drivable vehic
 | Autotsar Motor Club B42 | 3404737883 | Vehicle parts/mods | Additional vehicle customization/parts. |
 | Vehicle Seat UI (KI5) | 3501302358 | UI/QoL | Better vehicle UI. |
 | Vehicle Military Zones | 3436499337 | World/Loot | Military vehicle spawns in military zones. |
-| Fuel Side Indicator | 3565691335 | UI/QoL | Fuel gauge visibility. |
 | More Car Features + Spawn Zones Expansion | 3520758551 | Vehicles/World | More vehicle features and spawn variety. |
 | True Cargo - Project Full HD | 3806955469 | Vehicles/Visual | Cargo model improvements. |
 
@@ -136,8 +135,11 @@ These improve UX but don't add new content/progression paths:
 | Better Sorting | 2313387159 | Inventory sorting |
 | [B41/42] Minimal Sidebar (Auto Hide) | 3642084851 | UI clutter reduction |
 | [B42.20] Carry Visible Items In Hands [WIP] | 3749026793 | Visual feedback |
-| PZQuickActions | 3075292772 | Quick context actions |
-| More Info Tooltip | 2685168362 | Enhanced tooltips |
+| Quick Actions | 3082160142 | Quick context actions |
+| [B42] More Item Information | 3494474677 | Enhanced item tooltips |
+
+Fuel Side Indicator is deliberately not in the pack: its Workshop id no longer
+resolves, and the mod is Build 41-only (Build 42 ships the feature in vanilla).
 
 ---
 
