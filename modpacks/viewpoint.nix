@@ -4,7 +4,7 @@
 # (collection id 3812346398)
 #
 {
-  description = "Project Viewpoint Vanilla+ (updated from collection 3812346398).";
+  description = "Project Viewpoint Vanilla+ (updated from collection 3812346398 + QoL/progression/additions).";
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
@@ -149,6 +149,14 @@
     { id = "3787530735"; title = "'62 Daimler Ferret"; }
     { id = "2772575623"; title = "'59 Cadillac Miller-Meteor + ECTO-1"; }
     { id = "2900580391"; title = "'49 Dodge Power Wagon Crew Cab"; }
+    { id = "3826426915"; title = "Survivor PDA - RPG Skill Tree, Traders & Missions [B42]"; }
+    { id = "3828488394"; title = "Viewpoint Complete Fixes"; }
+    { id = "3828547927"; title = "Viewpoint Turrets"; }
+    { id = "3828594567"; title = "Werewolf: Project Wyldfyre"; }
+    { id = "3828608843"; title = "Roadworthy [BETA] - Realistic Driving & Car Maintenance [B42]"; }
+    { id = "3828755546"; title = "Viewpoint's Workstations Overhaul"; }
+    { id = "3828766487"; title = "Viewpoint: Real VHS — Movies & TV Shows [B42]"; }
+    { id = "3828842183"; title = "Viewpoint GPU Fix"; }
   ];
 
   mods = [
@@ -322,6 +330,13 @@
     "59meteor"
     "ECTO1"
     "49powerWagon"
+    "ProjectRPGExpanded"
+    "hrsys_viewpointturrets"
+    "WTAGarou"
+    "RealisticDrivingOverhaul"
+    "ViewpointWorkstations3D"
+    "VHSCinemaT2"
+    "ViewpointGpuMemoryFix"
   ];
 
   defaultSettings = {
