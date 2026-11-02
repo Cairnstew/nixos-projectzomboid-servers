@@ -1,55 +1,35 @@
 # modpacks/viewpoint.nix
 #
-# "Project Viewpoint Vanilla+" — the Steam Workshop collection by OwenOasis
-# (collection id 3812346398), reproduced here as a pack.
+# "Project Viewpoint Vanilla+" — updated from Steam Workshop collection by OwenOasis
+# (collection id 3812346398)
 #
-# The collection's 122 included items, plus a small QoL block added here.
-# The one collection omission is deliberate and explained under the NOTE below.
-#
-# NOTE Fuel Side Indicator (3565691335) is also deliberately absent. That
-# Workshop id no longer exists (Steam returns FileNotFound), and the mod is
-# Build 41-only — Build 42 ships the feature in vanilla. Listing it made the
-# in-game host die with a NullPointerException in
-# GameServerWorkshopItems.Install instead of starting.
-#
-# Order is the COLLECTION's own order, and it is load-bearing: ZombieBuddy
-# (first) is the JVM agent every Java mod here requires via
-# `require=\ZombieBuddy`, and ZombieBuddy additionally pins itself to the
-# front of the resolved list. The launcher writes this order to
-# WorkshopItems=, so reordering this list reorders mod loading.
-#
-# Project Viewpoint declares `javaJarFile=media/java/client/Viewpoint.jar`.
-# ZombieBuddy skips any jar under `media/java/client/` on a dedicated
-# server, so Viewpoint is safe to list: clients get the first-person
-# renderer, the server ignores it. Its two add-ons (6244 3D models, 3D Blood
-# VFX) are client-side assets for the same reason.
-#
-# NOTE [B42] ZombieBuddy Extensions (3807686870) is deliberately absent.
-#   * it declares `versionMax=42.0`, so Project Zomboid treats it as
-#     unavailable on the 42.21 the rest of this pack requires; and
-#   * it ships no `javaJarFile` — its own description says "enabling this
-#     entry does not install the replacement JAR".
-#   It is therefore inert server-side, and listing an item PZ has hidden is
-#   a needless way to provoke a missing-mod warning on join. The JVM agent
-#   is supplied through the consumer's `javaAgent` option instead, which is
-#   the supported hook (see modules/options.nix).
 {
-  description = "Project Viewpoint Vanilla+ (132 Workshop items: the 122-item OwenOasis collection plus 10 QoL additions).";
+  description = "Project Viewpoint Vanilla+ (updated from collection 3812346398).";
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
     { id = "3809306528"; title = "Project Viewpoint"; }
-    { id = "3811256204"; title = "Project Viewpoint QOL"; }
-    { id = "3810302175"; title = "6244 3D models for Viewpoint [sour_kisel]"; }
+    { id = "3810302175"; title = "6282 3D models for Viewpoint [sour_kisel]"; }
     { id = "3811472160"; title = "3d Blood VFX for Viewpoint (experimental)"; }
-    { id = "3779201168"; title = "[B42]Mod Folders"; }
-    { id = "3816324722"; title = "Attachments UI [B42]"; }
-    { id = "3817413313"; title = "Project Viewpoint - Immersive Driving"; }
+    { id = "3813801053"; title = "Blood FX for Viewpoint - Fixes"; }
     { id = "3803984183"; title = "Project A-Life [ALIFE NPCS]"; }
     { id = "3661336777"; title = "Horse Mod [B42.20+/MP]"; }
     { id = "3461415167"; title = "[B42.20+/MP] Bicycle!"; }
+    { id = "3456675747"; title = "[B42.20+ MP] Skateboard!"; }
     { id = "3404737883"; title = "Autotsar Motor Club B42"; }
+    { id = "3783444342"; title = "[B42]Aviation Core (Beta)"; }
+    { id = "3409723807"; title = "[B42] UH-1B Helicopter (Beta)"; }
+    { id = "3812896812"; title = "Helicopter Fix - Project Viewpoint"; }
     { id = "3761077099"; title = "[B42] Vanilla Firearms Expansion [CLASSIC]"; }
+    { id = "2799742455"; title = "Improvised Silencers by Maxwell218"; }
+    { id = "3813760573"; title = "HorseMod + Viewpoint Controls Patch"; }
+    { id = "3815999052"; title = "OldPoint - Rotating Overhead Camera [B42 / Viewpoint]"; }
+    { id = "3812612054"; title = "Project Viewpoint: Recoil & ADS"; }
+    { id = "3812864848"; title = "Viewpoint True Ballistics"; }
+    { id = "3813194971"; title = "Viewpoint - Advanced Throwables"; }
+    { id = "3813908957"; title = "Project Viewpoint: True Weathers & Lighting"; }
+    { id = "3813489363"; title = "SMB steps"; }
+    { id = "3824459820"; title = "Build Your Own Kayak [B42]"; }
     { id = "3783094058"; title = "Vanilla Outfits Expanded"; }
     { id = "3401134276"; title = "Vanilla Gear Expanded"; }
     { id = "3270190005"; title = "Detailed Footwear"; }
@@ -60,7 +40,6 @@
     { id = "2699828474"; title = "Rebalanced Prop Moving"; }
     { id = "2956146279"; title = "Rain Cleans Blood [B42.20 + MP]"; }
     { id = "3783989538"; title = "Project Parkour"; }
-    { id = "3413150945"; title = "More Damaged Objects [42MP]"; }
     { id = "3520758551"; title = "More Car Features + Spawn Zones Expansion"; }
     { id = "3777587577"; title = "LG Tape XP Indicator"; }
     { id = "3779164273"; title = "Improvised Silencers - Build 42.20 Compatibility"; }
@@ -69,7 +48,6 @@
     { id = "2447729538"; title = "Fluffy Hair [B41/B42]"; }
     { id = "3682936016"; title = "Equipment UI – STABLE +"; }
     { id = "3671176591"; title = "dustinguished bolt cutters"; }
-    { id = "3461263912"; title = "Clean HotBar [B42]"; }
     { id = "2313387159"; title = "Better Sorting"; }
     { id = "3387539308"; title = "Auto Mechanics"; }
     { id = "3775549570"; title = "Alice's Weapon Sling"; }
@@ -78,19 +56,21 @@
     { id = "3402491515"; title = "Tsar's Common Library B42"; }
     { id = "3387957272"; title = "[B42.20] Detailed Descriptions for Occupations and Traits"; }
     { id = "3749026793"; title = "[B42.20] Carry Visible Items In Hands [WIP]"; }
+    { id = "3816442251"; title = "Viewpoint: Living Props"; }
+    { id = "3815630947"; title = "Viewpoint Rolling Hills"; }
+    { id = "3817555882"; title = "Rolling Hills Physics Addon (Project Viewpoint)"; }
+    { id = "3814398576"; title = "Surface Fix - Project Viewpoint"; }
+    { id = "3812151347"; title = "Door Fix - Project Viewpoint"; }
     { id = "3806955469"; title = "True Cargo - Project Full HD"; }
+    { id = "3781616141"; title = "[B42.20+] Vehicle Aim Roof Fix"; }
+    { id = "3785695033"; title = "[B42.20+] Vehicle Enter/Exit Fix"; }
+    { id = "3783874874"; title = "[B42.20+] Vehicle Weapon Clipping Fix"; }
     { id = "3740300378"; title = "KI5 Mini-fixes"; }
     { id = "3501302358"; title = "Vehicle Seat UI (KI5)"; }
     { id = "3436499337"; title = "Vehicle Military Zones"; }
     { id = "2625625421"; title = "Containers!"; }
     { id = "3330403100"; title = "Trailers!"; }
     { id = "3670064951"; title = "Campers!"; }
-    { id = "3508537032"; title = "NeatUI Framework"; }
-    { id = "3502080466"; title = "Neat Crafting"; }
-    { id = "3536052310"; title = "Neat Building"; }
-    { id = "3540503606"; title = "Neat Crafting & Neat Building - XP & Mod Display"; }
-    { id = "3082160142"; title = "Quick Actions"; }
-    { id = "3494474677"; title = "[B42] More Item Information"; }
     { id = "2932547723"; title = "'93 Lincoln Town Car + Limo"; }
     { id = "3088951320"; title = "'93 Ford Taurus"; }
     { id = "3001592312"; title = "'93 Ford Mustang"; }
@@ -171,188 +151,185 @@
     { id = "2900580391"; title = "'49 Dodge Power Wagon Crew Cab"; }
   ];
 
-  # `Mods=` — the list PZ actually LOADS. `WorkshopItems=` only says what to
-  # download and require; with `SelfManagedMods=true` the game will not derive
-  # `Mods=` from it, so a workshop-only pack that omits this loads NOTHING (the
-  # server still boots and listens, which is what makes it easy to miss).
-  #
-  # These are each mod's mod.info `id=`, not the Workshop id, comma-separated.
-  # 158 ids from the pack's 132 Workshop items — several KI5 items ship
-  # more than one mod (variants), which is why the counts differ.
   mods = [
-    "49powerWagon"
-    "59meteor"
-    "62daimlerFerret"
-    "63Type2Van"
-    "63beetle"
-    "65banshee"
-    "66pontiacLeMans"
-    "67commando"
-    "67gt500"
-    "68firebird"
-    "69camaro"
-    "69charger"
-    "69fordMustang"
-    "69fordMustangExtra"
-    "69mini"
-    "69mini_ItalianJob"
-    "69mini_MrBean"
-    "69mini_PitbullSpecial"
-    "70barracuda"
-    "70chevelle"
-    "70dodge"
-    "70fordEscort"
-    "70roadRunner"
-    "73fordFalcon"
-    "73fordFalconPS"
-    "73nissanGTR"
-    "75grandPrix"
-    "76chevyKseries"
-    "76chevyKseriesExpanded"
-    "76chryslerNewYorker"
-    "77firebird"
+    "ZombieBuddy"
+    "Viewpoint"
+    "PZVoxelStudioViewpoint"
+    "ViewpointBloodFX"
+    "air"
+    "ViewpointBloodFXAddon"
+    "ProjectALifeNPCs"
+    "Horse"
+    "BicycleMod"
+    "SkateboardMod"
+    "amclub"
+    "AviationCore"
+    "UH"
+    "ViewpointHeli"
+    "VFExpansion1"
+    "ImprovisedSilencers"
+    "ImprovisedSilencersVFEPatch"
+    "HorsePatch3d"
+    "OldPoint"
+    "ProjectViewpointADS"
+    "ViewpointTrueBallistics"
+    "ViewpointAdvancedThrowables"
+    "ViewpointTrueWeathers"
+    "ViewpointTrueWeathersGameplay"
+    "SMB_steps"
+    "BuildYourOwnKayak"
+    "VanillaOutfitsExpanded"
+    "VanillaGearExpanded"
+    "DetailedFootwear"
+    "damnlib"
+    "damnlibGlass"
+    "RET_LethalStealth"
+    "SpecLoot"
+    "REORDER_THE_HOTBAR"
+    "RebalancedPropMoving"
+    "RainCleansBlood"
+    "Parkour"
+    "save"
+    "WayMoreCars"
+    "LGTapeXP"
+    "stanks_suicide"
+    "ImmersiveBlackouts"
+    "FH"
+    "EQUIPMENT_UI_B42"
+    "EQUIPMENT_UI"
+    "dustinguished_bolt_cutters"
+    "BetterSortCC"
+    "AutoMechanics"
+    "game"
+    "alicesWeaponSling"
+    "alicesWeaponSlingRadialMenu"
+    "YAPZLib"
+    "MinimalSidebar"
+    "tsarslib"
+    "DetailedDescriptionsForOccupationsAndTraits"
+    "CVI"
+    "ViewpointLivingProps"
+    "ViewpointRollingHills"
+    "RollingHillsPhysics"
+    "ViewpointSurface"
+    "ViewpointDoor"
+    "PFHDTrueCargo"
+    "CarRoofFix"
+    "CarEnterExitFix"
+    "CarWeaponFix"
+    "KI5minifixes"
+    "VSUIKI5"
+    "VMZNEW"
+    "isoContainers"
+    "KI5trailers"
+    "KI5campers"
+    "93townCar"
+    "93fordTaurus"
+    "93mustangSSP"
+    "93fordF350"
+    "93fordElgin"
+    "93chevySuburban"
+    "93chevySuburbanExpanded"
+    "92nissanGTR"
+    "92jeepYJ"
+    "92jeepYJJP18"
+    "92fordCVPI"
+    "92amgeneralM998"
+    "91range"
+    "91nissan240sx"
+    "91lexusLS400"
+    "91geoMetro"
+    "91fordRanger"
+    "91fordLTD"
+    "90pierceArrow"
+    "90fordF350ambulance"
+    "90bmwE30"
+    "89volvo200"
+    "89defender"
+    "89trooper"
+    "89fordBronco"
+    "89dodgeCaravan"
+    "88toyotaHilux"
+    "88chevyS10"
+    "87toyotaMR2"
+    "87toyotaCorolla"
+    "87fordB700"
+    "87chevySuburban"
+    "87buickRegal"
+    "86oshkoshP19A"
+    "86fordE150"
+    "86fordE150dnd"
+    "86fordE150mm"
+    "86fordE150pd"
+    "86fordE150expanded"
+    "86chevyCUCV"
+    "85pontiacParisienne"
+    "85oldsmobileDelta88"
+    "85chevyStepVan"
+    "85chevyStepVanexpanded"
+    "85chevyCaprice"
+    "85buickLeSabre"
+    "84oldsmobile98"
+    "84merc"
+    "84jeepXJ"
+    "84corvette"
+    "84cadillacDeVille"
+    "84buickElectra"
+    "82porsche911"
+    "82firebird"
+    "82firebirdKITT"
+    "82oshkoshM911"
+    "82jeepJ10"
+    "82jeepJ10t"
+    "81deloreanDMC12"
+    "81deloreanDMC12BTTF"
+    "79camaro"
+    "78lamboCountach"
     "78amgeneralM35A2"
     "78amgeneralM35A2extra"
     "78amgeneralM49A2C"
     "78amgeneralM50A3"
     "78amgeneralM62"
-    "78lamboCountach"
-    "79camaro"
-    "81deloreanDMC12"
-    "81deloreanDMC12BTTF"
-    "82firebird"
-    "82firebirdKITT"
-    "82jeepJ10"
-    "82jeepJ10t"
-    "82oshkoshM911"
-    "82porsche911"
-    "84buickElectra"
-    "84cadillacDeVille"
-    "84corvette"
-    "84jeepXJ"
-    "84merc"
-    "84oldsmobile98"
-    "85buickLeSabre"
-    "85chevyCaprice"
-    "85chevyStepVan"
-    "85chevyStepVanexpanded"
-    "85oldsmobileDelta88"
-    "85pontiacParisienne"
-    "86chevyCUCV"
-    "86fordE150"
-    "86fordE150dnd"
-    "86fordE150expanded"
-    "86fordE150mm"
-    "86fordE150pd"
-    "86oshkoshP19A"
-    "87buickRegal"
-    "87chevySuburban"
-    "87fordB700"
-    "87toyotaCorolla"
-    "87toyotaMR2"
-    "88chevyS10"
-    "88toyotaHilux"
-    "89defender"
-    "89dodgeCaravan"
-    "89fordBronco"
-    "89trooper"
-    "89volvo200"
-    "90bmwE30"
-    "90fordF350ambulance"
-    "90pierceArrow"
-    "91fordLTD"
-    "91fordRanger"
-    "91geoMetro"
-    "91lexusLS400"
-    "91nissan240sx"
-    "91range"
-    "92amgeneralM998"
-    "92amgeneralM998extra"
-    "92fordCVPI"
-    "92jeepYJ"
-    "92jeepYJJP18"
-    "92nissanGTR"
-    "93chevySuburban"
-    "93chevySuburbanExpanded"
-    "93fordElgin"
-    "93fordF350"
-    "93fordTaurus"
-    "93mustangSSP"
-    "93townCar"
-    "AutoMechanics"
-    "BetterSortCC"
-    "BicycleMod"
-    "CVI"
-    "CleanHotBar"
-    "DetailedDescriptionsForOccupationsAndTraits"
-    "DetailedFootwear"
+    "77firebird"
+    "76chryslerNewYorker"
+    "76chevyKseries"
+    "76chevyKseriesExpanded"
+    "75grandPrix"
+    "73nissanGTR"
+    "73fordFalcon"
+    "73fordFalconPS"
+    "70roadRunner"
+    "70barracuda"
+    "70fordEscort"
+    "70dodge"
+    "70chevelle"
+    "69mini"
+    "69mini_ItalianJob"
+    "69mini_MrBean"
+    "69mini_PitbullSpecial"
+    "69fordMustang"
+    "69fordMustangExtra"
+    "69charger"
+    "69camaro"
+    "68firebird"
+    "67gt500"
+    "67commando"
+    "66pontiacLeMans"
+    "65banshee"
+    "63Type2Van"
+    "63beetle"
+    "62daimlerFerret"
+    "59meteor"
     "ECTO1"
-    "EQUIPMENT_UI"
-    "EQUIPMENT_UI_B42"
-    "FH"
-    "Horse"
-    "ImmersiveBlackouts"
-    "ImprovisedSilencers"
-    "KI5campers"
-    "KI5minifixes"
-    "KI5trailers"
-    "LGTapeXP"
-    "MinimalSidebar"
-    "MoreDamagedObjects"
-    "PFHDTrueCargo"
-    "PZVoxelStudioViewpoint"
-    "Parkour"
-    "ProjectALifeNPCs"
-    "ProjectViewpointQOL"
-    "REORDER_THE_HOTBAR"
-    "RET_LethalStealth"
-    "RainCleansBlood"
-    "RebalancedPropMoving"
-    "SpecLoot"
-    "VFExpansion1"
-    "VMZNEW"
-    "VSUIKI5"
-    "VanillaGearExpanded"
-    "VanillaOutfitsExpanded"
-    "Viewpoint"
-    "ViewpointBloodFX"
-    "WayMoreCars"
-    "YAPZLib"
-    "ZombieBuddy"
-    "alicesWeaponSling"
-    "alicesWeaponSlingRadialMenu"
-    "amclub"
-    "damnlib"
-    "dustinguished_bolt_cutters"
-    "equipmentuipatch"
-    "isoContainers"
-    "stanks_suicide"
-    "tsarslib"
-    "NeatUI_Framework"
-    "Neat_Crafting"
-    "Neat_Building"
-    "Neat_Crafting_AddonXP"
-    "Neat_Building_AddonXP"
-    "QuickActions"
-    "MoreItemInformation"
-    "ModFolders"
-    "AttachmentsUI"
-    "ImmersiveDriving"
+    "49powerWagon"
   ];
 
-  # .ini keys any server on this pack inherits; a server's own `settings` win.
   defaultSettings = {
     PVP = true;
     PauseEmpty = true;
     SaveWorldEveryMinutes = 10;
-    # Build 42 ships a Lua-checksum check that false-positives on Linux and
-    # blocks clients from joining. See README 'Build 42'.
     DoLuaChecksum = false;
   };
 
-  # Deliberately no per-mod SandboxVars entries: a mod ships its own defaults in
-  # media/sandbox-options.txt and the game applies them unaided. Only a server
-  # that wants to OVERRIDE a mod's default needs an entry, and that belongs on
-  # the server, not in the shared pack.
   defaultSandbox = { };
 }
