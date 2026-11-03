@@ -153,6 +153,40 @@
     { id = "3813972279"; title = "[B42] Vehicle Manager by Minidoracat"; }
     { id = "3820158257"; title = "[B41/B42] Minimal Car Dashboard (Auto-Hide)"; }
     { id = "3814684002"; title = "[B42] Knox Pass by Minidoracat"; }
+
+    # ── Sewing / tailoring progression ──────────────────────────────────────
+    # All Build 42 and multiplayer-safe (Workshop `Multiplayer` tag, or verified
+    # from the download: items/recipes/shared Lua only). Dependencies first:
+    #   TooltipLib                      -> My Tailor Is Rich
+    #   ChuckleberryFinnAlertSystem     -> errorMagnifier -> Interactive Tailoring
+    #   InteractiveTailoring            -> Interactive Tailoring MP Fix
+    # Advanced Fabrics must load last among clothing mods.
+    { id = "3694097672"; title = "Tooltiplib - Tooltip Framework for Modders"; }
+    # STUB: Interactive Tailoring/errorMagnifier require a since-removed mod by
+    # this ID; this blank item fills the dependency (450 subscribers, no content).
+    { id = "3496670149"; title = "Mod Update and Alert System [STUB]"; }
+    { id = "2896041179"; title = "errorMagnifier"; }
+    { id = "3522680786"; title = "Interactive Tailoring"; }
+    { id = "3816028300"; title = "Interactive Tailoring MP Fix"; }
+    { id = "3803921146"; title = "Wildwrought: Tailoring Practice"; }
+    { id = "3822541989"; title = "Practice - Tailoring - Gunny Sack"; }
+    { id = "3684942821"; title = "[WYD] VHS Skill Tapes: Tailoring"; }
+    { id = "3792833867"; title = "Tailoring XP for Salvaging"; }
+    { id = "2879667197"; title = "PZ More Tailoring"; }
+    { id = "3675200093"; title = "PZ More Tailoring 2"; }
+    { id = "3794487959"; title = "StitchnSalvage"; }
+    { id = "3786896656"; title = "Combine Leather / Sew Leather"; }
+    { id = "3803789558"; title = "Knit Bandage"; }
+    { id = "3789037653"; title = "Tailor's Cut - Cut Clothing Holes Anywhere"; }
+    { id = "3416525606"; title = "Recut"; }
+    { id = "2142622992"; title = "Repair Any Clothes"; }
+    { id = "3667745474"; title = "Rip-A-Holic"; }
+    { id = "3810122988"; title = "My Tailor Is Rich - Clothing & Shoe Sizes"; }
+    { id = "3822249892"; title = "Master Sewing Kit"; }
+    { id = "3696197915"; title = "Suture Needles are for Sewing"; }
+    { id = "3794060081"; title = "Real Zomboid Batch Tailoring"; }
+    { id = "3810346562"; title = "Clothing Damage Alerts (Torn Threads)"; }
+    { id = "3787179508"; title = "Advanced Fabrics - Layered Protection"; } # load last
   ];
 
   mods = [
@@ -330,6 +364,33 @@
     "MinidoracatVehicleManagerFor42"
     "AutoHideCarDash"
     "MinidoracatKnoxPassFor42"
+
+    # ── Sewing / tailoring progression ──────────────────────────────────────
+    # Load order: dependencies before dependents; AdvancedFabricsMP last.
+    "TooltipLib"
+    "ChuckleberryFinnAlertSystem" # STUB item; fills a removed dependency
+    "errorMagnifier"
+    "InteractiveTailoring"
+    "InteractiveTailoringMPFix"
+    "WWS_TailoringPractice"
+    "PracticeTailoringGunny"
+    "SkillTapesTailor42"
+    "TailoringXP"
+    "PZMoreTailoring"
+    "PZMoreTailoring2"
+    "StitchnSalvage"
+    "TFC_CombineLeatherMod"
+    "KnitBandage"
+    "TailorsCut"
+    "RecutB42"
+    "RepairAnyClothes"
+    "rip-a-holic"
+    "batman_MyTailorIsRich"
+    "MasterSewingKit"
+    "SutureNeedles4Sewing"
+    "RealZomboidBatchTailoring"
+    "TornThreads"
+    "AdvancedFabricsMP"
   ];
 
   defaultSettings = {
