@@ -73,6 +73,10 @@ A mod's Workshop page is
 `https://steamcommunity.com/sharedfiles/filedetails/?id=<id>`. Verify each id is
 current for the server's build (41 / 42) before pinning it.
 
+To *find* new mods rather than resolve known ones — keyword search, Build
+42/multiplayer vetting, and reading `mod.info` for the real `id=`/`require=` —
+use the `pz-mod-search` skill.
+
 ## Steam collections
 
 A Steam Workshop **collection** is never something a server consumes — PZ reads
