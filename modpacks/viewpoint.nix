@@ -49,7 +49,6 @@
     { id = "3682936016"; title = "Equipment UI – STABLE +"; }
     { id = "3671176591"; title = "dustinguished bolt cutters"; }
     { id = "2313387159"; title = "Better Sorting"; }
-    { id = "3387539308"; title = "Auto Mechanics"; }
     { id = "3775549570"; title = "Alice's Weapon Sling"; }
     { id = "3624971238"; title = "Yet Another PZ LIbrary"; }
     { id = "3642084851"; title = "[B41/42] Minimal Sidebar (Auto Hide)"; }
@@ -187,6 +186,27 @@
     { id = "3794060081"; title = "Real Zomboid Batch Tailoring"; }
     { id = "3810346562"; title = "Clothing Damage Alerts (Torn Threads)"; }
     { id = "3787179508"; title = "Advanced Fabrics - Layered Protection"; } # load last
+
+    # ── Mechanics / vehicle repair progression ──────────────────────────────
+    # Better Auto Mechanics replaces the old Auto Mechanics (3387539308),
+    # removed because it has no MP support. VRO must load after vehicle mods; its
+    # whole-vehicle salvage lives in a second mod in the same Workshop item.
+    # Vanilla Vehicle Parts ships one addon per vehicle pack: only the DAMN
+    # Library and Autotsar Motorclub addons apply here (both packs are below).
+    { id = "3635856965"; title = "Better Auto Mechanics [B42.20.4+ MP+SP]"; }
+    { id = "2744114761"; title = "Craft Engine Parts"; }
+    { id = "3795571681"; title = "Vanilla Vehicle Parts"; }
+    { id = "2757712197"; title = "Vehicle Repair Overhaul"; }
+    { id = "3744391882"; title = "Consistent Vehicle Repairs"; }
+    { id = "3543612325"; title = "Restore Engine Quality [B42]"; }
+    { id = "3464551542"; title = "Functional Car Lift"; }
+    { id = "3793163745"; title = "Area Tasks - Select an area for vanilla tasks [B42]"; }
+    { id = "3801094884"; title = "Area Tasks: Auto Mechanics"; }
+    { id = "3677886085"; title = "Mechanics Eye"; }
+    { id = "3827271522"; title = "GarageWorks [B42]"; }
+    { id = "3800858172"; title = "Vehicle Armor Crafting [B42]"; }
+    { id = "3729609290"; title = "Engine Upgrade Kit & Extra Fluid Tank[SP/MP][42.21+]"; }
+    { id = "2945424264"; title = "Immersive Cars: Parts Picked"; }
   ];
 
   mods = [
@@ -237,7 +257,6 @@
     "EQUIPMENT_UI"
     "dustinguished_bolt_cutters"
     "BetterSortCC"
-    "AutoMechanics"
     "game"
     "alicesWeaponSling"
     "alicesWeaponSlingRadialMenu"
@@ -391,6 +410,29 @@
     "RealZomboidBatchTailoring"
     "TornThreads"
     "AdvancedFabricsMP"
+
+    # ── Mechanics / vehicle repair progression ──────────────────────────────
+    # One Craft Engine Parts tier only; one VRO core + its salvage addon;
+    # Vanilla Vehicle Parts core before its per-pack addons.
+    "better-auto-mechanics"
+    "CraftEnginePartsModerate"
+    "VanillaVehicleParts"
+    "VVPCarModels"
+    "VVPMotoModels"
+    "DamnlibVanillaPartsPatch"
+    "VVPHideRecipes"
+    "VehicleRepairOverhaul"
+    "VehicleSalvageOverhaulB42"
+    "ConsistentVehicleRepairs"
+    "Ivmakk_RestoreEngineQuality"
+    "FunctionalCarLift"
+    "AreaTasks"
+    "AreaTasksAutoMechanics"
+    "MechanicsEye"
+    "GarageWorks"
+    "VehicleArmorCrafting"
+    "vac_engine_upgrade_kit"
+    "ImmersiveCarsPicking"
   ];
 
   defaultSettings = {
