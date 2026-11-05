@@ -217,16 +217,39 @@
     { id = "3470205514"; title = "[B42]Recycling of waste"; }
     { id = "3787169788"; title = "Improvised Glass & Windows (B42 Stable)"; }
 
+    # Structural salvage / cleanup. Dismantle All Buildables is deliberately
+    # omitted: it adds the same Dismantle option to workstations/structures
+    # that Kentucky Workstation Salvage already covers.
+    { id = "3783972702"; title = "Kentucky Workstation Salvage"; }
+    { id = "3776658529"; title = "[42.20 SP/MP] Dismantle All Electronics"; }
+    { id = "3793407081"; title = "Remove Debris (Tree Stumps & Boulders) / Delete Trash Tiles"; }
+    { id = "3779330500"; title = "VRO Salvage Condition Lock"; }
+
     # ── Corpse handling / usage ────────────────────────────────────────────
     # Build 42 + multiplayer. Zombie Butchery is a server-authoritative
     # butchering path; Better Corpse Burning does its fire work server-side;
-    # Corpse Dumper removes bodies via bins. The last two are fixes: MP corpse
+    # Corpse Dumper removes bodies via bins. The two fixes cover MP corpse
     # loot (requires ZombieBuddy) and the Viewpoint 3D corpse-menu NPE.
     { id = "3787607014"; title = "Zombie Butchery [B42]"; }
     { id = "3790089095"; title = "Better Corpse Burning"; }
     { id = "3684602722"; title = "Corpse Dumper"; }
     { id = "3812132807"; title = "[B42] MP Vanilla Zombie Corpse Fix"; }
     { id = "3818966539"; title = "Viewpoint 42.21 Corpse Menu Fix"; }
+
+    # Additional, non-overlapping corpse mechanics: chipper/compost, vehicle
+    # towing, medical autopsy, dragging XP, floor gather/delete hotkey,
+    # door opening while dragging, player-corpse persistence, server-side
+    # zombie-corpse cap, sickness recovery and indoor stink propagation.
+    { id = "3795893288"; title = "Mulch - Corpse Disposal & Compost"; }
+    { id = "3782664078"; title = "Corpse Towing"; }
+    { id = "3791146188"; title = "Corpse Autopsy"; }
+    { id = "3404074048"; title = "[B42] Exercise With Corpses"; }
+    { id = "3414546041"; title = "[B42/41] Gather Floor Items & Corpse"; }
+    { id = "3784955576"; title = "Open Doors While Dragging Corpses"; }
+    { id = "3658915668"; title = "Persistent Player Corpses"; }
+    { id = "3823949980"; title = "Zombie Corpse Limiter [B42 MP]"; }
+    { id = "3687841589"; title = "Adjustable Corpse Sickness"; }
+    { id = "3825280124"; title = "True Corpse Stink"; }
   ];
 
   mods = [
@@ -459,6 +482,10 @@
     "Teardown"
     "WasteConversion"
     "ImprovisedGlassB42"
+    "KentuckyWorkstationSalvage"
+    "DismantleAllElectronics"
+    "TFC_RemoveDebrisMod"
+    "VROSalvageConditionLock" # requires VehicleSalvageOverhaulB42 (loaded above)
 
     # ── Corpse handling / usage ────────────────────────────────────────────
     # B42MPZombieCorpseFix requires ZombieBuddy (already first);
@@ -468,6 +495,16 @@
     "CorpseDumper"
     "B42MPZombieCorpseFix"
     "Viewpoint 42.21 Corpse Menu Fix"
+    "Mulch"
+    "CorpseTowing"
+    "CorpseAutopsy"
+    "ExerciseWithCorpses"
+    "GatherFloorItems"
+    "BossMan_WGQoL"
+    "PersistentPlayerCorpses"
+    "ZombieCorpseLimiter"
+    "twistrecovery"
+    "TrueCorpseStink"
   ];
 
   defaultSettings = {
