@@ -207,6 +207,26 @@
     { id = "3800858172"; title = "Vehicle Armor Crafting [B42]"; }
     { id = "3729609290"; title = "Engine Upgrade Kit & Extra Fluid Tank[SP/MP][42.21+]"; }
     { id = "2945424264"; title = "Immersive Cars: Parts Picked"; }
+
+    # ── Salvage / recycling ────────────────────────────────────────────────
+    # Build 42 + multiplayer. Teardown and Recycling of Waste are a paired
+    # loop: Teardown breaks junk down to scrap, Recycling of Waste smelts it
+    # back up. Both are static recipes (no client-side item creation, no item
+    # redefinitions). Improvised Glass recycles shards into panes/windows.
+    { id = "3792605253"; title = "Teardown - Junk Into Materials"; }
+    { id = "3470205514"; title = "[B42]Recycling of waste"; }
+    { id = "3787169788"; title = "Improvised Glass & Windows (B42 Stable)"; }
+
+    # ── Corpse handling / usage ────────────────────────────────────────────
+    # Build 42 + multiplayer. Zombie Butchery is a server-authoritative
+    # butchering path; Better Corpse Burning does its fire work server-side;
+    # Corpse Dumper removes bodies via bins. The last two are fixes: MP corpse
+    # loot (requires ZombieBuddy) and the Viewpoint 3D corpse-menu NPE.
+    { id = "3787607014"; title = "Zombie Butchery [B42]"; }
+    { id = "3790089095"; title = "Better Corpse Burning"; }
+    { id = "3684602722"; title = "Corpse Dumper"; }
+    { id = "3812132807"; title = "[B42] MP Vanilla Zombie Corpse Fix"; }
+    { id = "3818966539"; title = "Viewpoint 42.21 Corpse Menu Fix"; }
   ];
 
   mods = [
@@ -433,6 +453,21 @@
     "VehicleArmorCrafting"
     "vac_engine_upgrade_kit"
     "ImmersiveCarsPicking"
+
+    # ── Salvage / recycling ────────────────────────────────────────────────
+    # Teardown produces the scrap; WasteConversion smelts it upward.
+    "Teardown"
+    "WasteConversion"
+    "ImprovisedGlassB42"
+
+    # ── Corpse handling / usage ────────────────────────────────────────────
+    # B42MPZombieCorpseFix requires ZombieBuddy (already first);
+    # the Viewpoint corpse-menu fix requires Viewpoint (already loaded).
+    "ZombieButchery"
+    "BetterCorpseBurning"
+    "CorpseDumper"
+    "B42MPZombieCorpseFix"
+    "Viewpoint 42.21 Corpse Menu Fix"
   ];
 
   defaultSettings = {
