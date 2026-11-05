@@ -250,6 +250,49 @@
     { id = "3823949980"; title = "Zombie Corpse Limiter [B42 MP]"; }
     { id = "3687841589"; title = "Adjustable Corpse Sickness"; }
     { id = "3825280124"; title = "True Corpse Stink"; }
+
+    # ── Farming / agriculture ──────────────────────────────────────────────
+    # Build 42 + multiplayer, verified from each mod.info. One rebalance mod
+    # (Vanilla Agriculture Fix) rather than stacking Fair Farming / Faster
+    # Growth Stages. Area Tasks already handles batch sow/water/harvest, so
+    # Batch Farming is deliberately omitted. Natural + Primitive Irrigation
+    # are a designed pair; crop-adding mods load before the UI mods that read
+    # the crop registry.
+    { id = "3751370563"; title = "Vanilla Agriculture Fix"; }
+    { id = "3781608503"; title = "Forever Harvestable Crops"; }
+    { id = "3636824030"; title = "Force Crop Remover [B42.13.1 Fix]"; }
+    { id = "3733988329"; title = "Dirt Floor Farming Fix [B42]"; }
+    { id = "3782193333"; title = "Transplant Crop[42.21]"; }
+    { id = "3779625821"; title = "Fruit Farming (B42)"; }
+    { id = "3787740198"; title = "BADLANDS Mycology"; }
+    { id = "3763835105"; title = "Natural Irrigation"; }
+    { id = "3771245646"; title = "Primitive Irrigation"; }
+    { id = "3807333290"; title = "BADLANDS Greenhouse"; }
+    { id = "3826228411"; title = "Fuel From Farming"; }
+    { id = "3790724106"; title = "[GUI] Immersive Seed Packets [B42.20.4] [SP/MP]"; }
+    { id = "3786149487"; title = "M Farming Helper B42"; }
+    { id = "3470852353"; title = "[B42/41] Improved Farming Info Window"; }
+
+    # ── Livestock / animal husbandry ───────────────────────────────────────
+    # Build 42 + multiplayer. Feed That Animal ships an SP mod and an
+    # incompatible MP replacement: only FeedThatAnimalMP is enabled. Animal
+    # Barns likewise ships a safe-uninstall companion that is incompatible
+    # with the main mod: only AnimalBarns is enabled. Animal Fix loads before
+    # the animal-content mods it stabilises.
+    { id = "3786854702"; title = "Animal Fix - Livestock Stability [B42]"; }
+    { id = "3487450124"; title = "Feed That Animal!"; }
+    { id = "3582024827"; title = "Better Animal Care"; }
+    { id = "3568280195"; title = "Milk Them All [B42]"; }
+    { id = "3807514980"; title = "[B42] Animal Barns"; }
+    { id = "3787460693"; title = "Better Ranch Spawns"; }
+    { id = "3808507911"; title = "Smart Animal Waste [B42+]"; }
+    { id = "3640001799"; title = "Animal Collectors"; }
+    { id = "3798147284"; title = "Herd Control - Quiet Animals & Better Trailers"; }
+
+    # ── Beekeeping ─────────────────────────────────────────────────────────
+    # ShelterHold: Beehive requires NeatUI Framework; load the framework first.
+    { id = "3508537032"; title = "NeatUI Framework [B42]"; }
+    { id = "3596827035"; title = "ShelterHold: Beehive"; }
   ];
 
   mods = [
@@ -505,6 +548,41 @@
     "ZombieCorpseLimiter"
     "twistrecovery"
     "TrueCorpseStink"
+
+    # ── Farming / agriculture ──────────────────────────────────────────────
+    # Rebalance first, then fixes, crop packs, irrigation, and finally the
+    # UI mods that read every registered crop.
+    "VanillaAgricultureFix"
+    "ForeverHarvestableCrops"
+    "DirtFloorFarmingFix"
+    "ForceCropRemover"
+    "vac_transplant_crop"
+    "FruitFarming"
+    "ikag_mycology"
+    "NaturalIrrigation"
+    "PrimitiveIrrigation"
+    "BadlandsGreenhouse"
+    "FuelFromFarming"
+    "ImmersiveSeedPackets"
+    "MFarmingHelperB42"
+    "ImprovedFarmingInfoWindow"
+
+    # ── Livestock / animal husbandry ───────────────────────────────────────
+    # Stability fix first; FeedThatAnimalMP replaces the incompatible SP mod;
+    # AnimalBarns is the main mod (not its safe-uninstall companion).
+    "ArcadiaAnimalFix_B42"
+    "FeedThatAnimalMP"
+    "EURY_ANIMALCARE"
+    "Ivmakk_MilkThemAll"
+    "AnimalBarns"
+    "BetterRanchSpawns"
+    "SmartAnimalWaste"
+    "AnimalCollectors"
+    "TrixHerdControl"
+
+    # ── Beekeeping ─────────────────────────────────────────────────────────
+    "NeatUI_Framework"
+    "ShelterHold_Beehive"
   ];
 
   defaultSettings = {
