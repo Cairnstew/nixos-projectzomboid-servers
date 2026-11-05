@@ -21,10 +21,19 @@
     { id = "3409723807"; title = "[B42] UH-1B Helicopter (Beta)"; }
     { id = "3812896812"; title = "Helicopter Fix - Project Viewpoint"; }
     { id = "3761077099"; title = "[B42] Vanilla Firearms Expansion [CLASSIC]"; }
+    # VFE add-ons: content for the base mod above. Do not swap the base for
+    # "Complete Vanilla Firearms Expansion" (3820580321) — it ships a different
+    # Mod ID (ExtendedVanillaWeapons) and the Gunsmith/VAC/Improvised Silencers
+    # VFE patches all require VFExpansion1 specifically.
+    { id = "3761284354"; title = "[B42] Vanilla Firearms Expansion - STALKER pack [CLASSIC]"; } # VFExpansion2
+    { id = "3762355926"; title = "[B42] Vanilla Firearms Expansion - Post '93 [CLASSIC]"; } # VFExpansion3
     { id = "2799742455"; title = "Improvised Silencers by Maxwell218"; }
     { id = "3813760573"; title = "HorseMod + Viewpoint Controls Patch"; }
     { id = "3815999052"; title = "OldPoint - Rotating Overhead Camera [B42 / Viewpoint]"; }
-    { id = "3812612054"; title = "Project Viewpoint: Recoil & ADS"; }
+    # Arsenal is the successor to Recoil & ADS: it absorbs the old
+    # ProjectViewpointADS mod and explicitly says to disable the older separate
+    # Viewpoint weapon-handling/optics/ADS add-ons. Do not enable both.
+    { id = "3816584372"; title = "Viewpoint Arsenal - ADS & Optics"; }
     { id = "3812864848"; title = "Viewpoint True Ballistics"; }
     { id = "3813194971"; title = "Viewpoint - Advanced Throwables"; }
     { id = "3813908957"; title = "Project Viewpoint: True Weathers & Lighting"; }
@@ -345,6 +354,22 @@
     { id = "3105394500"; title = "Gunsmith [B42 + MP]"; }
     { id = "2917021415"; title = "Vanilla Ammo Crafting"; }
 
+    # ── Weapon progression / training ──────────────────────────────────────
+    # Additive progression layers, not new gun/ammo/repair systems: Signature
+    # Weapons grows a weapon through kills (with server-side sync Lua);
+    # Practice Reloading trains Reloading through vanilla timed actions;
+    # Training Target Shooting trains Aiming on mannequins. Deliberately not
+    # adding Load It! (second ammo press), Hags/Monkey's/Universal Gun Repair
+    # (second gun-repair system), Simple Silencers (second suppressor system)
+    # or Madax/MFS/Gunworks (second firearm overhaul).
+    { id = "3740745510"; title = "Signature Weapons"; }
+    { id = "3784654830"; title = "[B42.x SP/MP] Practice Reloading"; }
+    { id = "3767881622"; title = "Training Target Shooting"; }
+
+    # Attachments UI only replaces the attachment menus; it adds no attachment
+    # items, so it complements VFE's optics/bipods/slings instead of competing.
+    { id = "3816324722"; title = "Attachments UI [B42]"; }
+
     # ── Difficulty / threat escalation ──────────────────────────────────────
     # Pressure that scales with days survived, map clearing, base activity and
     # upkeep, rather than a fixed day-one difficulty multiplier.
@@ -372,12 +397,14 @@
     "UH"
     "ViewpointHeli"
     "VFExpansion1"
+    "VFExpansion2"          # STALKER add-on (requires VFExpansion1)
+    "VFExpansion3"          # Post '93 add-on (requires VFExpansion1)
     "ImprovisedSilencers"
     "ImprovisedSilencersVFEPatch"
     "HorsePatch3d"
     "OldPoint"
-    "ProjectViewpointADS"
     "ViewpointTrueBallistics"
+    "ViewpointArsenal"      # replaces ProjectViewpointADS; load after VTB + VFE
     "ViewpointAdvancedThrowables"
     "ViewpointTrueWeathers"
     "ViewpointTrueWeathersGameplay"
@@ -592,6 +619,15 @@
     "vac"
     "vac_vfe_patch"
     "RangedMaintenance"
+
+    # ── Weapon progression / training ──────────────────────────────────────
+    # Load after every gun/ammo mod so their items exist when these hook in.
+    # AttachmentsUI is a menu replacement; SignatureWeapons owns its own
+    # server/sync state; PracticeReloading reuses vanilla reload actions.
+    "AttachmentsUI"
+    "SignatureWeapons"
+    "PracticeReloading"
+    "TrainingTargetShooting"
 
     # ── Salvage / recycling ────────────────────────────────────────────────
     # Teardown produces the scrap; WasteConversion smelts it upward.
