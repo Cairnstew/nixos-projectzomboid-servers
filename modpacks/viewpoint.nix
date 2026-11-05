@@ -323,6 +323,16 @@
     { id = "3804093735"; title = "BADLANDS Power"; }
     { id = "3786970737"; title = "Exhaustive Power Rework [EPR Fork]"; } # ships ZombieBuddy add-on
     { id = "3793465866"; title = "Plysken Battery Charger"; }
+
+    # Optional QoL/vehicle additions to the same power stack. Genset is a
+    # vanilla-style generator on a trailer; Better Generator Info extends the
+    # vanilla generator window (drop it first if an LG/BADLANDS custom menu
+    # ever conflicts); Generator Hose overlaps LG's built-in fuel lines;
+    # Battery Drain Multiplier is a sandbox balance knob.
+    { id = "3803022693"; title = "Genset - Towable Generator"; }
+    { id = "3576056135"; title = "Better Generator Info"; }
+    { id = "3718216106"; title = "[42.20.4]Battery Drain Multiplier"; }
+    { id = "3790123686"; title = "Generator Hose"; }
   ];
 
   mods = [
@@ -638,6 +648,12 @@
     "ExhaustivePowerRework"
     "ExhaustivePowerReworkZB"
     "PBC"
+
+    # Optional power QoL/vehicle additions.
+    "Genset"
+    "BetterGeneratorInfo"
+    "Battery Drain Multiplier"
+    "GeneratorHose"
   ];
 
   defaultSettings = {
