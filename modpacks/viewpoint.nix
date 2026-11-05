@@ -193,9 +193,12 @@
     # whole-vehicle salvage lives in a second mod in the same Workshop item.
     # Vanilla Vehicle Parts ships one addon per vehicle pack: only the DAMN
     # Library and Autotsar Motorclub addons apply here (both packs are below).
+    # Apocalypse Car Engineer adds B42-native vehicle frame and vanilla-part
+    # crafting, covering body/mechanical parts that Craft Engine Parts does not.
     { id = "3635856965"; title = "Better Auto Mechanics [B42.20.4+ MP+SP]"; }
     { id = "2744114761"; title = "Craft Engine Parts"; }
     { id = "3795571681"; title = "Vanilla Vehicle Parts"; }
+    { id = "3631390083"; title = "Apocalypse Car Engineer Workshop - Build Cars on your own [42.20]"; }
     { id = "2757712197"; title = "Vehicle Repair Overhaul"; }
     { id = "3744391882"; title = "Consistent Vehicle Repairs"; }
     { id = "3543612325"; title = "Restore Engine Quality [B42]"; }
@@ -333,6 +336,24 @@
     { id = "3576056135"; title = "Better Generator Info"; }
     { id = "3718216106"; title = "[42.20.4]Battery Drain Multiplier"; }
     { id = "3790123686"; title = "Generator Hose"; }
+
+    # ── Gunsmithing / ammunition crafting ──────────────────────────────────
+    # Gunsmith replaces the firearm repair system with weapon parts, assembly
+    # and a Gunsmith skill; the same Workshop item ships a VFE add-on.
+    # Vanilla Ammo Crafting also ships a VFE patch. Both add-ons require
+    # VFExpansion1, which is already loaded early in this pack.
+    { id = "3105394500"; title = "Gunsmith [B42 + MP]"; }
+    { id = "2917021415"; title = "Vanilla Ammo Crafting"; }
+
+    # ── Difficulty / threat escalation ──────────────────────────────────────
+    # Pressure that scales with days survived, map clearing, base activity and
+    # upkeep, rather than a fixed day-one difficulty multiplier.
+    { id = "3676814360"; title = "DEZ - Dynamic Evolution Z"; }
+    { id = "3786750418"; title = "The Horde Is Coming"; }
+    { id = "3612823857"; title = "[B42] Maintenance Driven Repair Count"; }
+    { id = "3687219173"; title = "Ranged Weapon Maintenance"; }
+    { id = "3778403732"; title = "Immersive Looting B42: Search & Reveal"; }
+    { id = "3410729454"; title = "Proper Infected Wounds [B42.20+MP]"; }
   ];
 
   mods = [
@@ -539,7 +560,8 @@
 
     # ── Mechanics / vehicle repair progression ──────────────────────────────
     # One Craft Engine Parts tier only; one VRO core + its salvage addon;
-    # Vanilla Vehicle Parts core before its per-pack addons.
+    # Vanilla Vehicle Parts core before its per-pack addons. APO_Engineer is
+    # B42-native vehicle/parts crafting; mdrc_b42 must load after VRO.
     "better-auto-mechanics"
     "CraftEnginePartsModerate"
     "VanillaVehicleParts"
@@ -547,9 +569,11 @@
     "VVPMotoModels"
     "DamnlibVanillaPartsPatch"
     "VVPHideRecipes"
+    "APO_Engineer"          # vehicle frames + vanilla vehicle-part recipes
     "VehicleRepairOverhaul"
     "VehicleSalvageOverhaulB42"
     "ConsistentVehicleRepairs"
+    "mdrc_b42"              # requires VehicleRepairOverhaul (loaded above)
     "Ivmakk_RestoreEngineQuality"
     "FunctionalCarLift"
     "AreaTasks"
@@ -559,6 +583,15 @@
     "VehicleArmorCrafting"
     "vac_engine_upgrade_kit"
     "ImmersiveCarsPicking"
+
+    # ── Gunsmithing / ammunition ───────────────────────────────────────────
+    # Gunsmith core before its VFE add-on; Vanilla Ammo Crafting before its
+    # VFE patch. Both add-ons require VFExpansion1, loaded earlier.
+    "weapongunsmith"
+    "weapongunsmith_VFE"
+    "vac"
+    "vac_vfe_patch"
+    "RangedMaintenance"
 
     # ── Salvage / recycling ────────────────────────────────────────────────
     # Teardown produces the scrap; WasteConversion smelts it upward.
@@ -654,6 +687,15 @@
     "BetterGeneratorInfo"
     "Battery Drain Multiplier"
     "GeneratorHose"
+
+    # ── Difficulty / threat escalation ─────────────────────────────────────
+    # Loaded last so their Lua hooks see the full mod set. DEZ and The Horde Is
+    # Coming scale with days survived; mdrc_b42 and RangedMaintenance are in
+    # their respective upkeep sections above.
+    "DynamicEvolutionZ"
+    "TheHordeIsComing"
+    "ImmersiveLootingB42"
+    "Proper_Infected_Wounds_b42"
   ];
 
   defaultSettings = {
