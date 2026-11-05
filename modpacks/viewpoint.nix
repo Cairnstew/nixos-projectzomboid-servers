@@ -307,6 +307,22 @@
     { id = "3592172476"; title = "[B42:SP/MP] Take A Bath And Shower"; } # ships DepthMap fix
     { id = "3599665197"; title = "Immersive Water Shutoff [B42MP]"; }
     { id = "3793515249"; title = "Metal Trough Plumbing"; }
+
+    # ── Power / electricity ────────────────────────────────────────────────
+    # One coherent stack: LG wires whole buildings and shares generator load;
+    # Plysken Solar Revolution and BADLANDS Power are explicitly compatible
+    # with it, and BADLANDS is also tested alongside Plysken. Exhaustive Power
+    # Rework restores the native grid and is the mod Immersive Blackouts lists
+    # as compatible; its ZombieBuddy add-on uses the ZombieBuddy already first
+    # in this pack. Deliberately excluded: Generator Powered Buildings (LG says
+    # run one or the other), the EPR Community/B42/Slapstick forks (hard
+    # incompatible), and all Immersive Solar Arrays variants (PSR marks them
+    # incompatible).
+    { id = "3779562002"; title = "LG Extended Electricity"; } # ships LGExtendedElectricity + LGRealisticPowerUsage
+    { id = "3725311427"; title = "Plysken Solar Revolution"; }
+    { id = "3804093735"; title = "BADLANDS Power"; }
+    { id = "3786970737"; title = "Exhaustive Power Rework [EPR Fork]"; } # ships ZombieBuddy add-on
+    { id = "3793465866"; title = "Plysken Battery Charger"; }
   ];
 
   mods = [
@@ -609,6 +625,19 @@
     "TakeABathAndShowerNew"
     "ImmersiveWaterShutoff"
     "MetalTroughPlumbing"
+
+    # ── Power / electricity ────────────────────────────────────────────────
+    # LG core first, then its optional realistic-wattage module; BADLANDS sits
+    # on top of LG's wiring; EPR restores the grid and its ZB add-on requires
+    # ZombieBuddy (loaded first). PBC handles small device batteries, separate
+    # from PSR's car/deep-cycle banks.
+    "LGExtendedElectricity"
+    "LGRealisticPowerUsage"
+    "PSR"
+    "BadlandsPower"
+    "ExhaustivePowerRework"
+    "ExhaustivePowerReworkZB"
+    "PBC"
   ];
 
   defaultSettings = {
