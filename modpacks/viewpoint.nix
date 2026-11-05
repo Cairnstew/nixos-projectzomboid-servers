@@ -293,6 +293,20 @@
     # ShelterHold: Beehive requires NeatUI Framework; load the framework first.
     { id = "3508537032"; title = "NeatUI Framework [B42]"; }
     { id = "3596827035"; title = "ShelterHold: Beehive"; }
+
+    # ── Plumbing / water supply ────────────────────────────────────────────
+    # Carthon's Water Pipes is the maintained network here, with its Viewpoint
+    # add-on in the same Workshop item. Slayer's original Water Pipes
+    # (3546314080) and LG Extended Plumbing are alternative plumbing systems,
+    # deliberately not mixed in. NoCollision must load after the core; Take A
+    # Bath And Shower ships its required DepthMap fix first. Both Take A Bath
+    # And Shower and Immersive Water Shutoff are explicitly tested against
+    # Water Pipes by the core mod author.
+    { id = "3739595559"; title = "[B42] Water Pipes & Plumbing [VIEWPOINT COMPATIBLE]"; } # waterpipes + waterpipesviewpoint
+    { id = "3781520357"; title = "WaterPipes No Collision"; }
+    { id = "3592172476"; title = "[B42:SP/MP] Take A Bath And Shower"; } # ships DepthMap fix
+    { id = "3599665197"; title = "Immersive Water Shutoff [B42MP]"; }
+    { id = "3793515249"; title = "Metal Trough Plumbing"; }
   ];
 
   mods = [
@@ -583,6 +597,18 @@
     # ── Beekeeping ─────────────────────────────────────────────────────────
     "NeatUI_Framework"
     "ShelterHold_Beehive"
+
+    # ── Plumbing / water supply ────────────────────────────────────────────
+    # waterpipes -> its Viewpoint add-on -> the NoCollision add-on. Take A Bath
+    # And Shower needs the DepthMap fix loaded first. Metal Trough Plumbing
+    # leaves fixtures alone when another plumbing mod already supplies them.
+    "waterpipes"
+    "waterpipesviewpoint"
+    "WaterPipesNoCollision"
+    "ATakeABathAndShowerDepthMap"
+    "TakeABathAndShowerNew"
+    "ImmersiveWaterShutoff"
+    "MetalTroughPlumbing"
   ];
 
   defaultSettings = {
