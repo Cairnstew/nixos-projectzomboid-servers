@@ -411,6 +411,72 @@
     { id = "3687219173"; title = "Ranged Weapon Maintenance"; }
     { id = "3778403732"; title = "Immersive Looting B42: Search & Reveal"; }
     { id = "3410729454"; title = "Proper Infected Wounds [B42.20+MP]"; }
+
+    # ── Map tile packs (dependencies of the maps below) ─────────────────────
+    { id = "3628736763"; title = "Community Tile Pack"; }
+    { id = "2879745353"; title = "Melos Tiles for Miles Tilepack"; }
+    { id = "2837923608"; title = "PertsPartyTiles"; }
+    { id = "2852704777"; title = "Simon MDs Tiles [B41/B42]"; }
+    { id = "3520263838"; title = "Extranoise's Newburbs Tiles (Official Continuation)"; }
+    { id = "3694705423"; title = "Oujinjin's Tile Pack B42 Overhaul"; }
+    { id = "3666137359"; title = "Rocco's Tiles"; }
+    { id = "3736154771"; title = "LiuDing_Tiles"; }
+    { id = "2844685624"; title = "TryHonesty's Tiles B41 & B42"; }
+    { id = "3346506593"; title = "Erika's tiles"; }
+
+    # ── Viewpoint map rendering / furniture fixes ──────────────────────────
+    { id = "3813929757"; title = "Project Viewpoint: KK's General Mod Map Fix"; }
+    { id = "3816419379"; title = "Project Viewpoint Map Mod Furniture - Sprite Edition"; }
+
+    # ── Maps ───────────────────────────────────────────────────────────────
+    { id = "3821291943"; title = "Jasperville [B42]"; }
+    { id = "3821293600"; title = "Leavenburg [B42]"; }
+    { id = "3821294884"; title = "Leavenburg Riverside Bridge [B42]"; }
+    { id = "3659676359"; title = "AnruisiTown (Military Bastion)"; }
+    { id = "3522517059"; title = "Safeharbor Garrison"; }
+    { id = "3703704021"; title = "Chinatown B42 version"; }
+    { id = "3703704638"; title = "Chinatown Expansion B42 version"; }
+    { id = "3747339147"; title = "New Ellroy and Shadyside B42"; }
+    { id = "3576150391"; title = "Cathaya Valley 2.0 B42 version"; }
+    { id = "3449473111"; title = "[42+] [MP] Frogtown by TwinCrows"; }
+    { id = "3666566299"; title = "[B42 SP/MP] BLACKSTONE - Yellowstone Survival Map"; }
+    { id = "3666180085"; title = "[B42 SP/MP] Dawn Town"; }
+    { id = "3496507146"; title = "[B42&MP] Fort Preston"; }
+    { id = "2840889213"; title = "[B42] Chestown"; }
+    { id = "3815335110"; title = "[B42] The Walking Dead - Prison"; }
+    { id = "3482962418"; title = "Asakusa lake town"; }
+    { id = "3580819781"; title = "Atlanta"; }
+    { id = "3736155379"; title = "Begonia Town"; }
+    { id = "3820667986"; title = "Blackwood (乌木镇) [B42]"; }
+    { id = "3591833551"; title = "Brandenburg Beach Houses - B42.13+"; }
+    { id = "3612413803"; title = "Bunker 12 [B42]"; }
+    { id = "3762184916"; title = "Bunker 42"; }
+    { id = "3428165477"; title = "Bunker: Last Minute Prepper (B42)"; }
+    { id = "3480990544"; title = "Constown (B42)"; }
+    { id = "3390753141"; title = "Daisy County B42 version"; }
+    { id = "3802881424"; title = "Deer Valley Fishing Lodge 2"; }
+    { id = "3476333350"; title = "EchoCreek MilitaryBase"; }
+    { id = "3821285494"; title = "Ekron Castle [B42]"; }
+    { id = "3673620977"; title = "Forgotten Farm Bunker (B42)"; }
+    { id = "3490580478"; title = "Fort Benning B42"; }
+    { id = "3747595202"; title = "Greenport, KY (B42)"; }
+    { id = "3728357493"; title = "Haven Fall [B42]"; }
+    { id = "3738484989"; title = "Hershel's Farm from TWDG"; }
+    { id = "3545473388"; title = "Iris Eyot [B42]"; }
+    { id = "3045726312"; title = "LV International Airport [B41/B42]"; }
+    { id = "3644794945"; title = "Maplewood [B42]"; }
+    { id = "2815966702"; title = "Rabbit Hash, KY [B42+ Update]"; }
+    { id = "3388468313"; title = "RaccoonCityB42"; }
+    { id = "3484263516"; title = "Raven Creek B42"; }
+    { id = "3707695684"; title = "Rosewood Prison Upgrade (B42)"; }
+    { id = "3756111134"; title = "Rosewood VHS & Gun Stores [B42.19]"; }
+    { id = "3704429976"; title = "Towhead-Island-FOB (B42+)"; }
+    { id = "3636964628"; title = "Uncle Red's Bunker B42"; }
+    { id = "3673222028"; title = "West Point Military Tugboat B42"; }
+    { id = "3691773420"; title = "WILDSTEEL - FORT SPIFFO"; }
+    { id = "3479667649"; title = "Willowbrook Bastion!"; }
+    { id = "3823399562"; title = "小音庄园 XiaoYinEstate"; }
+    { id = "3495993590"; title = "榛果庄园 Hazelnut Manor"; }
   ];
 
   mods = [
@@ -786,6 +852,73 @@
     "TheHordeIsComing"
     "ImmersiveLootingB42"
     "Proper_Infected_Wounds_b42"
+
+    # ── Map tile packs (loaded before the maps that require them) ───────────
+    "UnofficialMappersCommunityTilePack"
+    "melos_tiles_for_miles_pack"
+    "PertsPartyTiles"
+    "simonMDsTiles"
+    "ThermoNewburbs"
+    "OujinjinTiles"
+    "Roccos_Tiles"
+    "LiuDing_Tiles"
+    "TryhonestyTiles"
+    "Erikas_Tiles"
+
+    # ── Viewpoint map rendering / furniture fixes ──────────────────────────
+    "PV-modmapbakefix"
+    "aparosa_vpmo_RaccoonCityB42"
+
+    # ── Maps ───────────────────────────────────────────────────────────────
+    "JaspervilleB42"
+    "LeavenburgB42"
+    "LeavenburgBridgeB42"
+    "AnruisiTown"
+    "modid"
+    "Chinatown B42 version"
+    "Chinatown Expansion B42 version"
+    "NewEllroyShadysideB42"
+    "Cathaya Valley 2.0 B42 version"
+    "Cathaya Valley 2.0 B42 version highway"
+    "Frogtown"
+    "BlackstoneMapMod"
+    "dawn_town"
+    "muldraughmilitarybaseas24"
+    "Chestown"
+    "TheWalkingDeadPrison"
+    "Asakusa lake town"
+    "Atlanta"
+    "Begonia_Town"
+    "Blackwood"
+    "BrandenburgBeachHouse"
+    "Bunker12"
+    "Bunker42"
+    "LastMinutePrepperReloadedB42"
+    "Constown42"
+    "Daisy County B42 version"
+    "Deer Valley Fishing Lodge"
+    "EchoCreek MilitaryBase回音河 军事基地"
+    "EkronCastleB42"
+    "ForgottenFarmBunker"
+    "FortBenningB42"
+    "GreenportB42"
+    "HavenFall"
+    "Hershel's Farm"
+    "IrisEyot"
+    "SimonMDLVInternationalAirport"
+    "Maplewood"
+    "RabbitHashKY"
+    "RaccoonCityB42"
+    "RavenCreekB42"
+    "Rosewood Prison"
+    "RosewoodVhsAndGunStoresB42"
+    "Towhead-Island-FOB"
+    "UncleRedsBunkerRedux"
+    "WMTBoat"
+    "WILDSTEEL"
+    "Willowbrook Bastion! 2"
+    "小音庄园XiaoYinEstate"
+    "HazelnutManor"
   ];
 
   defaultSettings = {
@@ -793,6 +926,13 @@
     PauseEmpty = true;
     SaveWorldEveryMinutes = 10;
     DoLuaChecksum = false;
+    # Pinned rather than derived. Several B42 map mods ship more than one map
+    # folder (Chestown/Greenport keep their B41-era map alongside the B42 one),
+    # so auto-detection would load both and overlap terrain. This list names only
+    # the intended folders, in the authors' load order for the contiguous groups
+    # (Jasperville -> bridge -> Leavenburg, Anruisi -> Safeharbor, Chinatown ->
+    # expansion, Cathaya -> highway). Keep it in sync with `workshopMods`/`mods`.
+    map = "Jasperville;LeavenburgBridge;Leavenburg;AnruisiTown;SafeharborGarrison;Chinatown B42 version;Chinatown Expansion B42 version;New Ellroy;Shadyside;Cathaya Valley2.0;Cathaya Valley2.0 highway;Asakusa lake town;Atlanta;Begonia_Town;Blackstone;Blackwood;BrandenburgBeachHouses;Bunker 12;Bunker 42;Chestown, KY;Constown, KY;Daisy County;DawnTown;Jester;EchoCreek MilitaryBase回音河 军事基地;EkronCastle;ForgottenFarmBunker;Fort Benning B42;Frogtown;Greenport, KY;HavenFall;Hazelnut Manor;Hershel's Farm;IrisEyot;LastMinutePrepperReloaded;lvinternationalairport;Maplewood;muldraughmilitarybaseas24;RabbitHashKY;RaccoonCity;Raven Creek B42;Rosewood Prison;RosewoodVhsAndGunStores;TheWalkingDeadPrison;Towhead-Island-FOB;Uncle Red's Bunker Redux B42;WestPoint-MilitaryTugBoat;WILDSTEEL;Willowbrook Bastion! 2026;小音庄园XiaoYinEstate;Muldraugh, KY";
   };
 
   defaultSandbox = { };

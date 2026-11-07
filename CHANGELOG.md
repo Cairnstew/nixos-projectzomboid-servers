@@ -8,6 +8,18 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Maps for the `viewpoint` pack.** 48 Build 42 map mods plus the tile packs
+  they require, covering central Knox Country, Louisville, the Leavenburg
+  corridor, Louisville International Airport, and a large set of towns and
+  bunkers. The pack pins `Map=` instead of deriving it: several B42 map mods
+  still ship their B41-era map folder next to the B42 one (Chestown, Greenport),
+  so detection would load both and overlap terrain. The pinned list names only
+  the intended folders and keeps the authors' order for the contiguous groups
+  (Jasperville → bridge → Leavenburg, Anruisi → Safeharbor, Chinatown →
+  expansion, Cathaya → highway). Every selected map was downloaded and its
+  `mod.info` `id=`/`require=`/`incompatible=` and `*.lotheader` cell footprint
+  checked, so the set has no unintended cell overlap. Also adds the Viewpoint
+  map-layer fix and 3D map-furniture shim.
 - **An optional Steam Web API key for the Workshop catalogue helpers.**
   `pz-workshop expand` / `resolve` query `api.steampowered.com` anonymously by
   default, which works but has a tight rate budget. Set

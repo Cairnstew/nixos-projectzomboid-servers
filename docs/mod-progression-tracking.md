@@ -3,8 +3,8 @@
 This document tracks what each mod in the `viewpoint` pack adds in terms of progression avenues - skills, recipes, items, vehicles, mechanics, etc. Use this to understand the full scope of content and plan gameplay progression.
 
 **Pack:** `viewpoint` (Project Viewpoint Vanilla+)  
-**Last Updated:** 2026-11-01  
-**Total Mods:** 132 Workshop items + extras
+**Last Updated:** 2026-11-07  
+**Total Mods:** 329 Workshop items + extras
 
 ## Progression Categories
 
@@ -28,6 +28,78 @@ This document tracks what each mod in the `viewpoint` pack adds in terms of prog
 | Yet Another PZ LIbrary | 3624971238 | Library | Shared code | Common dependency. No direct content. |
 | Tsar's Common Library B42 | 3402491515 | Library | Shared code | Common dependency. No direct content. |
 | NeatUI Framework | 3508537032 | UI Framework | QoL only | Enables Neat Crafting/Building UIs. No progression content. |
+
+---
+
+## Maps & World Expansion
+
+The pack pins `Map=` rather than deriving it, because a few B42 ports still ship
+their B41-era map folder alongside the B42 one (Chestown, Greenport) and
+auto-detection would load both. The pinned list names only the intended folders.
+Contiguous groups keep the authors' order:
+
+| Group | Map order |
+|---|---|
+| Leavenburg corridor | Jasperville → LeavenburgBridge → Leavenburg |
+| Anruisi | AnruisiTown → SafeharborGarrison |
+| Chinatown | Chinatown B42 version → Chinatown Expansion B42 version |
+| Cathaya | Cathaya Valley2.0 → Cathaya Valley2.0 highway |
+| New Ellroy | New Ellroy → Shadyside |
+
+| Map | Workshop ID | Type | Notes |
+|---|---|---|---|
+| Chestown | 2840889213 | Town | B42 map folder is `Chestown, KY`; the B41 `Chestown` folder is not loaded. |
+| Constown | 3480990544 | Town | Compatible with the Grapeseed cells. |
+| RaccoonCityB42 | 3388468313 | City | Resident Evil-inspired, west of Muldraugh. |
+| LV International Airport | 3045726312 | POI | Needs Community, Melos, Perts and Simon tiles. |
+| AnruisiTown | 3659676359 | Military town | Load before Safeharbor Garrison. |
+| Safeharbor Garrison | 3522517059 | Military town | Mod id is the generic `modid`; load after AnruisiTown. |
+| Raven Creek B42 | 3484263516 | City | B42 port of Raven Creek. |
+| Iris Eyot | 3545473388 | Town | Small island town. |
+| Dawn Town | 3666180085 | Town | Dense single-cell city. |
+| Haven Fall | 3728357493 | Town | Needs no tile pack. |
+| Willowbrook Bastion | 3479667649 | Town | 2026 branch (`Willowbrook Bastion! 2`). |
+| Daisy County | 3390753141 | County | Needs Community + Newburbs tiles; ships an items sub-mod. |
+| Chinatown + Expansion | 3703704021 / 3703704638 | City | Base then expansion; needs Oujinjin/Community/Perts/Newburbs/Tryhonesty/Melos. |
+| Fort Preston | 3496507146 | Military POI | MP untested by the author. |
+| Begonia Town | 3736155379 | Town | Needs LiuDing + Rocco tiles. |
+| Atlanta | 3580819781 | City | TWD-inspired; the separate safe-zone sub-map is not loaded. |
+| Cathaya Valley 2.0 | 3576150391 | Town | Base + highway sub-map. |
+| Asakusa lake town | 3482962418 | Town | Small rural town. |
+| Hazelnut Manor | 3495993590 | Estate | Player-scale manor. |
+| Frogtown | 3449473111 | Town | Explicit MP support. |
+| Fort Benning B42 | 3490580478 | Military base | B42 port. |
+| EchoCreek MilitaryBase | 3476333350 | Military POI | Mod id is `EchoCreek MilitaryBase`; map folder is Chinese. |
+| Last Minute Prepper | 3428165477 | Bunker | Single-cell bunker. |
+| Fort Spiffo (WILDSTEEL) | 3691773420 | Military POI | Highway intersection. |
+| BLACKSTONE | 3666566299 | Wilderness | Vanilla tiles only; MP. |
+| New Ellroy / Shadyside | 3747339147 | Towns | Both map folders in one mod. |
+| Rosewood VHS & Gun Stores | 3756111134 | POI | Rosewood expansion. |
+| Uncle Red's Bunker | 3636964628 | Bunker | Redux branch. |
+| Bunker 12 | 3612413803 | Bunker | Normal branch, not the Poor Version. |
+| Towhead Island FOB | 3704429976 | Military POI | Needs Community/Melos/Simon/Perts. |
+| Rosewood Prison Upgrade | 3707695684 | POI | Rosewood prison. |
+| Hershel's Farm | 3738484989 | POI | TWD farm. |
+| Forgotten Farm Bunker | 3673620977 | Bunker | Single cell. |
+| Brandenburg Beach Houses | 3591833551 | POI | Needs Melos tiles. |
+| The Walking Dead Prison | 3815335110 | POI | Prison map. |
+| Deer Valley Fishing Lodge 2 | 3802881424 | POI | Mod id is `Deer Valley Fishing Lodge`; needs Erika's tiles. |
+| Ekron Castle | 3821285494 | POI | Fitted into vanilla Ekron. |
+| Rabbit Hash, KY | 2815966702 | Town | Huge subscriber base; B42 update. |
+| Greenport, KY | 3747595202 | Town | B42 map folder is `Greenport, KY`; B41 `Greenport` is not loaded. |
+| Maplewood | 3644794945 | Town | Vanilla-themed, no tile pack. |
+| XiaoYinEstate | 3823399562 | Estate | Vanilla assets only. |
+| Blackwood | 3820667986 | Town | B42 port; needs Community tiles. |
+| Bunker 42 | 3762184916 | Bunker | Military bunker. |
+| Leavenburg / Jasperville | 3821293600 / 3821291943 | Towns | B42 ports; bridge needs Leavenburg. |
+| West Point Military Tugboat | 3673222028 | POI | West Point river POI. |
+
+Tile packs added for these maps: Community Tile Pack (3628736763), Melos
+(2879745353), PertsPartyTiles (2837923608), Simon MDs Tiles (2852704777),
+Newburbs (3520263838), Oujinjin (3694705423), Rocco's Tiles (3666137359),
+LiuDing_Tiles (3736154771), TryHonesty's Tiles (2844685624) and Erika's tiles
+(3346506593). The Viewpoint map-layer fix (3813929757) and map-furniture shim
+(3816419379) are also enabled.
 
 ---
 
