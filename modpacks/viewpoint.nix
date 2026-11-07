@@ -275,6 +275,9 @@
     { id = "3636824030"; title = "Force Crop Remover [B42.13.1 Fix]"; }
     { id = "3733988329"; title = "Dirt Floor Farming Fix [B42]"; }
     { id = "3782193333"; title = "Transplant Crop[42.21]"; }
+    # Forestry loop: collect seeds from chopped trees, plant saplings, and grow
+    # them through visible stages. No dependencies; patches ChopTree only.
+    { id = "3792162621"; title = "Normal Tree Planting B42"; }
     { id = "3779625821"; title = "Fruit Farming (B42)"; }
     { id = "3787740198"; title = "BADLANDS Mycology"; }
     { id = "3763835105"; title = "Natural Irrigation"; }
@@ -284,6 +287,15 @@
     { id = "3790724106"; title = "[GUI] Immersive Seed Packets [B42.20.4] [SP/MP]"; }
     { id = "3786149487"; title = "M Farming Helper B42"; }
     { id = "3470852353"; title = "[B42/41] Improved Farming Info Window"; }
+
+    # ── Foraging / wild food ───────────────────────────────────────────────
+    # All Build 42 + multiplayer. The tooltip is client-only UI; Wild Fruits
+    # adds five forage definitions; Ethnobotany is a static recipe mod (scripts
+    # only) that gives vanilla herbs and wild plants more uses. BADLANDS
+    # Mycology already owns the mushroom niche, so no second mycology mod.
+    { id = "3507997225"; title = "Foraging Tooltip Extended [B42]"; }
+    { id = "2618566294"; title = "Wild Fruits"; }
+    { id = "3753259986"; title = "Ethnobotany Vanilla [B42]"; }
 
     # ── Livestock / animal husbandry ───────────────────────────────────────
     # Build 42 + multiplayer. Feed That Animal ships an SP mod and an
@@ -301,10 +313,30 @@
     { id = "3640001799"; title = "Animal Collectors"; }
     { id = "3798147284"; title = "Herd Control - Quiet Animals & Better Trailers"; }
 
+    # ── Wildlife / hunting / trapping ──────────────────────────────────────
+    # Animal Sync Fix is the server+client repair for animals vanishing from
+    # hutches and traps in B42 MP. Hunting Tracks Fix is server-side only and
+    # re-tunes B42's track odds in memory (no vanilla file overrides).
+    # Trapping split: Vanilla Trapping Fix handles recipes/XP; Better Trapping
+    # is EURY's UI/placement helper (same author as Better Animal Care). They
+    # touch different layers and declare no incompatibility with each other.
+    { id = "3678382823"; title = "Animal Sync Fix (B42)"; }
+    { id = "3790356977"; title = "Hunting Tracks [Fix]"; }
+    { id = "3742961627"; title = "Vanilla Trapping Fix"; }
+    { id = "3649582861"; title = "Better Trapping"; }
+
     # ── Beekeeping ─────────────────────────────────────────────────────────
     # ShelterHold: Beehive requires NeatUI Framework; load the framework first.
     { id = "3508537032"; title = "NeatUI Framework [B42]"; }
     { id = "3596827035"; title = "ShelterHold: Beehive"; }
+
+    # ── Fishing ────────────────────────────────────────────────────────────
+    # Better Fishing leaves vanilla balance untouched unless its sandbox
+    # settings are changed; it adds the fishing status UI and reload-bait.
+    # FishingActionMPFix is the server-authoritative MP repair and requires
+    # ZombieBuddy (already first in this pack).
+    { id = "3570485296"; title = "TwisTonFire - Better Fishing"; }
+    { id = "3776009088"; title = "[B42] MP Vanilla Fishing Complete Fix"; }
 
     # ── Plumbing / water supply ────────────────────────────────────────────
     # Carthon's Water Pipes is the maintained network here, with its Viewpoint
@@ -666,6 +698,7 @@
     "DirtFloorFarmingFix"
     "ForceCropRemover"
     "vac_transplant_crop"
+    "NormalTreePlantingB42" # forestry: tree seeds + sapling stages
     "FruitFarming"
     "ikag_mycology"
     "NaturalIrrigation"
@@ -675,6 +708,12 @@
     "ImmersiveSeedPackets"
     "MFarmingHelperB42"
     "ImprovedFarmingInfoWindow"
+
+    # ── Foraging / wild food ───────────────────────────────────────────────
+    # UI first, then the forage definitions, then the recipe-only mod.
+    "Ivmakk_ForagingTooltipExtended"
+    "MattSimpleAddonsFriuts"
+    "EthnobotanyVanillaB42"
 
     # ── Livestock / animal husbandry ───────────────────────────────────────
     # Stability fix first; FeedThatAnimalMP replaces the incompatible SP mod;
@@ -689,9 +728,24 @@
     "AnimalCollectors"
     "TrixHerdControl"
 
+    # ── Wildlife / hunting / trapping ──────────────────────────────────────
+    # AnimalSyncFix is server+client; HuntingTracksFix is server-only tuning;
+    # VanillaTrappingFix patches recipes/XP; EURY_TRAPPING patches the trap UI
+    # and placement helpers.
+    "AnimalSyncFix"
+    "HuntingTracksFix"
+    "VanillaTrappingFix"
+    "EURY_TRAPPING"
+
     # ── Beekeeping ─────────────────────────────────────────────────────────
     "NeatUI_Framework"
     "ShelterHold_Beehive"
+
+    # ── Fishing ────────────────────────────────────────────────────────────
+    # Better Fishing's sandbox defaults are vanilla; FishingActionMPFix needs
+    # ZombieBuddy (loaded first) and owns the MP fishing action/netcode.
+    "twistonfirebetterfishing"
+    "FishingActionMPFix"
 
     # ── Plumbing / water supply ────────────────────────────────────────────
     # waterpipes -> its Viewpoint add-on -> the NoCollision add-on. Take A Bath
