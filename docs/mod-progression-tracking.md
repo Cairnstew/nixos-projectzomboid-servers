@@ -164,7 +164,9 @@ LiuDing_Tiles (3736154771), TryHonesty's Tiles (2844685624) and Erika's tiles
 
 ## Vehicles & Transportation
 
-The pack has extensive KI5 vehicle mods (50+ vehicles). Each adds drivable vehicles with parts, repair needs, etc.
+The pack has extensive KI5 vehicle mods (50+ vehicles) plus Filibuster Rhymes'
+Certified Used Cars (53 cars + 6 trailers). Each adds drivable vehicles with
+parts, repair needs, etc.
 
 | Category | Count | Progression Impact | Notes |
 |---|---|---|---|
@@ -177,6 +179,28 @@ The pack has extensive KI5 vehicle mods (50+ vehicles). Each adds drivable vehic
 | Vehicle Military Zones | 3436499337 | World/Loot | Military vehicle spawns in military zones. |
 | More Car Features + Spawn Zones Expansion | 3520758551 | Vehicles/World | More vehicle features and spawn variety. |
 | True Cargo - Project Full HD | 3806955469 | Vehicles/Visual | Cargo model improvements. |
+| Filibuster Rhymes' Certified Used Cars | 3683878228 | Vehicle pack | 53 cars + 6 trailers; MP door/window sync comes from VASinked. |
+| Vehicle Animations Sinked (Synced) | 3685499657 | MP fix | Syncs animated doors/windows for Filibuster in MP. |
+| More Car Variants (KI5) | 3812718124 | Vehicle variants | Extra lore-friendly KI5 skins/variants; requires YAPZLib + SpecLoot. |
+| '85 Club Car Golf Cart | 3330401526 | Vehicle | Low-speed utility cart; requires damnlib. |
+| Immersive Cars: Decay | 3495105059 | Condition/balance | Time-based vehicle decay; pairs with Parts Picked. |
+| Project Viewpoint - Immersive Driving | 3817413313 | Viewpoint/immersion | First-person driving camera and driver/passenger animations. |
+| Project Viewpoint - KI5 Vehicle Parts Fix | 3815019204 | Viewpoint fix | Keeps KI5 parts visible near the camera edge. |
+| Viewpoint - Vehicle Interior Fix | 3828075703 | Viewpoint fix | Keeps vehicle doors/interior surfaces visible from inside. |
+| Real Vehicle VFX + RVV+Viewpoint | 3788393574 / 3814635273 | Vehicles/Visual | Exhaust, tire, weather and collision effects, plus the Viewpoint bridge. |
+| Visible Vehicle Coupling + Viewpoint Addon | 3807182783 / 3824354252 | Towing/Visual | Visible rope/chain between towed vehicles; addon draws it in Viewpoint. |
+| Vehicle Ground Guard | 3690308807 | Fix | Right-click unstick/resurface for clipped vehicles; load last among vehicle mods. |
+| Essential Car Notifications | 3350173580 | QoL | Alerts when hood/gas tank/bumper break. |
+| Let Me Drive! | 3805307651 | QoL | Anti-stutter vehicle controls. |
+| Proper Vehicle Injuries for MP | 3007922923 | Difficulty/injuries | Configurable crash injuries, seatbelt/helmet support, MP-safe. |
+
+Deliberately not added: **Vanilla Vehicles Replacer (KI5)** (3423424077) because
+More Car Features tells you to drop vehicle replacers and use its spawn-zone
+settings; **Better Car Physics** and **Better Vehicle Dynamics** (manual client
+installation and a second driving-physics model on top of Viewpoint);
+**PZK VLC** (development paused); **Viewpoint Vehicle Interiors** (WIP, known
+disappearing-door bug; the interior fix above is the safer option); and
+**Project Viewpoint: Vehicle Top Speed** (balance change, not a fix).
 
 ---
 

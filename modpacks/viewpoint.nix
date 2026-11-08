@@ -162,6 +162,36 @@
     { id = "3820158257"; title = "[B41/B42] Minimal Car Dashboard (Auto-Hide)"; }
     { id = "3814684002"; title = "[B42] Knox Pass by Minidoracat"; }
 
+    # ── Additional vehicle content / Viewpoint vehicle bridges ──────────────
+    # Filibuster adds 53 cars + 6 trailers. Its MP door/window animation sync
+    # lives in the separate VASinked mod; the same Workshop item also ships an
+    # optional title-screen mod, which a server does not need. More Car
+    # Variants needs YAPZLib + SpecLoot and must load after the KI5 cars; the
+    # Golf Cart needs damnlib. Vanilla Vehicles Replacer (KI5) is deliberately
+    # absent: More Car Features says to drop vehicle replacers and use its own
+    # spawn-zone settings instead.
+    { id = "3683878228"; title = "[B42.19] Filibuster Rhymes' Certified Used Cars"; } # B42FRUsedCarsAnimAlpha
+    { id = "3685499657"; title = "[B42.15] Vehicle Animations Sinked (Synced)"; } # Filibuster MP sync
+    { id = "3812718124"; title = "[V2] More Car Variants (KI5)"; } # YAPZLib + SpecLoot
+    { id = "3330401526"; title = "'85 Club Car Golf Cart"; } # damnlib
+    # RVVFX is the effect framework; RVV+Viewpoint is its Viewpoint bridge.
+    { id = "3788393574"; title = "Real Vehicle VFX"; }
+    { id = "3814635273"; title = "RVV+Viewpoint (WIP)"; }
+    # Visible Vehicle Coupling (MP) plus its Viewpoint rendering addon.
+    { id = "3807182783"; title = "Visible Vehicle Coupling"; }
+    { id = "3824354252"; title = "Visible Vehicle Coupling - Viewpoint Addon"; }
+    # Viewpoint-specific vehicle fixes/addons (all require Viewpoint+ZombieBuddy).
+    { id = "3817413313"; title = "Project Viewpoint - Immersive Driving"; }
+    { id = "3815019204"; title = "Project Viewpoint - KI5 Vehicle Parts Fix"; }
+    { id = "3828075703"; title = "Viewpoint - Vehicle Interior Fix (KI5 & Vanilla)"; }
+    # Decay pairs with Immersive Cars: Parts Picked already in the pack.
+    { id = "3495105059"; title = "Immersive Cars: Decay"; }
+    # Vehicle QoL/fixes.
+    { id = "3350173580"; title = "Essential Car Notifications"; }
+    { id = "3805307651"; title = "Let Me Drive! - Anti-Stutter Car Controls"; }
+    { id = "3007922923"; title = "Proper Vehicle Injuries for MP [B41 & B42]"; }
+    { id = "3690308807"; title = "Vehicle Ground Guard [B42 SP + MP]"; }
+
     # ── Sewing / tailoring progression ──────────────────────────────────────
     # All Build 42 and multiplayer-safe (Workshop `Multiplayer` tag, or verified
     # from the download: items/recipes/shared Lua only). Dependencies first:
@@ -656,6 +686,28 @@
     "AutoHideCarDash"
     "MinidoracatKnoxPassFor42"
 
+    # ── Additional vehicle content ─────────────────────────────────────────
+    # Filibuster before VASinked (its MP animation sync). More Car Variants
+    # needs YAPZLib + SpecLoot and must load after the KI5 cars above; the
+    # Golf Cart needs damnlib. Vanilla Vehicles Replacer (KI5) is deliberately
+    # absent: More Car Features says to drop vehicle replacers and use its own
+    # spawn-zone settings instead.
+    "B42FRUsedCarsAnimAlpha"
+    "VASinked"
+    "MCVKI5NEW"
+    "85clubMan"
+
+    # ── Vehicle visuals / Viewpoint bridges ────────────────────────────────
+    # RVVFX -> RVV+Viewpoint; VVC -> its Viewpoint addon. ImmersiveDriving and
+    # the two Viewpoint vehicle fixes require Viewpoint + ZombieBuddy (first).
+    "RVVFX"
+    "RVV+Viewpoint"
+    "VisibleVehicleCouplingB42"
+    "VVCViewpoint"
+    "ImmersiveDriving"
+    "ProjectViewpointKI5VehiclePartsFix"
+    "ViewpointVehicleInteriorFix"
+
     # ── Sewing / tailoring progression ──────────────────────────────────────
     # Load order: dependencies before dependents; AdvancedFabricsMP last.
     "TooltipLib"
@@ -708,6 +760,16 @@
     "VehicleArmorCrafting"
     "vac_engine_upgrade_kit"
     "ImmersiveCarsPicking"
+
+    # Vehicle condition / QoL layers. Decay pairs with Parts Picked above;
+    # the notifications and anti-stutter controls are client-side QoL. Vehicle
+    # Ground Guard must load after every mod that adds vehicles or changes
+    # vehicle mechanics, and before any vehicle-physics mod (none here).
+    "ImmersiveCarsDecay"
+    "EssentialCarNotifications"
+    "LetMeDrive"
+    "ProperVehicleInjuriesMP"
+    "VehicleGroundGuard"
 
     # ── Gunsmithing / ammunition ───────────────────────────────────────────
     # Gunsmith core before its VFE add-on; Vanilla Ammo Crafting before its

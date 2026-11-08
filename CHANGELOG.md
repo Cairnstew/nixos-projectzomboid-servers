@@ -8,6 +8,22 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Vehicle content, Viewpoint vehicle bridges and QoL for the `viewpoint`
+  pack.** Filibuster Rhymes' Certified Used Cars (53 cars + 6 trailers) with
+  Vehicle Animations Sinked for its multiplayer door/window sync, More Car
+  Variants (KI5) for extra KI5 skins, the '85 Club Car Golf Cart, and Immersive
+  Cars: Decay (pairs with the existing Parts Picked). Viewpoint-specific
+  additions: Immersive Driving, the KI5 Vehicle Parts Fix, the KI5/vanilla
+  Vehicle Interior Fix, Real Vehicle VFX plus its RVV+Viewpoint bridge, and
+  Visible Vehicle Coupling plus its Viewpoint addon. QoL/fixes: Essential Car
+  Notifications, Let Me Drive!, Proper Vehicle Injuries for MP, and Vehicle
+  Ground Guard (loaded last among vehicle mods). Every item was downloaded and
+  its `mod.info` `id=`/`require=`/`loadModAfter=` checked; dependencies
+  (ZombieBuddy, Viewpoint, YAPZLib, SpecLoot, damnlib, RVVFX, VVC) are already
+  in the pack. Vanilla Vehicles Replacer (KI5) is deliberately excluded:
+  More Car Features says to drop vehicle replacers and use its spawn-zone
+  settings instead.
+
 - **Maps for the `viewpoint` pack.** 48 Build 42 map mods plus the tile packs
   they require, covering central Knox Country, Louisville, the Leavenburg
   corridor, Louisville International Airport, and a large set of towns and
