@@ -192,6 +192,19 @@
     { id = "3007922923"; title = "Proper Vehicle Injuries for MP [B41 & B42]"; }
     { id = "3690308807"; title = "Vehicle Ground Guard [B42 SP + MP]"; }
 
+    # ── Large / heavy vehicles ──────────────────────────────────────────────
+    # W900 ships two mods: the truck (rSemiTruck) and an Oshkosh M911
+    # compatibility patch (rSemiTruckhM911); enable both. W900 and LIAZ need
+    # tsarslib. Trucksmith is the required framework for the RKC HEMTTs.
+    { id = "3409472393"; title = "W900 Semi-Truck [B42]"; } # rSemiTruck + Oshkosh patch
+    { id = "3611100835"; title = "LIAZ 300"; }
+    { id = "3773998539"; title = "RVs, Heavy Duty & Trailers [B42.20–42.21]"; }
+    { id = "3433311021"; title = "Road Builder"; } # Volvo FE6 dump truck + gravel roads
+    { id = "3812497744"; title = "[RKC]TRUCKSMITH Vehicle"; } # framework; no vehicles itself
+    { id = "3814563423"; title = "[RKC]HEMTT M977 Cargo Truck"; }
+    { id = "3819092132"; title = "[RKC]HEMTT M984 Wrecker (Tow Truck)"; }
+    { id = "3816356507"; title = "[RKC]HEMTT M978 Tanker Truck"; }
+
     # ── Sewing / tailoring progression ──────────────────────────────────────
     # All Build 42 and multiplayer-safe (Workshop `Multiplayer` tag, or verified
     # from the download: items/recipes/shared Lua only). Dependencies first:
@@ -696,6 +709,24 @@
     "VASinked"
     "MCVKI5NEW"
     "85clubMan"
+
+    # ── Large / heavy vehicles ─────────────────────────────────────────────
+    # W900 ships its own Oshkosh M911 compatibility patch: enable both mods
+    # from that item. W900 and LIAZ require tsarslib (above). Trucksmith is
+    # the framework the RKC HEMTTs require; enable it before them. RVs, Heavy
+    # Duty & Trailers has no dependencies and includes Viewpoint support.
+    # Deliberately excluded: the WIP Ford Transcontinental, the BETA Double
+    # Decker Bus, Project RV Interior (mid-save/load-order warnings), and the
+    # Wingsmith aircraft (separate flight framework from Aviation Core).
+    "rSemiTruck"
+    "rSemiTruckhM911"        # W900 <-> Oshkosh M911 patch
+    "LIAZ 300"
+    "RVs_HeavyDuty_Trailers"
+    "DumpTruckGravelMod"
+    "Trucksmith"
+    "HEMTTM977Cargo"
+    "HEMTTM984Wrecker"
+    "HEMTTM978Tanker"
 
     # ── Vehicle visuals / Viewpoint bridges ────────────────────────────────
     # RVVFX -> RVV+Viewpoint; VVC -> its Viewpoint addon. ImmersiveDriving and

@@ -164,9 +164,10 @@ LiuDing_Tiles (3736154771), TryHonesty's Tiles (2844685624) and Erika's tiles
 
 ## Vehicles & Transportation
 
-The pack has extensive KI5 vehicle mods (50+ vehicles) plus Filibuster Rhymes'
-Certified Used Cars (53 cars + 6 trailers). Each adds drivable vehicles with
-parts, repair needs, etc.
+The pack has extensive KI5 vehicle mods (50+ vehicles), Filibuster Rhymes'
+Certified Used Cars (53 cars + 6 trailers), and a large/heavy set (semis, RVs,
+HEMTTs and a road-building dump truck). Each adds drivable vehicles with parts,
+repair needs, etc.
 
 | Category | Count | Progression Impact | Notes |
 |---|---|---|---|
@@ -193,6 +194,14 @@ parts, repair needs, etc.
 | Essential Car Notifications | 3350173580 | QoL | Alerts when hood/gas tank/bumper break. |
 | Let Me Drive! | 3805307651 | QoL | Anti-stutter vehicle controls. |
 | Proper Vehicle Injuries for MP | 3007922923 | Difficulty/injuries | Configurable crash injuries, seatbelt/helmet support, MP-safe. |
+| W900 Semi-Truck | 3409472393 | Heavy truck | Semi tractor with car/cattle trailers and cistern/freezer variants; ships an Oshkosh M911 patch. |
+| LIAZ 300 | 3611100835 | Heavy truck | Three truck and three trailer variants; requires tsarslib. |
+| RVs, Heavy Duty & Trailers | 3773998539 | Large vehicle pack | 19 RVs, ambulances, work trucks, box trucks and trailers; includes Viewpoint support. |
+| Road Builder | 3433311021 | Heavy vehicle/world | Volvo FE6 dump truck that lays gravel roads. |
+| [RKC]TRUCKSMITH Vehicle | 3812497744 | Framework | Required by the RKC trucks; adds no vehicles itself. |
+| [RKC]HEMTT M977 Cargo | 3814563423 | Heavy military truck | 8x8 cargo truck with a knuckle-boom crane. |
+| [RKC]HEMTT M984 Wrecker | 3819092132 | Heavy recovery | 8x8 wrecker with a retrieval boom for towing vehicles. |
+| [RKC]HEMTT M978 Tanker | 3816356507 | Heavy tanker | 8x8 fuel/water tanker with a pump module. |
 
 Deliberately not added: **Vanilla Vehicles Replacer (KI5)** (3423424077) because
 More Car Features tells you to drop vehicle replacers and use its spawn-zone
@@ -201,6 +210,16 @@ installation and a second driving-physics model on top of Viewpoint);
 **PZK VLC** (development paused); **Viewpoint Vehicle Interiors** (WIP, known
 disappearing-door bug; the interior fix above is the safer option); and
 **Project Viewpoint: Vehicle Top Speed** (balance change, not a fix).
+
+Large-vehicle candidates also left out: **1970 White Freightliner COE**
+(3409946507, trailer support expects the missing ATA Petyarbuilt 379),
+**Ford Transcontinental** (WIP), **Double Decker Bus** (BETA), **Project RV
+Interior** and its expansions (must load first and warns about mid-save
+additions), **Viewpoint - 3D RVs** (WIP), the **Wingsmith** aircraft family
+(a second flight framework alongside Aviation Core, and very high power), the
+**LAV-25** and **HEMTT C-RAM** (combat vehicles rather than utility), **Super
+Bulldozer** (map-destructive), and the **Dotol/Julles tankers** (overlap the
+HEMTT M978).
 
 ---
 

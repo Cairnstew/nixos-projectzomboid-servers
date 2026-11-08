@@ -8,6 +8,18 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Large/heavy vehicles for the `viewpoint` pack.** W900 Semi-Truck (with its
+  Oshkosh M911 compatibility patch), LIAZ 300, RVs, Heavy Duty & Trailers
+  (19 RVs/ambulances/work trucks/trailers with Viewpoint support), Road Builder
+  (a Volvo FE6 dump truck that lays gravel roads), and the RKC heavy set:
+  the Trucksmith framework plus HEMTT M977 Cargo, M984 Wrecker and M978 Tanker.
+  W900 and LIAZ require `tsarslib`; the HEMTTs require `Trucksmith`; all are
+  already ordered after their dependencies. Every item was downloaded and its
+  `mod.info` `id=`/`require=` checked. Deliberately excluded: the WIP Ford
+  Transcontinental, the BETA Double Decker Bus, Project RV Interior (mid-save
+  and load-order warnings), Viewpoint - 3D RVs (WIP), the Wingsmith aircraft
+  family (a second flight framework), and combat vehicles (LAV-25, HEMTT C-RAM).
+
 - **Vehicle content, Viewpoint vehicle bridges and QoL for the `viewpoint`
   pack.** Filibuster Rhymes' Certified Used Cars (53 cars + 6 trailers) with
   Vehicle Animations Sinked for its multiplayer door/window sync, More Car
