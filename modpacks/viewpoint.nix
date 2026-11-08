@@ -499,6 +499,30 @@
     { id = "3778403732"; title = "Immersive Looting B42: Search & Reveal"; }
     { id = "3410729454"; title = "Proper Infected Wounds [B42.20+MP]"; }
 
+    # ── Map QOL / multiplayer cartography ──────────────────────────────────
+    # These target the WORLD map, not the corner minimap: this world runs the
+    # Apocalypse preset, which ships AllowMiniMap=false while AllowWorldMap
+    # stays true, so a minimap mod would be inert unless the sandbox Map table
+    # is overridden. Nothing here is a map or tile pack.
+    { id = "2710167561"; title = "Map Legend UI [B42/41]"; } # MapLegendUI
+    { id = "3248403661"; title = "Map Coordinates Location Cursor Tooltip [B41/B42]"; } # mapcursorcord
+    { id = "3790912405"; title = "Auto Center Map"; } # MapCenter
+    # 53 extra symbols plus a size slider stacked on top of the vanilla picker.
+    # Preferred over Map Symbol Size Slider, whose own page documents breakage
+    # in very large packs ("all symbols disappeared"); this pack is 400+ mods.
+    { id = "3815686260"; title = "Map Symbols+ [42.21]"; } # MapSymbolsPlus
+    # Server-authoritative teammate blips with names, distance and faction
+    # filters. Independent rewrite; must not be combined with the original
+    # Players On Map (not in this pack) and installs on server and clients.
+    { id = "3792135936"; title = "Players On Map Redux [B42]"; } # PlayersOnMapRedux
+    # Auto-shares placed symbols and freehand drawings through PZ's native
+    # sharing system; sandbox modes Everyone/Faction/Safehouse/Off, pen and
+    # eraser gates, drawing caps. Adds no parallel sharing backend.
+    { id = "3676995511"; title = "Share Map Notes [B42][MP]"; } # PZShareMapNotes
+    # Shows Project A-Life NPCs and squads by stance on the world map. Needs
+    # ProjectALifeNPCs (already in this pack) 1.4+ and game 42.21+.
+    { id = "3809068618"; title = "A-Life NPCs on Map [B42]"; } # ALifeNpcMap
+
     # ── Map tile packs (dependencies of the maps below) ─────────────────────
     { id = "3628736763"; title = "Community Tile Pack"; }
     { id = "2879745353"; title = "Melos Tiles for Miles Tilepack"; }
@@ -1006,6 +1030,19 @@
     "TheHordeIsComing"
     "ImmersiveLootingB42"
     "Proper_Infected_Wounds_b42"
+
+    # ── Map QOL / multiplayer cartography ──────────────────────────────────
+    # World-map tooling only: the Apocalypse preset has AllowMiniMap=false, so
+    # there is no corner minimap to feed. ALifeNpcMap requires ProjectALifeNPCs
+    # (loaded above); PlayersOnMapRedux and PZShareMapNotes are network-facing
+    # and must therefore stay in the server's Mods= as well as the clients'.
+    "MapLegendUI"
+    "mapcursorcord"
+    "MapCenter"
+    "MapSymbolsPlus"
+    "PlayersOnMapRedux"
+    "PZShareMapNotes"
+    "ALifeNpcMap"
 
     # ── Map tile packs (loaded before the maps that require them) ───────────
     "UnofficialMappersCommunityTilePack"
