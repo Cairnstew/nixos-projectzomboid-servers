@@ -212,6 +212,10 @@
     { id = "2772575623"; title = "'59 Cadillac Miller-Meteor + ECTO-1"; }
     { id = "2900580391"; title = "'49 Dodge Power Wagon Crew Cab"; }
     { id = "3821300859"; title = "Knox Network Progression [B42]"; }
+    # Shared UI framework required by the two Minidoracat mods below; the mod
+    # page says to add both `Mods=MinidoracatUIFor42` and
+    # `WorkshopItems=3789836701` on a server.
+    { id = "3789836701"; title = "[B42] UI Library by Minidoracat"; }
     { id = "3813972279"; title = "[B42] Vehicle Manager by Minidoracat"; }
     { id = "3820158257"; title = "[B41/B42] Minimal Car Dashboard (Auto-Hide)"; }
     { id = "3814684002"; title = "[B42] Knox Pass by Minidoracat"; }
@@ -832,6 +836,7 @@
     "ECTO1"
     "49powerWagon"
     "KnoxNetworkProgression"
+    "MinidoracatUIFor42" # required by the two Minidoracat mods below
     "MinidoracatVehicleManagerFor42"
     "AutoHideCarDash"
     "MinidoracatKnoxPassFor42"
