@@ -64,6 +64,33 @@
     { id = "3402491515"; title = "Tsar's Common Library B42"; }
     { id = "3387957272"; title = "[B42.20] Detailed Descriptions for Occupations and Traits"; }
     { id = "3749026793"; title = "[B42.20] Carry Visible Items In Hands [WIP]"; }
+
+    # ── Inventory & loot management ────────────────────────────────────────
+    # Proximity Inventory merges every container in reach into one loot tab, so
+    # a room or a corpse pile is one list instead of fifteen cupboards. It is
+    # the mod ImmersiveLootingB42 explicitly detects (the "proxInv" container
+    # type) and treats as a single revealable container, so it does not bypass
+    # the search-and-reveal gating that pack already enforces.
+    { id = "2847184718"; title = "Proximity Inventory B42.20+"; } # ProximityInventory
+    # Per-container item-category assignment plus bulk "transfer to assigned
+    # containers"; explicitly documented as compatible with Better Sorting.
+    { id = "2650547917"; title = "Manage Containers"; } # manageContainers
+    # Fill bars on container buttons and magazine load indicators. Client-side
+    # UI only: it changes no capacity, contents or saved data.
+    { id = "3789660055"; title = "Container Capacity Indicator [B42]"; } # ContainerCapacityIndicator
+    # Pin exact item instances to the top of any inventory/container pane,
+    # ignoring sort filters; pins survive transfers between containers.
+    { id = "3773092190"; title = "Inventory Item Pinning"; } # InventoryItemPins
+    # Co-op loot pinging. This item ships core + two wheel styles and only one
+    # wheel may be enabled, so the Default Wheel is used here and
+    # PingItemsFriendsLoLWheel is deliberately left out.
+    { id = "3776262249"; title = "Ping Items! Friends! 42.20 MP Official"; } # PingItemsFriends + DefaultWheel
+    # Viewpoint-native first-person loot/store/eat/read/reload/sort menus with
+    # controller support. Requires ZombieBuddy + Viewpoint (both above) and
+    # declares incompatible= ProjectViewpointQOL and
+    # ProjectViewpointControllerSupport, neither of which this pack contains.
+    { id = "3819316734"; title = "Viewpoint Hands: Loot & Inventory [B42]"; } # DGVViewpointQoL
+
     { id = "3816442251"; title = "Viewpoint: Living Props"; }
     { id = "3815630947"; title = "Viewpoint Rolling Hills"; }
     { id = "3817555882"; title = "Rolling Hills Physics Addon (Project Viewpoint)"; }
@@ -593,6 +620,20 @@
     "MinimalSidebar"
     "tsarslib"
     "DetailedDescriptionsForOccupationsAndTraits"
+
+    # ── Inventory & loot management ────────────────────────────────────────
+    # Client-side inventory UI; all of it loads before ImmersiveLootingB42
+    # (last, in the difficulty section) which has explicit support for
+    # ProximityInventory's "proxInv" container type. DGVViewpointQoL requires
+    # ZombieBuddy + Viewpoint and declares loadModAfter for them; both are at
+    # the top of this list.
+    "ProximityInventory"
+    "manageContainers"
+    "ContainerCapacityIndicator"
+    "InventoryItemPins"
+    "PingItemsFriends"              # core; the wheel below requires it
+    "PingItemsFriendsDefaultWheel"  # only one wheel may be enabled
+    "DGVViewpointQoL"
     "CVI"
     "ViewpointLivingProps"
     "ViewpointRollingHills"
