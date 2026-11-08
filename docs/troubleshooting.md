@@ -252,8 +252,9 @@ Either no installed mod ships a map, or detection is off. Check with
 `--list-maps`. If you set `map` explicitly, detection is suppressed entirely and
 the pinned value wins outright.
 
-Also: the map list is **semicolon** separated, while `Mods=` is **comma**
-separated. Both are `WorkshopItems=`-adjacent keys, and swapping them is silent.
+Also: every one of `Map=`, `Mods=` and `WorkshopItems=` is **semicolon**
+separated. Build 42 splits `Mods=` on `;` only, so a comma-joined list is read
+as a single (missing) mod id and loads nothing — silently.
 
 ---
 

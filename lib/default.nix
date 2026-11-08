@@ -581,7 +581,7 @@ let
       )
       ++ lib.optional (settings ? map) (key "Map" settings.map)
       ++ [
-        (key "Mods" (concatStringsSep "," mods))
+        (key "Mods" (concatStringsSep ";" mods))
         (key "WorkshopItems" (concatStringsSep ";" workshopItems))
       ]
       ++ lib.optional legacyBuild41 (key "Whitelist" (concatStringsSep "," whitelist))
@@ -772,8 +772,14 @@ let
       modpack = srv.modpack;
       packDescription = pack.description;
 
-      # `Mods=` is a comma-separated list of local mod *folder* names (from each
-      # mod's mod.info `id=` value), unlike WorkshopItems which are the ids above.
+      # `Mods=` is a semicolon-separated list of local mod *folder* names (from
+      # each mod's mod.info `id=` value), like WorkshopItems above.
+      #
+      # NOT commas. Build 42 splits `Mods=` on `;` only (the game's own
+      # ServerSettingsScreen joins and splits with ";"), so a comma-joined list
+      # is read as ONE mod id: the server logs `required mod "<whole list>" not
+      # found`, loads no mods, and every `Map=` entry is then "non-existent".
+      # Build 41 also uses semicolons — do not "restore" commas.
       #
       # `localMods` contributes its KEYS: the key is the mod folder name, and
       # naming it here is what makes declaring the directory its only mention —

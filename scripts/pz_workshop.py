@@ -505,7 +505,7 @@ def cmd_resolve(args):
     """Print each item's internal Mod ID, then the paste-ready ini lines.
 
     `Mods=` and `WorkshopItems=` use the exact separators the module's
-    renderIniLines produces (comma / semicolon), so what this prints is what
+    renderIniLines produces (both semicolon), so what this prints is what
     the server would run. Resolution is best-effort from the description's
     `Mod ID:` declaration: items that do not declare one are listed with a
     reminder but left OUT of `Mods=` (a wrong id there can break load order),
@@ -583,7 +583,7 @@ def cmd_resolve(args):
         else:
             print(f"# {head}  —  Mods: {', '.join(parsed)}")
     print()
-    print("Mods=" + ",".join(mods))
+    print("Mods=" + ";".join(mods))
     print("WorkshopItems=" + ";".join([pid for pid, _, _, _ in rows]))
     return 0
 

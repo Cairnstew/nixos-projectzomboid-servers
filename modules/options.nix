@@ -678,10 +678,10 @@ in
                 example = "Muldraugh, KY;West Point, KY";
                 description = ''
                   The <literal>Map=</literal> list, <emphasis>semicolon</emphasis>
-                  separated — note that <literal>Mods=</literal> is comma separated
-                  and <literal>WorkshopItems=</literal> is also semicolon
-                  separated, so this is the one key where the separator differs
-                  from its neighbours.
+                  separated. <literal>Mods=</literal> and
+                  <literal>WorkshopItems=</literal> are semicolon separated too —
+                  Build 42 splits <literal>Mods=</literal> on <literal>;</literal>
+                  only, so a comma-joined list loads nothing at all.
 
                   null (the default) means <emphasis>derive it from the installed
                   mods</emphasis>: every <literal>media/maps/&lt;name&gt;</literal>

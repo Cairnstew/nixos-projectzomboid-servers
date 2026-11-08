@@ -64,8 +64,11 @@ Two separators, and mixing them up is the single most common reason a server
 boots with no mods:
 
 - `WorkshopItems=` — **semicolon** separated
-- `Mods=` — **comma** separated
+- `Mods=` — **semicolon** separated
 - `Map=` — **semicolon** separated
+
+Build 42 splits `Mods=` on `;` only, so commas make the whole list one missing
+mod id (the server logs `required mod "<whole list>" not found`).
 
 ## Resolving Workshop item IDs
 

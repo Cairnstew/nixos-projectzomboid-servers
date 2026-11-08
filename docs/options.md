@@ -217,7 +217,7 @@ Two separators matter here, and mixing them up is a reliable source of silent
 misconfiguration:
 
 - `WorkshopItems=` — **semicolon** separated
-- `Mods=` — **comma** separated
+- `Mods=` — **semicolon** separated
 - `Map=` — **semicolon** separated
 
 ---

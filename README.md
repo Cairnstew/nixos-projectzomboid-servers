@@ -372,9 +372,10 @@ Things that bite, recorded so they are not re-learned. More in
   under `compatibility.build41`.
 - **`SpawnPoint=` is a world coordinate triple** (`x,y,z`), not a preset or an
   index. `SpawnPoint=2` means two metres from the origin.
-- The separators differ per key, which is a reliable source of silent
-  misconfiguration: `Map=` is **semicolon** separated, `Mods=` is **comma**
-  separated, and `WorkshopItems=` is **semicolon** separated.
+- The separators are the same per key, which removes a reliable source of
+  silent misconfiguration: `Map=`, `Mods=` and `WorkshopItems=` are all
+  **semicolon** separated. Build 42 splits `Mods=` on `;` only, so commas make
+  the whole list one missing mod id.
 - `mod.info` ships with CRLF, so validating a downloaded mod with a shell `grep`
   needs `grep -llx -E "id=$mod[[:cntrl:]]?"`.
 - Build 42's native Prometheus endpoint only starts if `-DprometheusPort=<port>`

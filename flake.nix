@@ -1220,6 +1220,10 @@
                   ! grep -q '^SelfManagedMods=' "$ini" || fail "SelfManagedMods was written for Build 42"
                   grep -q '^WorkshopItems=.\+' "$ini" || fail "WorkshopItems did not reach the client ini"
                   grep -q '^Mods=.\+' "$ini" || fail "Mods did not reach the client ini"
+                  # Build 42 splits Mods= on ';' only. A comma-joined list is
+                  # read as one mod id (the whole line becomes a missing
+                  # "required mod"), so no mods load and Map= entries are skipped.
+                  ! grep -q '^Mods=[^=]*,' "$ini" || fail "Mods= is comma separated; Build 42 would load nothing"
 
                   # Only Server/ may be created. In particular no `mods/`, no
                   # Workshop link farm, and no Saves directory.

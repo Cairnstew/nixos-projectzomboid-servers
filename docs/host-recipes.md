@@ -240,8 +240,8 @@ your own repo, or anywhere else, and share it independently of the module.
     ];
 
     # Local mod folder names — the id= values from each mod's mod.info.
-    # These are NOT Workshop ids, and Mods= is COMMA separated where
-    # WorkshopItems= is semicolon separated.
+    # These are NOT Workshop ids. `Mods=` is semicolon separated, like
+    # `WorkshopItems=` and `Map=`.
     mods = [
       "Moodle"
       "NoFuel"

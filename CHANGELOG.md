@@ -306,6 +306,23 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **`Mods=` is semicolon-separated, not comma-separated.** Build 42 splits the
+  key on `;` only (the game's own `ServerSettingsScreen` joins and splits with
+  `";"`), so the comma-joined list the module rendered was read as a single mod
+  id. Every boot produced `required mod "<the whole Mods= line>" not found`, no
+  mod was loaded, and every `Map=` entry whose folder lives in a mod was then
+  `skipping non-existent map folder` — a client host therefore ran a vanilla
+  world with no custom maps, no map `objects.lua` (`ZombiesType` zones) and no
+  mod spawn points. `renderIniLines`, `pz-workshop resolve` and every doc/skill
+  that stated "comma" now say semicolon, and the client-host check rejects a
+  comma in the rendered `Mods=`. Build 41 uses semicolons too.
+
+- **Four broken mod ids in the `viewpoint` pack.** `UH` was truncated
+  (`UH-1BHelicopter`), `EchoCreek MilitaryBase回音河 军事基地` was the map
+  *folder* name rather than the mod id (`EchoCreek MilitaryBase`), and `air`,
+  `save` and `game` matched no `mod.info` on either the client or the server
+  library. None of them can ever load; they only added noise to the boot.
+
 - **A mod folder with a non-ASCII name no longer aborts mod loading.** Java
   derives its filename encoding from the process locale; under the C locale
   (what a systemd service gets with no `LANG`, and what Steam exports as

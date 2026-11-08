@@ -165,7 +165,8 @@ mods = [
 ];
 ```
 
-- `WorkshopItems=` is semicolon-separated; `Mods=` is comma-separated. The
+- `WorkshopItems=` and `Mods=` are both semicolon-separated (Build 42 splits
+  `Mods=` on `;` only — commas silently load nothing). The
   module does the joining — you only edit the lists.
 - **Order in `mods` is load order.** Dependencies first, `loadModAfter` hints
   honoured, and author instructions ("load last", "after vehicle mods") obeyed.
