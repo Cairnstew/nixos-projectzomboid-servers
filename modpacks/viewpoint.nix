@@ -338,6 +338,34 @@
     { id = "3793407081"; title = "Remove Debris (Tree Stumps & Boulders) / Delete Trash Tiles"; }
     { id = "3779330500"; title = "VRO Salvage Condition Lock"; }
 
+    # ── Construction / carpentry ───────────────────────────────────────────
+    # Neat Building replaces the vanilla Build UI and adds railings/extra
+    # buildables; NeatUI Framework (Beekeeping section) must load before it.
+    # More Builds is a native-B42 content pack of vanilla-style buildables and
+    # is safe to add/remove mid-save. Starlit Library and TchernoLib are
+    # dependency-only libraries for Repairable Windows and Fix Inside Player
+    # Building. Barricades Rebuilt requires the Community Tile Pack (Map tile
+    # packs section), so the whole block loads after it. Deliberately not
+    # stacked: Knox Buildworks (second build framework, needs ElyonLib),
+    # Hammertime (author says it conflicts with other construction mods),
+    # Better Building Plus (blueprint WIP on RC's Structures Framework) and
+    # Build Anything (bypasses recipe/skill gates).
+    { id = "3536052310"; title = "Neat Building [B42]"; } # Neat_Building only, not modular variants
+    { id = "515555911"; title = "More Builds"; }
+    { id = "3378285185"; title = "Starlit Library"; }
+    { id = "3378304610"; title = "[42MP] Repairable Windows"; }
+    { id = "3389605231"; title = "TchernoLib"; }
+    { id = "3202305691"; title = "Fix Inside Player Building"; }
+    { id = "3810876724"; title = "Remove & Install Doors [B42.21] - Single & Double Doors"; }
+    { id = "3798211972"; title = "Can Repair Doors"; }
+    { id = "3781002132"; title = "Craftable Tall Wooden Fences"; }
+    { id = "3796645371"; title = "Functional Storm Shutters"; }
+    { id = "3795855624"; title = "Barricades Rebuilt 2.3b"; }
+    { id = "3781319724"; title = "[B42.21+ MP] - Furniture Push & Pull"; }
+    { id = "3780276812"; title = "Large Craftable Containers"; }
+    { id = "3721980333"; title = "Basement Builder"; }
+    { id = "3724301960"; title = "Building Queue"; }
+
     # ── Lockpicking / entry / locks ────────────────────────────────────────
     # Locksmith is the single all-in-one lock mod: padlocks and combination
     # locks on gates/garages/storage furniture, window latches, lockpicking
@@ -1222,6 +1250,28 @@
     "LiuDing_Tiles"
     "TryhonestyTiles"
     "Erikas_Tiles"
+
+    # ── Construction / carpentry ───────────────────────────────────────────
+    # Placed after NeatUI_Framework (Beekeeping) and the Community Tile Pack
+    # (Map tile packs) because Neat_Building and BarricadesRebuilt require
+    # them. Neat_Building is the full variant; its UIOnly/SESCompat/Railings
+    # siblings declare it incompatible, so only this one is enabled. The two
+    # libraries load before their dependents.
+    "StarlitLibrary"
+    "RepairableWindows"
+    "TchernoLib"
+    "FixInsidePlayerBuilding"
+    "Neat_Building"
+    "MoreBuilds"
+    "BarricadesRebuilt"
+    "RemoveAndInstallDoors"
+    "AuDmodCanRepairDoorsB42"
+    "CraftableTallWoodenFences"
+    "FunctionalStormShutters"
+    "FurniturePushPull"
+    "LargeCraftableContainers"
+    "BasementBuilder"
+    "BuildingQueue"
 
     # ── Viewpoint map rendering / furniture fixes ──────────────────────────
     "PV-modmapbakefix"
