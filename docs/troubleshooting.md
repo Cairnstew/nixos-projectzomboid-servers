@@ -394,19 +394,21 @@ Fix, in this order:
 1. `clientHost.openFirewall = true`. The server-level `openFirewall` does not
    cover a client host: it is wired from the enabled servers, and a client host
    normally has `enable = false`.
-2. Forward UDP `defaultPort` and `udpPort` on the router to this machine, **or**
-   set `upnp = true` and make sure the router actually answers UPnP discovery.
-   `upnpc -l` (miniupnpc) prints `No IGD UPnP Device found` when it does not —
-   many ISP routers ship with UPnP switched off.
+2. Forward UDP `defaultPort` and `udpPort` on the router to this machine.
+   `upnp = true` does **not** help on Build 42: 42.21 has no UPnP
+   implementation, so the resolver warns and nothing is forwarded. Either add
+   the two forwards by hand, or map them from a UPnP client — `miniupnpc`'s
+   `upnpc -a <lan-ip> 16261 16261 UDP` works and can live in a small systemd
+   service.
 
-   A NixOS firewall can produce that same message on a router that has UPnP
+   A NixOS firewall makes that client look broken on a router that has UPnP
    **enabled**: the SSDP `M-SEARCH` is sent to `239.255.255.250:1900` and the
    reply arrives from the router's udp/1900 to an ephemeral local port, which
    `nixos-fw` treats as a NEW inbound packet and drops (the outbound multicast
-   is not a tracked flow). Capture while running `upnpc -l` to tell the two
-   apart — `tcpdump -ni <lan-if> 'udp and port 1900'` shows the request and the
-   reply, while `upnpc` still reports no IGD. The fix is to accept SSDP replies
-   from the LAN:
+   is not a tracked flow). `upnpc -l` then prints `No IGD UPnP Device found` on
+   a perfectly good router. Capture while running it to tell the two apart —
+   `tcpdump -ni <lan-if> 'udp and port 1900'` shows the request and the reply —
+   and accept the replies from the LAN:
 
    ```nix
    networking.firewall.extraCommands = ''

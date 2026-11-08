@@ -1067,6 +1067,15 @@ in
                   <literal>UPnP=</literal> — ask the router to open the server's
                   ports automatically.
 
+                  <emphasis>Build 41 only.</emphasis> Build 42 has no UPnP
+                  implementation: the 42.21 game jar contains no UPnP class at
+                  all and <literal>ServerOptions.uPnp</literal> is never read, so
+                  the key is a silent no-op there. The resolver emits an
+                  evaluation warning when this is set on a Build 42 server;
+                  forward <option>defaultPort</option>/<option>udpPort</option> on
+                  the router instead, or map them with a UPnP client such as
+                  <literal>miniupnpc</literal>.
+
                   Defaults to <emphasis>false</emphasis>, unlike PZ's own default of
                   true. Automatic port forwarding is a poor default for a managed
                   host: it silently punches holes in a firewall that

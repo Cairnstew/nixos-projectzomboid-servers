@@ -257,7 +257,7 @@ a matching `.socket` for its console.
 | `secretFiles` | attrsOf path | `{}` | `Key = path`. The only way to set a secret. |
 | `passwordFile` | path \| null | `null` | Sugar for `secretFiles.Password`. Wins if both are set. |
 | `extraArgs` | listOf str | `[]` | Appended to the command line. **Never a credential** — it lands in a world-readable unit. |
-| `upnp` | bool | `false` | `UPnP=`. PZ defaults this **true**; see [below](#two-defaults-that-differ-from-pz). |
+| `upnp` | bool | `false` | `UPnP=`. **Build 41 only** — Build 42 has no UPnP implementation, so the resolver warns and the router is never touched. PZ defaults this **true**; see [below](#two-defaults-that-differ-from-pz). |
 | `selfManagedMods` | bool | `true` | **Build 41 only.** Stops PZ rewriting `Mods=`. The key does not exist in 42.21, so nothing is rendered for Build 42. |
 | `softReset` | bool | `false` | Discard world identity so clients reroll characters. **The map is kept** — see [softReset](#softreset). Destructive. |
 | `betaBranch` | str \| null | `null` | e.g. `"legacy41"`. Per-server, but applied by the **shared** install, so set it on every server or none. |

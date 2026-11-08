@@ -8,6 +8,12 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`upnp` is asserted dead on Build 42.** The 42.21 jar contains no UPnP class
+  and `ServerOptions.uPnp` is never read, so `UPnP=` forwards nothing — a silent
+  no-op in exactly the place a broken port forward is hardest to see. The
+  resolver now warns when `upnp` is set on a Build 42 server and points at the
+  router (or a UPnP client such as `miniupnpc`) instead. Build 41 is unchanged.
+
 - **`clientHost.openFirewall`.** A client host's ports can now be opened from
   Nix. The server-level `openFirewall` never covered one: it is wired from the
   *enabled* servers, and the usual client-host configuration has

@@ -696,12 +696,24 @@ let
       # it is reported at evaluation time instead of being left as a silent
       # no-op. `RCONPassword` cannot come from `settings` (it is a secret key),
       # so `secretFiles` is the only place to look.
-      warnings = lib.optional (srv.rconPort != 0 && !(srv.secretFiles ? RCONPassword)) ''
-        services.project-zomboid-servers.servers."${name}": rconPort is ${toString srv.rconPort}
-        but no RCONPassword secret is configured. Project Zomboid starts RCON only
-        when the port is non-zero AND the password is non-empty, so RCON will
-        silently stay off. Set `secretFiles.RCONPassword = …;` (or `rconPort = 0;`).
-      '';
+      warnings =
+        lib.optional (srv.rconPort != 0 && !(srv.secretFiles ? RCONPassword)) ''
+          services.project-zomboid-servers.servers."${name}": rconPort is ${toString srv.rconPort}
+          but no RCONPassword secret is configured. Project Zomboid starts RCON only
+          when the port is non-zero AND the password is non-empty, so RCON will
+          silently stay off. Set `secretFiles.RCONPassword = …;` (or `rconPort = 0;`).
+        ''
+        # 42.21 ships no UPnP implementation: the jar contains no UPnP class at
+        # all, and `ServerOptions.uPnp` is never read by `GameServer`. `UPnP=` is
+        # still a live ini key (the game writes it back), so nothing else rejects
+        # it — which is exactly the silent no-op this warning exists to surface.
+        ++ lib.optional (srv.upnp && !srv.compatibility.build41) ''
+          services.project-zomboid-servers.servers."${name}": upnp is enabled, but Build 42
+          has no UPnP implementation (the 42.21 jar contains no UPnP classes and
+          `ServerOptions.uPnp` is never read), so `UPnP=` does nothing and the router
+          will not forward defaultPort/udpPort. Forward them on the router yourself —
+          or map them with a UPnP client such as miniupnpc — and drop `upnp`.
+        '';
     in
     {
       inherit
