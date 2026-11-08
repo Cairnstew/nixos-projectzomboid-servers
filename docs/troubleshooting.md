@@ -366,6 +366,45 @@ LC_ALL=en_GB.UTF-8 %command%
 `LC_ALL=C.UTF-8 %command%` also works. Confirm the fix by checking that
 `InvalidPathException` no longer appears in `console.txt` after hosting.
 
+### A friend cannot join a client host
+
+A world hosted from the game's **Host** button is not reachable just because your
+own client reached it — for example over Tailscale or ZeroTier. The co-op server
+hands every joining client the host's **public** address:
+
+```
+SERVER: server-address@203.0.113.7:16261
+```
+
+That value is RakNet's `GetServerIP()` plus `defaultPort`, so it is the WAN
+address even when the joiner arrived over a tunnel. The joiner's client then
+opens the game channel to *that* address; with no UDP forward on the router the
+packets are dropped, and the server sees:
+
+```
+RakNet: new-incoming-connection … ip="null" steam-id="0"
+… connection-attempt-timeout        (~26 s later)
+```
+
+`ip="null"` and `steam-id="0"` mean **no login packet arrived**. It is a network
+problem, not a mod mismatch, a whitelist, or a wrong password.
+
+Fix, in this order:
+
+1. `clientHost.openFirewall = true`. The server-level `openFirewall` does not
+   cover a client host: it is wired from the enabled servers, and a client host
+   normally has `enable = false`.
+2. Forward UDP `defaultPort` and `udpPort` on the router to this machine, **or**
+   set `upnp = true` and make sure the router actually answers UPnP discovery.
+   `upnpc -l` (miniupnpc) prints `No IGD UPnP Device found` when it does not —
+   many ISP routers ship with UPnP switched off.
+3. While hosting, confirm the sockets with `ss -lunp | grep -E '1626[12]'`, and
+   in the connections log look for a `login` event ending in `client-connect`
+   instead of another `connection-attempt-timeout`.
+
+A tunnel does not remove the need for 1–2: it changes how *you* reach the host,
+not the address the game advertises to the people joining it.
+
 ### RCON stays off even though `rconPort` is set
 
 PZ starts the RCON listener only when the port is non-zero **and**

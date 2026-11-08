@@ -8,6 +8,15 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`clientHost.openFirewall`.** A client host's ports can now be opened from
+  Nix. The server-level `openFirewall` never covered one: it is wired from the
+  *enabled* servers, and the usual client-host configuration has
+  `enable = false` with no systemd unit. The new option feeds `defaultPort` and
+  `udpPort` into `networking.firewall.allowedUDPPorts` from `clientResolved`,
+  and `module-eval` asserts both reach the firewall. `docs/troubleshooting.md`
+  documents the rest of the path (`server-address@<public-ip>` advertisement,
+  router forwarding, UPnP discovery).
+
 - **`PublicDescription` for the `viewpoint` pack.** The world previously had a
   name and an empty browser description (`PublicDescription=`), so the public
   listing showed nothing. It now carries a one-line summary of the pack. It is

@@ -1313,6 +1313,30 @@ in
                     rather than reusing the existing one.
                   '';
                 };
+
+                openFirewall = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = ''
+                    Open this client host's two UDP ports in the firewall.
+
+                    The server-level <option>openFirewall</option> cannot cover a
+                    client host: it is wired from the ENABLED servers only, and
+                    the usual client-host setup has <literal>enable = false</literal>
+                    with no unit at all. The game's own Host button binds
+                    <option>defaultPort</option> and <option>udpPort</option> when
+                    it starts, so set this when other players must reach a world
+                    hosted from the client.
+
+                    Note that PZ also tells joining clients its
+                    <emphasis>public</emphasis> address (the co-op server sends
+                    <literal>server-address@&lt;public-ip&gt;:&lt;defaultPort&gt;</literal>),
+                    so opening the ports is necessary but not sufficient behind a
+                    NAT router — the router has to forward the same two ports, or
+                    <option>upnp</option> has to work. See the troubleshooting
+                    guide.
+                  '';
+                };
               };
             };
           }

@@ -82,6 +82,16 @@ let
       warnOnResolved (pz.resolveServer cfg.modpacks name srv)
   ) (lib.filterAttrs (_: srv: srv.clientHost.enable) cfg.servers);
 
+  # Every UDP port this module opens, in ONE place: enabled servers that asked
+  # for their own ports, plus client hosts that asked for theirs. The client-host
+  # half cannot come from `resolved` — that is filtered to `enable = true`, and
+  # the usual client-host setup has no enabled server at all.
+  firewallUdpPorts =
+    concatMap (srv: optionals srv.openFirewall (pz.udpPortsOf srv)) (lib.attrValues resolved)
+    ++ concatMap (srv: optionals srv.clientHost.openFirewall (pz.udpPortsOf srv)) (
+      lib.attrValues clientResolved
+    );
+
   unitName = name: "project-zomboid-${name}";
   installUnit = "project-zomboid-install";
 
@@ -628,6 +638,10 @@ in
           };
         }
       ) clientResolved;
+
+      # Declared HERE, outside the `enable` gate, because a client host's ports
+      # must open even when no dedicated server exists.
+      networking.firewall.allowedUDPPorts = firewallUdpPorts;
     }
 
     (mkIf (cfg.enable && cfg.package != null) {
@@ -727,10 +741,6 @@ in
       systemd.tmpfiles.rules = [ "d '${cfg.runDir}' 0755 ${cfg.user} ${cfg.group} - -" ];
 
       # ── Firewall ────────────────────────────────────────────────────────────
-      networking.firewall.allowedUDPPorts = concatMap (
-        srv: optionals srv.openFirewall (pz.udpPortsOf srv)
-      ) (lib.attrValues resolved);
-
       # `lib.optionals`, not `mkIf`: mkIf yields a `{ _type = "if"; … }` set that is
       # only valid as a whole option definition, so using it as an operand of `++`
       # fails with "expected a list but found a set".

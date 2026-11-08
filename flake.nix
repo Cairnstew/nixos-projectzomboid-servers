@@ -545,6 +545,10 @@
                     enable = false;
                     modpack = "viewpoint";
                     clientHost.enable = true;
+                    # The firewall must be opened from the CLIENT half: this eval
+                    # has `enable = false`, so the server-level `openFirewall` is
+                    # not even in play.
+                    clientHost.openFirewall = true;
                   };
                 };
               };
@@ -587,6 +591,17 @@
                 (lib.optionalString (
                   oneHost == null || builtins.length (oneHost.mods or [ ]) < 100
                 ) "the viewpoint pack's Mods list did not reach clientHosts")
+                # `clientHost.openFirewall` has to open BOTH UDP ports. The
+                # server-level `openFirewall` never sees this server (it is
+                # filtered to enabled ones), so without the client wiring the
+                # option is a silent no-op — exactly the failure mode this check
+                # exists for.
+                (lib.optionalString (
+                  !(lib.all (p: builtins.elem p (clientEval.config.networking.firewall.allowedUDPPorts or [ ])) [
+                    versions.defaultPort
+                    versions.defaultUdpPort
+                  ])
+                ) "clientHost.openFirewall did not open both UDP ports")
               ];
 
               failures = lib.filter (s: s != null && s != "") (

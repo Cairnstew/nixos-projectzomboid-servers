@@ -388,6 +388,7 @@ installed at all.
 | --- | --- | --- | --- |
 | `enable` | bool | `false` | Produce a `clientHosts.<attr>` entry. |
 | `name` | str | `"servertest"` | The client-side server name. PZ names both `<name>.ini` and `Saves/Multiplayer/<name>` after it — so changing it makes a **new world** rather than reusing the existing one. `servertest` is what the Host screen uses by default. |
+| `openFirewall` | bool | `false` | Open `defaultPort`/`udpPort` for this client host. The server-level `openFirewall` cannot: it is fed from the enabled servers, and a client host normally has `enable = false`. Opening the ports is necessary but not sufficient behind NAT — see [troubleshooting](troubleshooting.md#a-friend-cannot-join-a-client-host). |
 
 The `.ini` is merged rather than rewritten (see
 [`clientHosts`](#clienthosts)), and the mods are delivered by the Host flow:
