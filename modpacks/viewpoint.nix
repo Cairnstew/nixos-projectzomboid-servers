@@ -334,6 +334,25 @@
     { id = "3793407081"; title = "Remove Debris (Tree Stumps & Boulders) / Delete Trash Tiles"; }
     { id = "3779330500"; title = "VRO Salvage Condition Lock"; }
 
+    # ── Lockpicking / entry / locks ────────────────────────────────────────
+    # Locksmith is the single all-in-one lock mod: padlocks and combination
+    # locks on gates/garages/storage furniture, window latches, lockpicking
+    # (screwdriver + paperclip, Nimble roll), crowbar forcing, bolt cutting,
+    # lock repair, key cutting and re-pinning, and car door/ignition keying.
+    # It is server-authoritative, MP-tagged, overwrites no vanilla files, and
+    # defines no profession/trait/skill — which is exactly why it is chosen
+    # over the popular alternatives, all of which redefine `base:burglar`
+    # and/or add a Lockpicking skill/perk and would fight This Is Me,
+    # Kentucky Occupations and Hephas:
+    #   Neat Lockpicking (3783535220)        -> character_profession_definition base:burglar + Lockpicking skill
+    #   The Best Lockpicking (3440867775)    -> Lockpicking skill + Lockpicker perk (also WIP)
+    #   Better Lockpicking Continued (3768298886) -> traits + burglar prof, no MP tag
+    #   Awesome Lockpicking (3758561559)     -> professions.txt + traits.txt
+    #   Simple Lockpicking (2991923398)      -> client-only Lua, last updated Dec 2025 (pre-42.20)
+    # Crowbar & Screwdriver Entry (3770164353) is clean too, but it duplicates
+    # this mod's crowbar/pick/bolt-cut paths and is deliberately not stacked.
+    { id = "3797292945"; title = "Locksmith - Padlocks, Lockpicking, & Re-pinning [B42]"; } # Locksmith
+
     # ── Fire behaviour / realism ───────────────────────────────────────────
     # Fire Spread Control is a server-side governor: it refuses a configurable
     # share of spread-created fires and caps a blaze's radius and simultaneous
@@ -947,6 +966,11 @@
     "DismantleAllElectronics"
     "TFC_RemoveDebrisMod"
     "VROSalvageConditionLock" # requires VehicleSalvageOverhaulB42 (loaded above)
+
+    # ── Lockpicking / entry / locks ────────────────────────────────────────
+    # Standalone (no require=/loadModAfter=); its own server unit handles all
+    # state, so it has no dependency on any other mod in the pack.
+    "Locksmith"
 
     # ── Fire behaviour / realism ───────────────────────────────────────────
     # Standalone; no load-order requirement between the two. See the
