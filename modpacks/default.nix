@@ -38,4 +38,4 @@ let
     )
   );
 in
-lib.genAttrs packFiles (name: import "${dir}/${name}.nix")
+lib.genAttrs packFiles (name: import (dir + "/${name}.nix"))
