@@ -91,6 +91,33 @@
     # ProjectViewpointControllerSupport, neither of which this pack contains.
     { id = "3819316734"; title = "Viewpoint Hands: Loot & Inventory [B42]"; } # DGVViewpointQoL
 
+    # ── Traits & professions ───────────────────────────────────────────────
+    # Expansion here is additive and points-priced, not point-inflating: no
+    # free-point mods and no dynamic trait system that defaults to on. Deliberate
+    # omissions:
+    #   * ETW, the maintained continuation of More Traits, turns dynamic
+    #     gain/loss ON by default, and this module cannot pin per-mod sandbox
+    #     keys — so it would silently change the trait economy everywhere.
+    #   * More Traits itself is documented by Hephas as unbalanced alongside its
+    #     own weight perk and Bleeder (doubled descriptions).
+    #   * SOTO is still unsupported in Build 42 multiplayer (its MP fork also
+    #     conflicts with other trait mods), so neither variant is used.
+    # This Is Me: 66 Build 42.20 traits with per-trait sandbox toggles, pairing
+    # strong positives with matching negatives. The MP add-on carries the
+    # co-op-only traits (Friendly, Mentor, Hero).
+    { id = "3806020504"; title = "This Is Me - More Character Traits"; } # thisIsMe-Traits + thisIsMe-TraitsMP
+    # Kentucky: 12 vanilla-fitting professions, each with +1 XPBoost and a
+    # locked trait; the 9 shared traits cost 2-4 points rather than granting
+    # points, so this adds variety without adding starting power.
+    { id = "3792437164"; title = "Kentucky Occupations and Traits"; } # KentuckyOccupationsAndTraits
+    # Hephas: balanced occupations plus skill-coverage traits, costs kept close
+    # to vanilla and meta builds made more expensive (strong professions cost
+    # 8-12 points). Use the WithVanillaProfessions variant so this ADDS
+    # occupations instead of replacing every vanilla one. HephasGunsmith is
+    # deliberately not enabled: the pack already runs Gunsmith (weapongunsmith)
+    # with its own weapon-parts system, and this item ships a second parts set.
+    { id = "3256482412"; title = "Hephas Occupations and Traits"; } # HephasOccupationsAndTraits_WithVanillaProfessions
+
     { id = "3816442251"; title = "Viewpoint: Living Props"; }
     { id = "3815630947"; title = "Viewpoint Rolling Hills"; }
     { id = "3817555882"; title = "Rolling Hills Physics Addon (Project Viewpoint)"; }
@@ -658,6 +685,18 @@
     "PingItemsFriends"              # core; the wheel below requires it
     "PingItemsFriendsDefaultWheel"  # only one wheel may be enabled
     "DGVViewpointQoL"
+
+    # ── Traits & professions ───────────────────────────────────────────────
+    # Build 42 registers modded traits in one pass: a broken trait mod drops
+    # every trait mod after it, on whichever side broke. Keep this group
+    # together and in this order. This Is Me first (main, then its MP add-on),
+    # Kentucky next, Hephas last because it also rewrites profession
+    # definitions. None of the three depends on another.
+    "thisIsMe-Traits"
+    "thisIsMe-TraitsMP"        # require=thisIsMe-Traits
+    "KentuckyOccupationsAndTraits"
+    "HephasOccupationsAndTraits_WithVanillaProfessions"
+
     "CVI"
     "ViewpointLivingProps"
     "ViewpointRollingHills"
