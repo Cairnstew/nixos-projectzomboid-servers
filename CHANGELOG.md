@@ -291,6 +291,21 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **A mod folder with a non-ASCII name no longer aborts mod loading.** Java
+  derives its filename encoding from the process locale; under the C locale
+  (what a systemd service gets with no `LANG`, and what Steam exports as
+  `LC_ALL=C`) the JVM reports `sun.jnu.encoding = ANSI_X3.4-1968`, so
+  `Paths.get()` throws `InvalidPathException: Malformed input or input contains
+  unmappable characters` for a folder such as `小音庄园XiaoYinEstate`. Three
+  Workshop items in the `viewpoint` pack ship one, and in a client host the
+  exception terminated the co-op server on every retry. The server unit and the
+  standalone runner now export `LANG`/`LC_ALL=C.UTF-8` (`C.UTF-8` is built into
+  glibc ≥ 2.35, so no `i18n.supportedLocales` entry is needed), and `module-eval`
+  asserts the unit carries it. A client host runs under Steam, whose environment
+  the module cannot set — that case is documented in
+  [troubleshooting](docs/troubleshooting.md) with the `LC_ALL=en_GB.UTF-8
+  %command%` launch option.
+
 - **`SelfManagedMods` is no longer written for Build 42.** The key does not
   exist in 42.21 — it appears nowhere in the game jar (client classes included)
   and is absent from the 144-key `.ini` the server writes back — so a Build 42

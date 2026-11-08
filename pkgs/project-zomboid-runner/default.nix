@@ -236,6 +236,18 @@ stdenvNoCC.mkDerivation {
     # from here, because it is a runtime argument rather than Nix data.
     export PZ_SERVER_NAME="$server_name"
 
+    # Java derives its filename encoding from the locale. Under a C/POSIX locale
+    # (what a minimal environment, and any `systemd` service without an explicit
+    # LANG, provides) the JVM reports `sun.jnu.encoding = ANSI_X3.4-1968`, and
+    # `Paths.get()` throws
+    # `InvalidPathException: Malformed input or input contains unmappable
+    # characters` for a mod folder with a non-ASCII name — aborting mod load.
+    # The systemd unit sets this too; here it also covers `nix run` from a
+    # minimal shell. `C.UTF-8` is built into glibc, so no locale package is
+    # needed, and it keeps C numeric formatting.
+    export LANG=C.UTF-8
+    export LC_ALL=C.UTF-8
+
     # Auth + prune, read by lib/prepare.nix from the environment so the shared
     # install and prep scripts honour them without a second implementation.
     # Only exported when set, so the script's own anonymous default applies.

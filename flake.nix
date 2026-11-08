@@ -350,6 +350,11 @@
                     !hasEnv unit "PZ_JVM_OPTS="
                   ) "${unit} has no PZ_JVM_OPTS — jvmOpts did not reach the unit")
                   (lib.optionalString (!hasEnv unit "PZ_SERVER_DIR=") "${unit} has no PZ_SERVER_DIR")
+                  # Locale: without a UTF-8 locale the JVM encodes filenames as
+                  # ASCII and aborts on a mod folder with a non-ASCII name.
+                  (lib.optionalString (
+                    !hasEnv unit "LC_ALL=C.UTF-8"
+                  ) "${unit} has no LC_ALL=C.UTF-8 — a non-ASCII mod folder would fail to load")
                 ]
               ) (lib.attrNames cfg.servers);
 
@@ -1749,21 +1754,25 @@
                   # still gets it.
                   ${expectTrue "a Build 42 ini wrote SelfManagedMods" (
                     !(lib.hasInfix "SelfManagedMods" (
-                      lib.concatStringsSep "\n" (pz-lib.renderIniLines {
-                        settings = (resolvedWith { }).settings;
-                        mods = [ ];
-                        workshopItems = [ ];
-                      })
+                      lib.concatStringsSep "\n" (
+                        pz-lib.renderIniLines {
+                          settings = (resolvedWith { }).settings;
+                          mods = [ ];
+                          workshopItems = [ ];
+                        }
+                      )
                     ))
                   )}
                   ${expectTrue "a Build 41 ini dropped SelfManagedMods" (
                     lib.hasInfix "SelfManagedMods=true" (
-                      lib.concatStringsSep "\n" (pz-lib.renderIniLines {
-                        settings = (resolvedWith { }).settings;
-                        mods = [ ];
-                        workshopItems = [ ];
-                        legacyBuild41 = true;
-                      })
+                      lib.concatStringsSep "\n" (
+                        pz-lib.renderIniLines {
+                          settings = (resolvedWith { }).settings;
+                          mods = [ ];
+                          workshopItems = [ ];
+                          legacyBuild41 = true;
+                        }
+                      )
                     )
                   )}
 

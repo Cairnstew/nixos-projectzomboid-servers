@@ -48,6 +48,14 @@ library owns the PZ install (for example
 `/mnt/media/SteamLibrary/steamapps/workshop/content/108600`), and the client
 loads it from Steam's subscription list.
 
+One environment requirement comes with that: the client must run with a UTF-8
+locale, because Java derives its filename encoding from it and a few Workshop
+items ship a mod folder with a non-ASCII name. A C/POSIX locale (Steam exports
+`LC_ALL=C` on some systems) makes the Host flow abort with
+`InvalidPathException`. Set `LC_ALL=en_GB.UTF-8 %command%` in the game's Steam
+launch options; see [troubleshooting](troubleshooting.md#a-client-host-fails-with-invalidpathexception-non-ascii-mod-folder).
+The dedicated server sets `LANG`/`LC_ALL=C.UTF-8` itself.
+
 ### Why the client cannot load from the server's directory
 
 Project Zomboid's client **enumerates Workshop mods through Steam's subscription

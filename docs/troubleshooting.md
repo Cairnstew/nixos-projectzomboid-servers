@@ -338,6 +338,34 @@ does, the game's Host button fetches the items through Steam; if it does not, th
 pack rendered no Workshop ids. See [mod delivery](mod-delivery.md). The module
 does not install or link mods on the client side.
 
+### A client host fails with `InvalidPathException` (non-ASCII mod folder)
+
+The Host flow aborts and you land back in the menu, with this in
+`~/Zomboid/console.txt`:
+
+```
+ERROR: ConnectToServerState.Finish> Exception thrown
+    java.nio.file.InvalidPathException: Malformed input or input contains
+      unmappable characters: …/108600/3823399562/mods/小音庄园XiaoYinEstate
+```
+
+Java derives its filename encoding from the process locale, so a C/POSIX locale
+makes `sun.jnu.encoding` ASCII and `Paths.get()` rejects any folder whose name is
+not ASCII. A few Workshop items ship such a folder (`小音庄园XiaoYinEstate`,
+`EchoCreek MilitaryBase回音河 军事基地`, `Atlanta - Safe Zone-Chinese …`).
+
+The **dedicated server** sets `LANG`/`LC_ALL=C.UTF-8` for you. A **client host**
+runs under Steam, which on some systems exports `LC_ALL=C` — the module cannot
+change that environment. Add a locale to the game's Steam launch options and
+restart the game (the JVM reads it at startup):
+
+```
+LC_ALL=en_GB.UTF-8 %command%
+```
+
+`LC_ALL=C.UTF-8 %command%` also works. Confirm the fix by checking that
+`InvalidPathException` no longer appears in `console.txt` after hosting.
+
 ### RCON stays off even though `rconPort` is set
 
 PZ starts the RCON listener only when the port is non-zero **and**

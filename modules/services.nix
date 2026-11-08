@@ -361,6 +361,16 @@ let
         WorkingDirectory = cfg.serverDir;
         Environment = [
           "HOME=${cfg.dataDir}/${name}"
+          # Java derives its filename encoding from the process locale, and a
+          # systemd service gets none (no LANG/LC_ALL — NixOS sets neither), so
+          # the JVM falls back to ANSI_X3.4-1968. With that encoding it throws
+          # `java.nio.file.InvalidPathException: Malformed input or input
+          # contains unmappable characters` for any mod folder whose name is not
+          # ASCII — three Workshop items in the viewpoint pack ship one — and
+          # aborts mod loading. `C.UTF-8` is built into glibc >= 2.35, so this
+          # needs no `i18n.supportedLocales`, and it keeps C numeric formatting.
+          "LANG=C.UTF-8"
+          "LC_ALL=C.UTF-8"
           # Read by lib/prepare.nix's prep script, which is shared with the
           # standalone runner.
           "PZ_DATA_DIR=${cfg.dataDir}"
