@@ -280,6 +280,23 @@
     { id = "3793407081"; title = "Remove Debris (Tree Stumps & Boulders) / Delete Trash Tiles"; }
     { id = "3779330500"; title = "VRO Salvage Condition Lock"; }
 
+    # ── Fire behaviour / realism ───────────────────────────────────────────
+    # Fire Spread Control is a server-side governor: it refuses a configurable
+    # share of spread-created fires and caps a blaze's radius and simultaneous
+    # burning squares, so one molotov cannot roll across the map. It never
+    # suppresses the initial ignition, campfires, ovens or burning corpses.
+    # Sensible Fire Spread marks streets, gravel, dirt/sand, sidewalks/stone and
+    # some playground rubber unflamable, so fire cannot cross a road into the
+    # next block. Both are Build 42, declare no require=/incompatible=, and are
+    # MP-verified (Fire Spread Control's logic is host-side; clients only need
+    # it installed for the connection mod check). Deliberately NOT stacking
+    # Realistic Fire Mechanics (3794202741) on top: it reimplements the same
+    # material-firebreak rules and intercepts the same OnNewFire spread path,
+    # and it is still a 0.7.0 test build. Better Corpse Burning's
+    # corpse-to-corpse spread is independent of both.
+    { id = "3775892334"; title = "Fire Spread Control"; } # FireSpreadControl
+    { id = "3780363089"; title = "Sensible Fire Spread"; } # SensibleFireSpread
+
     # ── Corpse handling / usage ────────────────────────────────────────────
     # Build 42 + multiplayer. Zombie Butchery is a server-authoritative
     # butchering path; Better Corpse Burning does its fire work server-side;
@@ -826,6 +843,12 @@
     "DismantleAllElectronics"
     "TFC_RemoveDebrisMod"
     "VROSalvageConditionLock" # requires VehicleSalvageOverhaulB42 (loaded above)
+
+    # ── Fire behaviour / realism ───────────────────────────────────────────
+    # Standalone; no load-order requirement between the two. See the
+    # workshopMods block above for why Realistic Fire Mechanics is not stacked.
+    "FireSpreadControl"
+    "SensibleFireSpread"
 
     # ── Corpse handling / usage ────────────────────────────────────────────
     # B42MPZombieCorpseFix requires ZombieBuddy (already first);
