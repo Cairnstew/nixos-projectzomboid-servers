@@ -1019,6 +1019,10 @@
     PauseEmpty = true;
     SaveWorldEveryMinutes = 10;
     DoLuaChecksum = false;
+    # The public server-browser blurb (`PublicDescription=`, a real B42 key).
+    # Kept on one line: PZ renders `<LINE>` as a break, and a listing reads
+    # worse wrapped. ASCII only, so the .ini stays unambiguous.
+    PublicDescription = "Project Viewpoint Vanilla+ - first-person Viewpoint renderer, ~390 mods (maps, vehicles, tailoring, farming, wildlife). PvP on, normal zombies.";
     # Pinned rather than derived. Several B42 map mods ship more than one map
     # folder (Chestown/Greenport keep their B41-era map alongside the B42 one),
     # so auto-detection would load both and overlap terrain. This list names only

@@ -150,10 +150,11 @@ Behaviours worth knowing:
 - Named keys come from the server's resolved settings, so a server defined with
   `public = true` will **overwrite** a client-side `Public=false` in that file.
   Override it in `settings` if the client host should stay private.
-- The game's Host screen rewrites `<name>.ini` and **strips
-  `SelfManagedMods=true`**. The module does not fight that: every Home Manager
-  activation re-runs the merge and puts the key back. Treat it as a client-side
-  quirk, not a config the game honours.
+- The game's Host screen rewrites `<name>.ini` and drops every key it does not
+  know. Re-running the merge re-applies the declared keys while `Seed`,
+  `ServerPlayerID` and the rest of the world identity survive, so repeated
+  activations are safe. `SelfManagedMods` is not written for Build 42 at all —
+  the key does not exist in 42.21.
 - No mods are installed, linked or copied by this half. With
   `WorkshopItems=` populated, the Host button fetches everything through Steam
   into the library that owns the PZ install, before it reads `~/Zomboid/mods`.
@@ -241,7 +242,7 @@ a matching `.socket` for its console.
 | `spawn` | submodule | `{}` | See [spawn](#spawn). |
 | `defaultPort` | port | `16261` | `DefaultPort`, UDP. Must be unique across enabled servers. |
 | `udpPort` | port | `16262` | `UDPPort`, UDP. PZ binds **two** UDP ports per instance; both must be unique. |
-| `rconPort` | port | `0` | `0` = RCON off. |
+| `rconPort` | port | `0` | `0` = RCON off. A port alone is not enough: PZ starts RCON only when `RCONPassword` (via `secretFiles`) is non-empty too, and warns at eval time otherwise. |
 | `openFirewall` | bool | `false` | Opens this server's two UDP ports. |
 | `public` | bool \| null | `null` | Server browser. `null` = true. |
 | `publicName` | str \| null | `null` | Browser name. `null` = the attribute name. |
@@ -257,7 +258,7 @@ a matching `.socket` for its console.
 | `passwordFile` | path \| null | `null` | Sugar for `secretFiles.Password`. Wins if both are set. |
 | `extraArgs` | listOf str | `[]` | Appended to the command line. **Never a credential** — it lands in a world-readable unit. |
 | `upnp` | bool | `false` | `UPnP=`. PZ defaults this **true**; see [below](#two-defaults-that-differ-from-pz). |
-| `selfManagedMods` | bool | `true` | Stop PZ rewriting `Mods=` out from under you. |
+| `selfManagedMods` | bool | `true` | **Build 41 only.** Stops PZ rewriting `Mods=`. The key does not exist in 42.21, so nothing is rendered for Build 42. |
 | `softReset` | bool | `false` | Discard world identity so clients reroll characters. **The map is kept** — see [softReset](#softreset). Destructive. |
 | `betaBranch` | str \| null | `null` | e.g. `"legacy41"`. Per-server, but applied by the **shared** install, so set it on every server or none. |
 | `jvmOpts` | str | `-Xmx4G -Xms2G` | Placed **before the `--`** the launcher inserts, which is what routes flags to the JVM rather than to the game. The only way to set the heap. |
@@ -615,7 +616,10 @@ world-readable unit file.
   behind a container at all. Use `openFirewall`.
 - **`rconPort` default is `0`** (off), and the suggested port when you do enable
   it is **27016**, not PZ's 27015 — that is Minecraft's default, and this module
-  is meant to sit alongside a Minecraft server.
+  is meant to sit alongside a Minecraft server. A port is not enough on its own:
+  PZ starts RCON only when `RCONPassword` (set through `secretFiles`) is
+  non-empty too. `rconPort` without a password is reported as an evaluation
+  warning, because otherwise it looks configured and silently does nothing.
 
 ### Why `restart` is `always`
 

@@ -8,6 +8,12 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`PublicDescription` for the `viewpoint` pack.** The world previously had a
+  name and an empty browser description (`PublicDescription=`), so the public
+  listing showed nothing. It now carries a one-line summary of the pack. It is
+  a pack default, so the dedicated server and the client host show the same text;
+  override it in a server's `settings` if a deployment needs different wording.
+
 - **Dotted `sandbox` keys for Build 42's nested tables.**
   `sandbox."ZombieLore.Speed"` and
   `sandbox."ZombieConfig.PopulationStartMultiplier"` now render a real nested
@@ -284,6 +290,22 @@ All notable changes to this project. Format follows
   than before and works under either hardening posture.
 
 ### Fixed
+
+- **`SelfManagedMods` is no longer written for Build 42.** The key does not
+  exist in 42.21 — it appears nowhere in the game jar (client classes included)
+  and is absent from the 144-key `.ini` the server writes back — so a Build 42
+  server never read it and PZ dropped it on the next rewrite. It is now rendered
+  only when `compatibility.build41` is set, where it is still honoured. The
+  client-host check asserts the key is absent and that a re-run still preserves
+  world identity and foreign keys.
+
+- **`rconPort` without an `RCONPassword` is reported instead of failing
+  silently.** `GameServer` starts RCON only when the port is non-zero **and** the
+  password is non-empty (`if (port != 0 && password != null &&
+  !password.isEmpty())`), so a port with no secret looked configured and opened
+  nothing. `resolveServer` now returns a `warnings` list and the module emits it
+  at evaluation time. With a non-zero port and no password, RCON stays off — this
+  is a warning, not an error, because the rest of the server is unaffected.
 
 - **The rendered `SandboxVars.lua` had no `VERSION` header, so PZ migrated its
   values.** A missing version reads as 0, and `upgradeOptionValue` then rewrites

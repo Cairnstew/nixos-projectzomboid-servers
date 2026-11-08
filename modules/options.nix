@@ -787,6 +787,14 @@ in
                 description = ''
                   RCON TCP port (<literal>RCONPort</literal>). The default 0 leaves
                   RCON off — open one explicitly if you want remote admin.
+
+                  RCON also needs a password: PZ starts the listener only when the
+                  port is non-zero <emphasis>and</emphasis>
+                  <literal>RCONPassword</literal> is non-empty, so set
+                  <option>secretFiles</option><literal>.RCONPassword</literal>
+                  alongside this. A port without a password is reported as an
+                  evaluation warning (and RCON stays off), because otherwise it
+                  looks configured and silently does nothing.
                 '';
               };
 
@@ -845,9 +853,11 @@ in
                   <literal>Map</literal>,
                   <literal>Mods</literal>,
                   <literal>WorkshopItems</literal>,
-                  <literal>UPnP</literal>,
-                  <literal>SelfManagedMods</literal>, and (Build 41)
-                  <literal>Whitelist</literal> / <literal>Users</literal>.
+                  <literal>UPnP</literal> and
+                  <literal>SelfManagedMods</literal> (Build 41 only — the key does
+                  not exist in Build 42), plus <literal>Whitelist</literal> /
+                  <literal>Users</literal> when
+                  <option>compatibility.build41</option> is set.
 
                   A value cannot contain a newline: the <literal>.ini</literal>
                   format has no escape for one. Use PZ's literal
@@ -1077,11 +1087,13 @@ in
                   managed externally and must not be rewritten by the game or by
                   in-game mod editing.
 
-                  true (the default) is what makes the declarative modpack actually
-                  stick: with it off, a player who opens the server's mod screen
-                  can write a different <literal>Mods=</literal> back to the
-                  <literal>.ini</literal>, and the next start would faithfully apply
-                  their change over yours.
+                  <emphasis>Build 41 only.</emphasis> The key does not exist in
+                  Build 42: it is absent from the 42.21 game jar and from the
+                  <literal>.ini</literal> the server writes back, so a Build 42
+                  server never reads it. The renderer therefore omits it for a
+                  Build 42 target rather than writing a key that does nothing
+                  (it is still written when
+                  <option>compatibility.build41</option> is set).
                 '';
               };
 

@@ -571,7 +571,14 @@ let
         (key "Open" settings.open)
       ]
       ++ lib.optional (settings ? UPnP) (key "UPnP" settings.UPnP)
-      ++ lib.optional (settings ? SelfManagedMods) (key "SelfManagedMods" settings.SelfManagedMods)
+      # Build 41 only. `SelfManagedMods` is absent from the 42.21 game jar (it
+      # contains every key it reads, including the client classes) and from the
+      # 144-key `.ini` the server writes back, so Build 42 never reads it — it
+      # is exactly the silent no-op these guards exist to reject. Build 41 does
+      # honour it, so it stays behind the same switch as `Whitelist`/`Users`.
+      ++ lib.optional (legacyBuild41 && settings ? SelfManagedMods) (
+        key "SelfManagedMods" settings.SelfManagedMods
+      )
       ++ lib.optional (settings ? map) (key "Map" settings.map)
       ++ [
         (key "Mods" (concatStringsSep "," mods))
@@ -681,6 +688,20 @@ let
       workshopItems = map (m: m.id) (pack.workshopMods ++ srv.workshopMods);
 
       sandbox = lib.recursiveUpdate pack.defaultSandbox srv.sandbox;
+
+      # PZ starts RCON only when the port is non-zero AND the password is
+      # non-empty — `GameServer`:
+      #   if (port != 0 && password != null && !password.isEmpty()) RCONServer.init(...)
+      # A port with no password therefore looks configured and does nothing, so
+      # it is reported at evaluation time instead of being left as a silent
+      # no-op. `RCONPassword` cannot come from `settings` (it is a secret key),
+      # so `secretFiles` is the only place to look.
+      warnings = lib.optional (srv.rconPort != 0 && !(srv.secretFiles ? RCONPassword)) ''
+        services.project-zomboid-servers.servers."${name}": rconPort is ${toString srv.rconPort}
+        but no RCONPassword secret is configured. Project Zomboid starts RCON only
+        when the port is non-zero AND the password is non-empty, so RCON will
+        silently stay off. Set `secretFiles.RCONPassword = …;` (or `rconPort = 0;`).
+      '';
     in
     {
       inherit
@@ -690,6 +711,7 @@ let
         description
         sandbox
         pinnedMap
+        warnings
         ;
 
       # Everything the systemd units, the web shim and the assertions read. This

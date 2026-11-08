@@ -338,11 +338,13 @@ does, the game's Host button fetches the items through Steam; if it does not, th
 pack rendered no Workshop ids. See [mod delivery](mod-delivery.md). The module
 does not install or link mods on the client side.
 
-### `SelfManagedMods=true` disappears from a client host's `.ini`
+### RCON stays off even though `rconPort` is set
 
-The game's Host flow rewrites the file and strips the key. The module does not
-fight it; the next Home Manager activation re-merges the file and puts it back.
-On a dedicated server the key is honoured normally.
+PZ starts the RCON listener only when the port is non-zero **and**
+`RCONPassword` is non-empty. A port with no password (for example a client host,
+or a server that never configured `secretFiles.RCONPassword`) therefore opens
+nothing. The resolver emits an evaluation warning for exactly this case; set the
+secret or return `rconPort` to `0`.
 
 ### A dedicated server's mods are older than the client's
 

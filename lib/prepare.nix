@@ -419,10 +419,9 @@ rec {
           "$server_conf/''${pz_name}_SandboxVars.lua"
 
         # Nothing else. Every file above is under `$PZ_CLIENT_ZOMBOID/Server/`.
-        # If PZ strips `SelfManagedMods` while rewriting the file from its Host
-        # screen, the next run of this script (every activation) puts it back —
-        # that is the only drift this half repairs, and it is not a fight with
-        # the game.
+        # The Host screen rewrites this `.ini` and drops every key it does not
+        # know; re-running (every activation) re-applies the declarative set,
+        # while merge_ini.py keeps the world identity (Seed / ServerPlayerID).
         echo "project-zomboid: prepared client host $pz_name in $server_conf (config only; the Host flow fetches the mods)"
       '';
     };

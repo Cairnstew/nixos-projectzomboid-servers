@@ -1147,9 +1147,9 @@
             # production (the files still appear), so it is checked structurally
             # AND by running the real script.
             #
-            # It also proves the `SelfManagedMods` drift repair: the game's Host
-            # screen strips the key when it rewrites the `.ini`; re-running the
-            # prepare (which Home Manager does on every activation) restores it.
+            # It also proves the merge semantics the Host screen depends on:
+            # a re-run re-applies the declared keys while keeping the world
+            # identity (Seed) and any key the module does not own.
             client-host-prepare =
               let
                 evaluated = eval-config {
@@ -1194,7 +1194,10 @@
 
                   [ -f "$ini" ] || fail "no servertest.ini written"
                   [ -f "$sandbox" ] || fail "no servertest_SandboxVars.lua written"
-                  grep -qx 'SelfManagedMods=true' "$ini" || fail "SelfManagedMods is absent"
+                  # Build 42 has no `SelfManagedMods` key — it is absent from the
+                  # 42.21 jar and from the 144-key .ini the server writes back.
+                  # Rendering it would be a silent no-op, so it must not appear.
+                  ! grep -q '^SelfManagedMods=' "$ini" || fail "SelfManagedMods was written for Build 42"
                   grep -q '^WorkshopItems=.\+' "$ini" || fail "WorkshopItems did not reach the client ini"
                   grep -q '^Mods=.\+' "$ini" || fail "Mods did not reach the client ini"
 
@@ -1204,18 +1207,19 @@
                   [ "$top" = "Server " ] || fail "client prepare created more than Server/: $top"
                   [ ! -e "$zomboid/mods" ] || fail "client prepare created ~/Zomboid/mods"
 
-                  # The game strips SelfManagedMods when it rewrites the file.
-                  # A second run must put it back — and must not reset world
-                  # identity while doing so.
+                  # The game's Host screen rewrites the file and drops every key
+                  # it does not know. A second run must re-apply the declared
+                  # keys, keep the world identity and leave foreign keys alone —
+                  # and must not resurrect a key Build 42 does not read.
                   printf 'Seed=keep-this\n' >> "$ini"
-                  grep -v '^SelfManagedMods=' "$ini" > "$ini.stripped"
-                  mv "$ini.stripped" "$ini"
-                  ! grep -q '^SelfManagedMods=' "$ini" || fail "could not simulate the game stripping SelfManagedMods"
+                  printf 'SomeUnknownKey=1\n' >> "$ini"
                   "$PREPARE"
-                  grep -qx 'SelfManagedMods=true' "$ini" || fail "a re-run did not restore SelfManagedMods"
                   grep -qx 'Seed=keep-this' "$ini" || fail "a re-run reset the world identity"
+                  grep -qx 'SomeUnknownKey=1' "$ini" || fail "a re-run dropped a key it does not own"
+                  grep -q '^Mods=.\+' "$ini" || fail "a re-run lost Mods"
+                  ! grep -q '^SelfManagedMods=' "$ini" || fail "a re-run wrote SelfManagedMods for Build 42"
 
-                  echo "client-host prepare ok: config only, no mod paths, SelfManagedMods restored on re-run"
+                  echo "client-host prepare ok: config only, no mod paths, no B42 SelfManagedMods, world identity and foreign keys preserved on re-run"
                   touch "$out"
                 '';
 
@@ -1626,7 +1630,7 @@
                 '';
 
             # ── Renderer guards ───────────────────────────────────────────────
-            # Three inputs produce a silently broken server rather than an eval
+            # Four inputs produce a silently broken server rather than an eval
             # error, so all are asserted here:
             #   * a newline in a value — the .ini has no escape for one, and Lua
             #     forbids a raw newline inside a short string;
@@ -1635,7 +1639,9 @@
             #     user's value would be ignored with no warning at all;
             #   * a Build 41 key that B42 no longer reads, or a B42 key that only
             #     works inside a nested table set flat — PZ ignores unknown keys,
-            #     so the server starts cleanly and the setting does nothing.
+            #     so the server starts cleanly and the setting does nothing;
+            #   * `rconPort` without an `RCONPassword` — PZ starts no listener,
+            #     and the resolver reports it instead of leaving it silent.
             render-guards =
               let
                 base = {
@@ -1657,12 +1663,16 @@
                 sandbox = settings: pz-lib.renderSandbox { inherit settings; };
                 # The resolver is where a USER-supplied reserved key is caught.
                 # (The renderer catches pack defaults and direct callers for the
-                # keys it does not own; `UPnP`/`SelfManagedMods` are rendered by
-                # the module itself, so only the resolver can tell a user's
-                # value from its own.)
+                # keys it does not own; `UPnP` is rendered by the module itself
+                # and `SelfManagedMods` only exists in Build 41, so only the
+                # resolver can tell a user's value from its own.)
                 resolved =
                   extra:
                   pz-lib.resolveServer self.modpacks "guard" ((serverDefaults "guard") // { settings = extra; });
+                # Same fixture but merging arbitrary top-level options, for the
+                # resolver-level warnings (`rconPort` without an RCON password).
+                resolvedWith =
+                  extra: pz-lib.resolveServer self.modpacks "guard" ((serverDefaults "guard") // extra);
                 # `deepSeq`, not plain `tryEval`: the guard throws while the
                 # returned list is being constructed, and a shallow tryEval would
                 # stop at the cons cell and report success either way.
@@ -1671,6 +1681,7 @@
                 # readable and the failure message is impossible to forget.
                 expectFail = msg: x: if evaluates x then "fail ${lib.escapeShellArg msg}" else ":";
                 expectPass = msg: x: if evaluates x then ":" else "fail ${lib.escapeShellArg msg}";
+                expectTrue = msg: cond: if cond then ":" else "fail ${lib.escapeShellArg msg}";
                 luaFile = pkgs.writeText "guard-SandboxVars.lua" (
                   pz-lib.renderSandbox {
                     settings = {
@@ -1731,6 +1742,44 @@
                   ${expectPass "a free-form settings key was rejected" (resolved {
                     PVP = true;
                   })}
+
+                  # `SelfManagedMods` only exists in Build 41 (it is absent from
+                  # the 42.21 jar and from the .ini the server writes back), so
+                  # a Build 42 target must not emit it — while a Build 41 target
+                  # still gets it.
+                  ${expectTrue "a Build 42 ini wrote SelfManagedMods" (
+                    !(lib.hasInfix "SelfManagedMods" (
+                      lib.concatStringsSep "\n" (pz-lib.renderIniLines {
+                        settings = (resolvedWith { }).settings;
+                        mods = [ ];
+                        workshopItems = [ ];
+                      })
+                    ))
+                  )}
+                  ${expectTrue "a Build 41 ini dropped SelfManagedMods" (
+                    lib.hasInfix "SelfManagedMods=true" (
+                      lib.concatStringsSep "\n" (pz-lib.renderIniLines {
+                        settings = (resolvedWith { }).settings;
+                        mods = [ ];
+                        workshopItems = [ ];
+                        legacyBuild41 = true;
+                      })
+                    )
+                  )}
+
+                  # RCON is started only when the port is non-zero AND the
+                  # password is non-empty, so a port without a password is a
+                  # silent no-op the resolver must report.
+                  ${expectTrue "rconPort without an RCONPassword produced no warning" (
+                    (resolvedWith { rconPort = 27017; }).warnings != [ ]
+                  )}
+                  ${expectTrue "rconPort with an RCONPassword still warned" (
+                    (resolvedWith {
+                      rconPort = 27017;
+                      secretFiles.RCONPassword = "/dev/null";
+                    }).warnings == [ ]
+                  )}
+                  ${expectTrue "rconPort = 0 produced a warning" ((resolvedWith { }).warnings == [ ])}
 
                   # Build 41 keys that B42 silently ignores must fail instead.
                   # The moved-section cases...
@@ -1805,7 +1854,7 @@
                   grep -qF 'Note = "a\nb\"c\\d"' "$LUA_FILE" \
                     || fail "a SandboxVars string was not escaped for Lua"
 
-                  echo "render guards ok: newline, reserved-key, stale-B41 and flat-nested inputs fail; free-form, B42 and dotted keys still work"
+                  echo "render guards ok: newline, reserved-key, stale-B41 and flat-nested inputs fail; SelfManagedMods is B41-only; RCON without a password warns; free-form, B42 and dotted keys still work"
                   touch "$out"
                 '';
 

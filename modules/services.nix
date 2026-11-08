@@ -55,7 +55,16 @@ let
   };
 
   enabledServers = lib.filterAttrs (_: srv: srv.enable) cfg.servers;
-  resolved = lib.mapAttrs (name: srv: pz.resolveServer cfg.modpacks name srv) enabledServers;
+
+  # Evaluation-time warning, not an error: a misconfigured server still starts,
+  # it just never opens its RCON listener. The condition lives in
+  # `resolveServer` (`warnings`), so every consumer sees the same text.
+  warnOnResolved =
+    r: if r.warnings == [ ] then r else lib.warn (lib.concatStringsSep "\n\n" r.warnings) r;
+
+  resolved = lib.mapAttrs (
+    name: srv: warnOnResolved (pz.resolveServer cfg.modpacks name srv)
+  ) enabledServers;
   serverNames = builtins.attrNames resolved;
 
   # Servers that asked for client-host files, resolved INDEPENDENTLY of `enable`.
@@ -63,9 +72,15 @@ let
   # case where NO dedicated server exists on this host, and the pack must still
   # render. Deriving this from `resolved` would silently drop exactly that
   # configuration — a pack that renders nothing, with no error.
-  clientResolved = lib.mapAttrs (name: srv: pz.resolveServer cfg.modpacks name srv) (
-    lib.filterAttrs (_: srv: srv.clientHost.enable) cfg.servers
-  );
+  clientResolved = lib.mapAttrs (
+    name: srv:
+    # Reuse `resolved` when the same server is also enabled, so one
+    # misconfiguration is never reported twice.
+    if builtins.hasAttr name resolved then
+      resolved.${name}
+    else
+      warnOnResolved (pz.resolveServer cfg.modpacks name srv)
+  ) (lib.filterAttrs (_: srv: srv.clientHost.enable) cfg.servers);
 
   unitName = name: "project-zomboid-${name}";
   installUnit = "project-zomboid-install";

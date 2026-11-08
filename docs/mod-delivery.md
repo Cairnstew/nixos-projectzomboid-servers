@@ -57,13 +57,15 @@ which an earlier revision of this module created — is invisible to the game.
 That is why the link-sharing option was removed rather than fixed: there is
 nothing on the client that would consume it.
 
-### `SelfManagedMods` is not honoured here
+### `SelfManagedMods` does not exist in Build 42
 
-The game's Host flow rewrites `~/Zomboid/Server/<name>.ini` and strips
-`SelfManagedMods=true`. The module does not try to prevent that. Every Home
-Manager activation re-merges the file and restores the key, so a re-run puts it
-back, but the game may strip it again on the next Host. Treat it as a
-client-side quirk. On a **dedicated** server the key is honoured normally.
+Build 41 used `SelfManagedMods=true` to stop the game rewriting `Mods=`. The key
+was **removed in Build 42**: it appears nowhere in the 42.21 game jar (which
+includes the client classes) and is absent from the 144-key `.ini` the server
+writes back, so a Build 42 server never reads it — PZ drops it on the next
+rewrite. The renderer therefore omits it for a Build 42 target (`legacyBuild41`
+still writes it). Nothing is lost: the Host screen rewrites `Mods=` from its own
+list either way, and re-running the merge re-applies the declared list.
 
 ## Singleplayer and local mods
 
