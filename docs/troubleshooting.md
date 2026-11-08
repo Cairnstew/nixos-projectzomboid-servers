@@ -398,6 +398,21 @@ Fix, in this order:
    set `upnp = true` and make sure the router actually answers UPnP discovery.
    `upnpc -l` (miniupnpc) prints `No IGD UPnP Device found` when it does not —
    many ISP routers ship with UPnP switched off.
+
+   A NixOS firewall can produce that same message on a router that has UPnP
+   **enabled**: the SSDP `M-SEARCH` is sent to `239.255.255.250:1900` and the
+   reply arrives from the router's udp/1900 to an ephemeral local port, which
+   `nixos-fw` treats as a NEW inbound packet and drops (the outbound multicast
+   is not a tracked flow). Capture while running `upnpc -l` to tell the two
+   apart — `tcpdump -ni <lan-if> 'udp and port 1900'` shows the request and the
+   reply, while `upnpc` still reports no IGD. The fix is to accept SSDP replies
+   from the LAN:
+
+   ```nix
+   networking.firewall.extraCommands = ''
+     iptables -A nixos-fw -p udp -s 192.168.1.0/24 --sport 1900 -j nixos-fw-accept
+   '';
+   ```
 3. While hosting, confirm the sockets with `ss -lunp | grep -E '1626[12]'`, and
    in the connections log look for a `login` event ending in `client-connect`
    instead of another `connection-attempt-timeout`.
