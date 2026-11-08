@@ -123,6 +123,19 @@
     { id = "3817555882"; title = "Rolling Hills Physics Addon (Project Viewpoint)"; }
     { id = "3814398576"; title = "Surface Fix - Project Viewpoint"; }
     { id = "3812151347"; title = "Door Fix - Project Viewpoint"; }
+    # Viewpoint-native construction companions. Interface supplies the
+    # first-person craft/build/place flow (K), 3D build preview and furniture
+    # moving; it deliberately overlaps Neat Building's build window and
+    # Furniture Push & Pull, but declares no incompatibility with either.
+    # Proper Roofs closes half-roofs so they read correctly in first person and
+    # its tiles are ordinary buildable/dismantlable tiles. Physics & Collision
+    # adds prop rigid bodies/collision (also overlaps Furniture Push & Pull
+    # behaviourally). Workstations Overhaul is cosmetic. All require Viewpoint
+    # and load after it below.
+    { id = "3812616893"; title = "Viewpoint - Interface"; } # ViewpointUI
+    { id = "3818941548"; title = "Viewpoint - Proper Roofs"; }
+    { id = "3817135911"; title = "Viewpoint - Physics & Collision"; }
+    { id = "3828755546"; title = "Viewpoint's Workstations Overhaul"; }
     { id = "3806955469"; title = "True Cargo - Project Full HD"; }
     { id = "3781616141"; title = "[B42.20+] Vehicle Aim Roof Fix"; }
     { id = "3785695033"; title = "[B42.20+] Vehicle Enter/Exit Fix"; }
@@ -811,6 +824,10 @@
     "RollingHillsPhysics"
     "ViewpointSurface"
     "ViewpointDoor"
+    "ViewpointProperRoofs"
+    "ViewpointUI"
+    "ViewpointWorkstations3D"
+    "ViewpointPhysicsProps" # loadModAfter Viewpoint + PZVoxelStudioViewpoint
     "PFHDTrueCargo"
     "CarRoofFix"
     "CarEnterExitFix"
