@@ -155,7 +155,8 @@ stdenvNoCC.mkDerivation {
       --extra-arg ARG      argument for the server command line; repeatable
       --admin-user NAME    create/update the Build 42 admin account
       --admin-pass-file P  file holding its password (required with --admin-user)
-      --soft-reset         discard world identity, generating a fresh world
+      --soft-reset         discard world identity; clients create new characters
+                           (the map and Saves/ are kept)
       --login NAME         Steam account for gated Workshop items (default: anonymous)
       --prune              remove mods no longer declared (shared cache + link farms)
       --lenient            log-and-skip Workshop items that cannot be downloaded

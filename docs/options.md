@@ -245,9 +245,9 @@ a matching `.socket` for its console.
 | `openFirewall` | bool | `false` | Opens this server's two UDP ports. |
 | `public` | bool \| null | `null` | Server browser. `null` = true. |
 | `publicName` | str \| null | `null` | Browser name. `null` = the attribute name. |
-| `maxPlayers` | int | `32` | PZ warns above 32. |
-| `settings` | attrs | `{}` | `.ini` keys this server owns. **Never a secret.** |
-| `sandbox` | attrs | `{}` | SandboxVars. **Never a secret.** |
+| `maxPlayers` | int (1–254) | `32` | Excludes admins. PZ warns above 32; the 42.21 build caps it at 254. |
+| `settings` | attrs | `{}` | Free-form `.ini` keys. **Never a secret**; module-owned keys are rejected — see [reserved keys](#reserved-keys-in-settings). |
+| `sandbox` | attrs | `{}` | SandboxVars. Nested B42 tables use dotted keys — see [nested keys](#nested-sandboxvars-keys). **Never a secret.** |
 | `open` | bool \| null | `null` | `null` = true. `false` requires a populated `whitelist`. |
 | `whitelist` | listOf str | `[]` | **Build 41 only.** |
 | `admins` | listOf str | `[]` | **Build 41 only.** Grants in-game rights; never creates the login. |
@@ -258,7 +258,7 @@ a matching `.socket` for its console.
 | `extraArgs` | listOf str | `[]` | Appended to the command line. **Never a credential** — it lands in a world-readable unit. |
 | `upnp` | bool | `false` | `UPnP=`. PZ defaults this **true**; see [below](#two-defaults-that-differ-from-pz). |
 | `selfManagedMods` | bool | `true` | Stop PZ rewriting `Mods=` out from under you. |
-| `softReset` | bool | `false` | Discard world identity, generating a fresh world. Destructive. |
+| `softReset` | bool | `false` | Discard world identity so clients reroll characters. **The map is kept** — see [softReset](#softreset). Destructive. |
 | `betaBranch` | str \| null | `null` | e.g. `"legacy41"`. Per-server, but applied by the **shared** install, so set it on every server or none. |
 | `jvmOpts` | str | `-Xmx4G -Xms2G` | Placed **before the `--`** the launcher inserts, which is what routes flags to the JVM rather than to the game. The only way to set the heap. |
 | `javaAgent` | submodule \| null | `null` | `{ jar, args }` — a JVM agent (e.g. ZombieBuddy) prepended to `jvmOpts`. A headless server **must** set a non-prompting policy. |
@@ -270,6 +270,106 @@ a matching `.socket` for its console.
 | `webConsole` | bool | `true` | Needs `web.enable`. |
 | `port` | port \| null | `null` | Web console port; `null` assigns from `web.portBase` in sorted server order. |
 | `clientHost` | submodule | disabled | Render files for the game's in-game **Host** button from this same pack. See [clientHost](#clienthost). |
+
+### Reserved keys in `settings`
+
+`settings` is deliberately open — any Build 42 `.ini` key can be set without this
+module enumerating PZ's ~150 of them. But a handful of keys are **not** free-form:
+each has a dedicated option, or is rendered by the module itself. Setting one in
+`settings` is an evaluation error rather than a silently duplicated line:
+
+| Key | Use instead |
+| --- | --- |
+| `DefaultPort` | `defaultPort` |
+| `UDPPort` | `udpPort` |
+| `RCONPort` | `rconPort` |
+| `Public` | `public` |
+| `PublicName` | `publicName` |
+| `MaxPlayers` | `maxPlayers` |
+| `Open` | `open` |
+| `Map` | `map`, or leave it unset to derive from the installed mods |
+| `Mods` | the pack's `mods`, or the server's `localMods` |
+| `WorkshopItems` | the pack's / server's `workshopMods` |
+| `UPnP` | `upnp` |
+| `SelfManagedMods` | `selfManagedMods` |
+| `Whitelist` | `whitelist` (`compatibility.build41`) |
+| `Users` | `admins` (`compatibility.build41`) |
+
+`Map` gets the strongest version of this guard: the prep script always supplies
+the effective value at start, so a `settings.Map` would be overwritten on every
+boot with no warning at all.
+
+Values are rendered verbatim, and **a newline is rejected** in an `.ini` value —
+the format has no escape for one. Use PZ's literal `<LINE>` token for the keys
+that support line breaks (`ServerWelcomeMessage`, `PublicDescription`). In
+`sandbox`, a newline inside a Lua string is escaped to `\n` rather than emitted
+raw, because a raw newline would make the whole file a syntax error.
+
+### Build 41 keys in a Build 42 config
+
+PZ **ignores an unknown key silently** — the server starts cleanly and the
+setting simply does nothing. A config copied from a Build 41 guide is therefore
+the worst kind of wrong. The renderers reject known B41 names and name the
+replacement:
+
+| B41 key | Build 42 |
+| --- | --- |
+| `FoodLoot`, `CannedFoodLoot`, `MedicalLoot`, `MechanicsLoot`, … | `*LootNew` (a `0.00`–`4.00` multiplier, not a `1`–`5` enum) |
+| `WeaponLoot`, `RangedWeaponLoot`, `AmmoLoot` | `WeaponLootNew`, `RangedWeaponLootNew`, `AmmoLootNew` |
+| `FuelStationGas` | `FuelStationGasMin` / `FuelStationGasMax` / `FuelStationGasEmptyChance` |
+| `LootRespawn` | `HoursForLootRespawn` / `SeenHoursPreventLootRespawn` / `MaxItemsForLootRespawn` |
+| `MinutesPerPage`, `HoursForLootRespawn`, `ConstructionPreventsLootRespawn` | these moved to `sandbox` |
+| `DisableSafehouseWhenPlayerConnected` | `DisableSafehouseWhenOwnerConnected` |
+| `DiscordChannel` / `DiscordChannelID` | `DiscordChatChannel` (also `DiscordLogChannel`, `DiscordCommandChannel`) |
+
+The full table is `staleIniKeys` / `staleSandboxKeys` in `lib/default.nix`; every
+entry was checked against a generated 42.21 file. B41-only keys with no
+replacement (`SteamPort1`/`SteamPort2`, `UPnPLeaseTime`, `PlayerSaveOnDamage`,
+`SaveTransactionID`, `VoiceSampleRate`, …) fail with "removed in Build 42".
+
+### Nested SandboxVars keys
+
+Build 42 moved several groups into nested Lua tables: `ZombieLore`,
+`ZombieConfig`, `MultiplierConfig` (skill XP rates), `Map` and `Basement`. The
+server registers them by dotted name (`ZombieConfig.PopulationStartMultiplier`),
+so a **flat** key is an unknown option and is silently ignored. Write them with
+a dotted key:
+
+```nix
+sandbox = {
+  Zombies = 5;
+  "ZombieConfig.PopulationStartMultiplier" = 1.5;
+  "ZombieConfig.PopulationPeakMultiplier" = 2.0;
+  "ZombieLore.Speed" = 2;
+};
+```
+
+A flat `PopulationStartMultiplier` / `Speed` is an evaluation error naming the
+dotted spelling. The table is rendered as a real nested Lua table.
+
+One name is ambiguous: `Farming` flat is the farming-speed enum; the skill XP
+multiplier is `"MultiplierConfig.Farming"`. The table of known keys is
+`nestedSandboxTables` in `lib/default.nix` (from the 42.21 `SandboxOptions`
+classes, cross-checked against a generated `SandboxVars.lua`); a dotted key with
+an unknown table or short name is rejected.
+
+The renderer always writes the version header (`VERSION = 6` for 42.21). It is
+**not** optional: a file without it is read as version 0, and PZ then runs its
+old-build value migrations — `DayLength = 8` (5 hours) becomes the B41-era index
+14 (11 hours). Set `sandbox.VERSION` only if you are targeting an older build.
+
+### `softReset`
+
+**It rerolls characters; it does not regenerate the world.** The option clears
+PZ's identity keys (`Seed`, `ResetID`, `ServerPlayerID`, …), so clients are told
+their character belongs elsewhere and create a new one. `Saves/` is untouched:
+terrain, constructions, loot and vehicles all persist, and the old save is still
+there if you flip the option back.
+
+PZ's own `Seed` comment says a genuinely new map also needs `map_worldgen.bin`
+deleted from the save directory. This option deliberately does not do that — a
+declarative switch that silently destroys a world is a bad trade. Move
+`Saves/Multiplayer/<name>/` aside by hand if that is what you want.
 
 ### `clientHost`
 

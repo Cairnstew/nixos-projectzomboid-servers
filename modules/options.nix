@@ -805,9 +805,16 @@ in
               };
 
               maxPlayers = mkOption {
-                type = types.int;
+                # Build 42 (verified on 42.21.0) documents `Min: 1 Max: 254
+                # Default: 32` in its own generated .ini. The wiki's 1–100 is out
+                # of date, so the bound is the server's, not the page's.
+                type = types.ints.between 1 254;
                 default = 32;
-                description = "Max concurrent players. PZ warns above 32.";
+                description = ''
+                  Max concurrent players (<literal>MaxPlayers</literal>). This
+                  excludes admins. PZ warns above 32 — map streaming and sync
+                  degrade — and the build caps it at 254.
+                '';
               };
 
               # ── Config ──────────────────────────────────────────────────────
@@ -824,6 +831,28 @@ in
                   pack's <option>defaultSettings</option> and re-applied on every
                   start. Only these keys are touched; PZ's world-identity keys in
                   the same file are preserved.
+
+                  This is for keys the module does not otherwise own. These keys
+                  have their own options and are <emphasis>rejected</emphasis>
+                  here rather than rendered twice:
+                  <literal>DefaultPort</literal>,
+                  <literal>UDPPort</literal>,
+                  <literal>RCONPort</literal>,
+                  <literal>Public</literal>,
+                  <literal>PublicName</literal>,
+                  <literal>MaxPlayers</literal>,
+                  <literal>Open</literal>,
+                  <literal>Map</literal>,
+                  <literal>Mods</literal>,
+                  <literal>WorkshopItems</literal>,
+                  <literal>UPnP</literal>,
+                  <literal>SelfManagedMods</literal>, and (Build 41)
+                  <literal>Whitelist</literal> / <literal>Users</literal>.
+
+                  A value cannot contain a newline: the <literal>.ini</literal>
+                  format has no escape for one. Use PZ's literal
+                  <literal>&lt;LINE&gt;</literal> token where the key supports it
+                  (e.g. <literal>ServerWelcomeMessage</literal>).
                 '';
               };
 
@@ -839,6 +868,29 @@ in
                   <option>defaultSandbox</option> and rewritten on every start.
                   Unlike the <literal>.ini</literal>, this file is fully declarative
                   — PZ regenerates it, so nothing is preserved from it.
+
+                  Build 42 moved several groups into nested Lua tables
+                  (<literal>ZombieLore</literal>, <literal>ZombieConfig</literal>,
+                  <literal>MultiplierConfig</literal>, <literal>Map</literal>,
+                  <literal>Basement</literal>). Those keys must be written in
+                  dotted form, because a flat key is an unknown option and is
+                  ignored:
+
+                  <programlisting>
+                    sandbox."ZombieConfig.PopulationStartMultiplier" = 1.5;
+                    sandbox."ZombieLore.Speed" = 2;
+                  </programlisting>
+
+                  A flat <literal>PopulationStartMultiplier</literal> is rejected
+                  with the dotted spelling to use. The one ambiguous name is
+                  <literal>Farming</literal>: flat is the farming-speed enum,
+                  dotted (<literal>"MultiplierConfig.Farming"</literal>) is the XP
+                  multiplier.
+
+                  The renderer writes the version header automatically
+                  (<literal>VERSION = 6</literal> for 42.21). Do not omit it:
+                  without it PZ treats the file as version 0 and migrates values
+                  (e.g. <literal>DayLength = 8</literal> becomes 14).
                 '';
               };
 
@@ -1039,14 +1091,23 @@ in
                 description = ''
                   Discard this server's world identity — <literal>Seed</literal>,
                   <literal>ResetID</literal>, <literal>ServerPlayerID</literal> and
-                  friends — so PZ generates a fresh world on the next start.
+                  friends — so every client must create a new character on its next
+                  join.
+
+                  <emphasis>The map is NOT regenerated.</emphasis>
+                  <literal>Saves/</literal> is left untouched, so terrain,
+                  constructions, loot and vehicles all persist; only the identity
+                  keys are cleared and a new seed value is generated. PZ itself
+                  notes that a genuinely new world also requires deleting
+                  <literal>map_worldgen.bin</literal> from the save directory —
+                  this option deliberately does not, so the old world stays
+                  recoverable and an accidental flip is not catastrophic.
 
                   <emphasis>Destructive, and applied on every start while
-                  true.</emphasis> The NixOS module clears it once
-                  <command>systemd.nixos.reboot</command> takes effect, so this is a
-                  declarative "reset my world" switch; leave it on and every restart
-                  starts a new world. The <literal>Saves/</literal> directory is
-                  left alone — the old world stays on disk to recover.
+                  true.</emphasis> Nothing clears it for you — a Nix option is
+                  static — so set it back to <literal>false</literal> and rebuild
+                  once the reroll has happened. Leaving it on rerolls clients again
+                  on every restart.
                 '';
               };
 

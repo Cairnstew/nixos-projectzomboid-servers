@@ -8,6 +8,18 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Dotted `sandbox` keys for Build 42's nested tables.**
+  `sandbox."ZombieLore.Speed"` and
+  `sandbox."ZombieConfig.PopulationStartMultiplier"` now render a real nested
+  Lua table. A flat key from one of those tables is rejected with the dotted
+  spelling, because PZ ignores unknown keys silently — the server registers
+  `ZombieConfig.PopulationStartMultiplier`, never a top-level
+  `PopulationStartMultiplier`. `Farming` stays valid flat as the farming-speed
+  enum; the XP multiplier is `"MultiplierConfig.Farming"`. The known tables and
+  keys (`ZombieLore`, `ZombieConfig`, `MultiplierConfig`, `Map`, `Basement`)
+  come from the 42.21 `SandboxOptions` classes and a generated
+  `SandboxVars.lua`.
+
 - **Large/heavy vehicles for the `viewpoint` pack.** W900 Semi-Truck (with its
   Oshkosh M911 compatibility patch), LIAZ 300, RVs, Heavy Duty & Trailers
   (19 RVs/ambulances/work trucks/trailers with Viewpoint support), Road Builder
@@ -236,6 +248,20 @@ All notable changes to this project. Format follows
 
 ### Changed
 
+- **`maxPlayers` is bounded to what Build 42 actually accepts: 1–254.** The
+  wiki's "Min: 1 Max: 100" is out of date; the 42.21 server's own generated
+  `.ini` says `Min: 1 Max: 254 Default: 32`. The option was a plain `int`, so
+  `maxPlayers = 5000` passed evaluation and had no defined effect. It now fails
+  the type check, and the description notes that the count excludes admins.
+
+- **`softReset` is documented as rerolling characters, not the world.** It
+  clears only PZ's identity keys (`Seed`, `ResetID`, `ServerPlayerID`, …);
+  `Saves/` — terrain, constructions, loot — is untouched, and the guide now says
+  so. The old text also claimed "the NixOS module clears it once
+  `systemd.nixos.reboot` takes effect", which does not exist: a Nix option is
+  static, so it is now stated plainly that you must set it back to `false` and
+  rebuild. Docs in `options.md`, `installing.md` and `host-recipes.md` follow.
+
 - **The client-host prepare is config-only, and documented as such.** It takes
   only `PZ_CLIENT_ZOMBOID`; `PZ_SERVER_DIR`, `PZ_CLIENT_WORKSHOP` and
   `PZ_LINK_STEAM_WORKSHOP` are gone. `docs/mod-delivery.md` (new) explains the
@@ -258,6 +284,59 @@ All notable changes to this project. Format follows
   than before and works under either hardening posture.
 
 ### Fixed
+
+- **The rendered `SandboxVars.lua` had no `VERSION` header, so PZ migrated its
+  values.** A missing version reads as 0, and `upgradeOptionValue` then rewrites
+  old-build values — `DayLength = 8` (5 hours) becomes the B41-era index 14
+  (11 hours), `CarSpawnRate` shifts, and so on. The renderer now writes
+  `VERSION = 6` (the 42.21 value) unless `sandbox.VERSION` overrides it. This was
+  invisible for the `viewpoint` pack, whose sandbox is empty, and easy to
+  misread as harmless because the game rewrites the file after loading.
+
+- **`survival-hard`'s sandbox used keys that do not exist in Build 42, or were
+  in the wrong table.** `MeleeWeaponLootNew` is `WeaponLootNew`;
+  `ZombieDamage` has no B42 key and is removed; `ZombieRespawn = 4` (the enum is
+  `1–4`, so `0` was out of range); and `RedistributeHours`,
+  `PopulationStartMultiplier`, `PopulationPeakMultiplier` moved under
+  `ZombieConfig.`. The comments now describe what the values actually mean
+  (`Zombies = 5` is Low, `DayLength = 8` is 5 hours, `Helicopter = 2` is Once).
+  The first two were silently ignored, exactly like a Build 41 key.
+  `vanilla-plus`'s `MaximumLooted = -1` was outside the option's 0–200 range;
+  it is now `0`, which matches its "unlimited loot" comment (0 = never
+  pre-looted).
+
+- **Build 41 keys are rejected instead of silently ignored.** PZ ignores an
+  unknown key, so a config copied from a B41 guide starts cleanly and does
+  nothing. `lib/default.nix` now carries `staleIniKeys` / `staleSandboxKeys` —
+  verified against a generated 42.21 file — and both renderers fail with the
+  replacement named (`FoodLoot` → `FoodLootNew`, `MinutesPerPage` →
+  `sandbox.MinutesPerPage`, `DisableSafehouseWhenPlayerConnected` →
+  `DisableSafehouseWhenOwnerConnected`, …). `render-guards` covers the moves,
+  the renames, the two invented spellings and the flat-nested form.
+
+- **A newline in a setting corrupted the file it was written to.** The `.ini`
+  format has no escape for a line break, so `settings.ServerWelcomeMessage = "a\nb"`
+  produced a second line with no `=` that `merge_ini.py` then dropped — the value
+  silently truncated on the next start. A raw newline in a `sandbox` string was
+  worse: Lua forbids one inside a short string, so the whole `SandboxVars.lua`
+  became a syntax error and PZ regenerated it from defaults, discarding every
+  setting in the file. The `.ini` renderer now rejects a line break with an error
+  pointing at PZ's `<LINE>` token; the Lua renderer escapes `\n`, `\r`, `\t`,
+  `"` and `\`.
+
+- **A reserved key in `settings` silently disagreed with its dedicated option.**
+  `settings` is open, but `MaxPlayers`, `Map`, `UPnP` and friends are written by
+  the module itself. `settings.MaxPlayers` emitted a second line (the last one
+  wins in `merge_ini.py`, so the option and the file diverged), and
+  `settings.Map` was overwritten by the value the prep script supplies at every
+  start — with no warning. Such keys now fail evaluation, naming the option to
+  use instead (`maxPlayers`, `map`, `upnp`, …). `resolveServer` checks the user's
+  own `settings`; the renderer checks pack defaults and direct callers.
+
+- **`serverDefaults` was missing `javaAgent`.** The comment above it says every
+  field must exist on a `resolveServer` result, and the resolver's
+  `inherit (srv) javaAgent` failed with "attribute 'javaAgent' missing" whenever
+  the whole value was forced. Added as `null`, matching the option default.
 
 - **`result=9` is reported as a rate limit, not a missing mod.** Exceeding the
   anonymous budget makes Steam answer `result=9` ("busy") with an empty title,

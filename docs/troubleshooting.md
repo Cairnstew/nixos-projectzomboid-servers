@@ -100,6 +100,50 @@ nix eval --raw .#formatter.x86_64-linux.outPath
 The proper replacement is `pkgs.nixfmt-tree` (treefmt), which uses a different
 invocation model.
 
+### `an .ini value cannot contain a line break`
+
+PZ's `.ini` format has no escape for a newline, so the renderer refuses one
+instead of writing a file that silently truncates on the next start. Use the
+literal `<LINE>` token where the key supports it (`ServerWelcomeMessage`,
+`PublicDescription`). `sandbox` values are different: a newline there is escaped
+to `\n` for Lua.
+
+### `these keys have their own option and cannot be set through settings`
+
+The key you put in `settings` is owned by the module — `MaxPlayers`, `Map`,
+`UPnP`, `SelfManagedMods`, `DefaultPort`, and the rest listed in
+[options](options.md#reserved-keys-in-settings). The error names the option to
+use instead. It exists because the duplicate would otherwise be silent: the last
+line wins in `merge_ini.py`, and `Map` is overwritten by the prep script on every
+start anyway.
+
+Everything else in PZ's ~150-key `.ini` belongs in `settings`.
+
+### `these SandboxVars keys are not valid in Build 42`
+
+PZ ignores unknown keys, so a Build 41 key does nothing at all — no error and no
+log line. The guard catches the known renames and section moves and names the
+replacement (`FoodLoot` → `FoodLootNew`, `MinutesPerPage` → `sandbox.MinutesPerPage`,
+`DisableSafehouseWhenPlayerConnected` → `DisableSafehouseWhenOwnerConnected`, …).
+
+If you believe a key is valid, check the server's own generated
+`Zomboid/Server/<name>.ini` and `<name>_SandboxVars.lua`: the 42.21 server writes
+every key it reads, including the nested `ZombieLore` / `ZombieConfig` tables.
+
+### `these SandboxVars keys only exist inside a nested table`
+
+Build 42 registers e.g. `PopulationStartMultiplier` as
+`ZombieConfig.PopulationStartMultiplier`, so the flat spelling is an unknown
+option. Write it dotted:
+
+```nix
+sandbox."ZombieConfig.PopulationStartMultiplier" = 1.5;
+```
+
+The same applies to `ZombieLore`, `MultiplierConfig`, `Map` and `Basement`.
+`Farming` is the one name that is valid both ways: flat is the farming-speed
+enum, `"MultiplierConfig.Farming"` is the XP multiplier.
+
 ---
 
 ## The server will not start

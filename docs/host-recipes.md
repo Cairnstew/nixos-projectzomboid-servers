@@ -98,9 +98,10 @@ Points that bite:
 - `autoStart = false` on one server leaves it defined but stopped. Data is
   untouched, so it is safe to toggle.
 - `softReset = true` is destructive and applies **on every start while true**.
-  The NixOS module clears it once `systemd.nixos.reboot` takes effect, so it
-  behaves as a declarative "reset my world" switch. Leave it on and every restart
-  starts a new world. `Saves/` is left alone, so the old world is recoverable.
+  Nothing clears it for you, so set it back to `false` and rebuild after the
+  reroll. It clears only PZ's identity keys: clients create new characters, but
+  the map, constructions and loot in `Saves/` all persist. That also makes the old
+  world recoverable if you flip it back.
 
 ---
 

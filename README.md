@@ -468,6 +468,7 @@ The checks:
 | `module-eval` | Four configurations — plain, web consoles + tmux, **client-host-only** (no install unit/steamcmd/user), and a custom `workshopDir` — produce the right units, ports, Exec paths and environment. |
 | `nonflake-entry` | `default.nix` really is usable by a consumer without flakes: an attrset, supplies `package`, produces working units. |
 | `options-documented` | Every option in `modules/options.nix` appears in `docs/options.md`. |
+| `render-guards` | A newline in an `.ini` value, a reserved key in `settings` (`MaxPlayers`, `Map`, `UPnP`, …), a Build 41 key that B42 no longer reads (`FoodLoot`, `MinutesPerPage`, …) and a B42 nested-table key written flat (`PopulationStartMultiplier`) all fail evaluation with the replacement named; Lua strings escape newlines/quotes/backslashes; dotted keys render a nested table; free-form and B42 keys still work. |
 | `prep-roundtrip` | Runs the real prep script against a seeded world: the merge preserves world identity, runtime overrides win, SandboxVars is written, mods are linked and stale ones unlinked. |
 | `client-host-prepare` | The client-host script writes only `~/Zomboid/Server/` — never `mods/`, never a Steam/steamcmd path — and a re-run restores `SelfManagedMods` after the game strips it. |
 | `pz-client-mods-isolation` | The deprecated client downloader runs steamcmd with an isolated HOME and has no Steam-library target, so it cannot rewrite `libraryfolders.vdf`. |

@@ -252,7 +252,7 @@ PVP=true
 | `--list-maps` | Print the derived `Map=` and why, then exit. No server needed. |
 | `--extra-arg ARG` | Argument for the server command line. Repeatable. |
 | `--admin-user` + `--admin-pass-file` | Create/update the Build 42 admin login. |
-| `--soft-reset` | Discard world identity, generating a fresh world. |
+| `--soft-reset` | Discard world identity so clients create new characters. **The map and `Saves/` are kept.** |
 | `--login NAME` | Steam account for Workshop items anonymous cannot fetch. Token must be cached once under `--data-dir`. |
 | `--prune` | Remove mods no longer declared — the shared cache and the server's link farms. |
 | `--lenient` | Log-and-skip Workshop items that cannot be downloaded instead of failing the install. |

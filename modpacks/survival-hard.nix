@@ -26,19 +26,23 @@
   };
 
   defaultSandbox = {
-    Zombies = 5; # Extreme
-    DayLength = 8; # 3 hours
-    Helicopter = 2; # Never
-    ZombieRespawn = 0; # Never
-    ZombieDamage = 2;
+    Zombies = 5; # Low (6 = None)
+    DayLength = 8; # 5 hours (6 = 3 hours)
+    Helicopter = 2; # Once (1 = Never)
+    ZombieRespawn = 4; # None (the enum is 1..4, not 0..4)
+    # There is no `ZombieDamage` key in Build 42. The nearest equivalents are
+    # `ZombieLore.Strength` / `ZombieLore.Toughness`, which this module does not
+    # expose yet; leaving the invented key here was a silent no-op.
     FoodLootNew = 0.4;
     RangedWeaponLootNew = 0.6;
-    MeleeWeaponLootNew = 0.6;
+    WeaponLootNew = 0.6; # melee and other non-tool weapons
     ClothingLootNew = 0.5;
     ContainerLootNew = 0.5;
-    RedistributeHours = 0;
+    # Build 42 moved these into the `ZombieConfig` table; a flat key is an
+    # unknown option and is ignored. The dotted form renders the table.
+    "ZombieConfig.RedistributeHours" = 0;
+    "ZombieConfig.PopulationStartMultiplier" = 1.5;
+    "ZombieConfig.PopulationPeakMultiplier" = 2.0;
     MaximumLooted = 40; # Cap total looted items per container
-    PopulationStartMultiplier = 1.5;
-    PopulationPeakMultiplier = 2.0;
   };
 }

@@ -172,6 +172,7 @@
             betaBranch = null;
             extraArgs = [ ];
             jvmOpts = "-Xmx4G -Xms2G";
+            javaAgent = null;
             openFirewall = false;
             autoStart = true;
             restart = "always";
@@ -1603,7 +1604,9 @@
                   [ -f "$sandbox" ] || fail "no _SandboxVars.lua written"
                   head -1 "$sandbox" | grep -qx 'SandboxVars = {' || fail "_SandboxVars.lua does not open a SandboxVars table"
                   tail -1 "$sandbox" | grep -qx '}' || fail "_SandboxVars.lua does not close the table"
-                  grep -qE '^ +Zombies = [0-9]+$' "$sandbox" || fail "the modpack's sandbox vars did not land"
+                  # The comma is optional: a nested table after this key makes it
+                  # a non-final entry, and Lua allows (here, requires) the comma.
+                  grep -qE '^ +Zombies = [0-9]+,?$' "$sandbox" || fail "the modpack's sandbox vars did not land"
 
                   # ── Workshop symlinks ───────────────────────────────────────
                   link="$data/$srv/Zomboid/Workshop/content/108600/2625441155"
@@ -1619,6 +1622,190 @@
                   grep -q '^Mods=.*TestLocalMod' "$ini" || fail "a localMod key was not added to Mods="
 
                   echo "prep roundtrip ok: world identity preserved, config merged, sandbox written, mods linked, prune kept only the declared set"
+                  touch "$out"
+                '';
+
+            # ── Renderer guards ───────────────────────────────────────────────
+            # Three inputs produce a silently broken server rather than an eval
+            # error, so all are asserted here:
+            #   * a newline in a value — the .ini has no escape for one, and Lua
+            #     forbids a raw newline inside a short string;
+            #   * a `settings` key that duplicates a module-owned line — notably
+            #     `Map`, which the prep script overwrites at every start, so the
+            #     user's value would be ignored with no warning at all;
+            #   * a Build 41 key that B42 no longer reads, or a B42 key that only
+            #     works inside a nested table set flat — PZ ignores unknown keys,
+            #     so the server starts cleanly and the setting does nothing.
+            render-guards =
+              let
+                base = {
+                  defaultPort = 16261;
+                  udpPort = 16262;
+                  rconPort = 0;
+                  public = true;
+                  publicName = "guard";
+                  maxPlayers = 32;
+                  open = true;
+                };
+                ini =
+                  extra:
+                  pz-lib.renderIniLines {
+                    settings = base // extra;
+                    mods = [ ];
+                    workshopItems = [ ];
+                  };
+                sandbox = settings: pz-lib.renderSandbox { inherit settings; };
+                # The resolver is where a USER-supplied reserved key is caught.
+                # (The renderer catches pack defaults and direct callers for the
+                # keys it does not own; `UPnP`/`SelfManagedMods` are rendered by
+                # the module itself, so only the resolver can tell a user's
+                # value from its own.)
+                resolved =
+                  extra:
+                  pz-lib.resolveServer self.modpacks "guard" ((serverDefaults "guard") // { settings = extra; });
+                # `deepSeq`, not plain `tryEval`: the guard throws while the
+                # returned list is being constructed, and a shallow tryEval would
+                # stop at the cons cell and report success either way.
+                evaluates = x: (builtins.tryEval (builtins.deepSeq x x)).success;
+                # Shell fragments rather than whole `if` blocks: the check stays
+                # readable and the failure message is impossible to forget.
+                expectFail = msg: x: if evaluates x then "fail ${lib.escapeShellArg msg}" else ":";
+                expectPass = msg: x: if evaluates x then ":" else "fail ${lib.escapeShellArg msg}";
+                luaFile = pkgs.writeText "guard-SandboxVars.lua" (
+                  pz-lib.renderSandbox {
+                    settings = {
+                      Note = "a\nb\"c\\d";
+                    };
+                  }
+                );
+                nestedFile = pkgs.writeText "guard-nested.lua" (
+                  pz-lib.renderSandbox {
+                    settings = {
+                      Zombies = 5;
+                      "ZombieConfig.PopulationStartMultiplier" = 1.5;
+                    };
+                  }
+                );
+              in
+              pkgs.runCommand "pz-render-guards-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                  ];
+                  LUA_FILE = luaFile;
+                  NESTED_FILE = nestedFile;
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  # A newline in an .ini value must fail evaluation...
+                  ${expectFail "a newline in an .ini value was accepted" (ini {
+                    ServerWelcomeMessage = "a\nb";
+                  })}
+
+                  # ...and a reserved key must fail, naming its owning option —
+                  # through the resolver (the user's own settings)...
+                  ${expectFail "settings.MaxPlayers was accepted although maxPlayers owns it" (resolved {
+                    MaxPlayers = 64;
+                  })}
+                  ${expectFail "settings.Map was accepted although the prep script overwrites Map= at start"
+                    (resolved {
+                      Map = "Foo";
+                    })
+                  }
+                  ${expectFail "settings.UPnP was accepted although upnp owns it" (resolved {
+                    UPnP = false;
+                  })}
+                  ${expectFail "settings.SelfManagedMods was accepted although selfManagedMods owns it" (resolved {
+                    SelfManagedMods = false;
+                  })}
+
+                  # ...and through the renderer (a modpack's defaultSettings or a
+                  # direct caller).
+                  ${expectFail "a pack default of MaxPlayers reached the renderer" (ini {
+                    MaxPlayers = 64;
+                  })}
+
+                  # ...while a free-form key still renders normally.
+                  ${expectPass "a free-form settings key was rejected" (resolved {
+                    PVP = true;
+                  })}
+
+                  # Build 41 keys that B42 silently ignores must fail instead.
+                  # The moved-section cases...
+                  ${expectFail "the B41 ini key MinutesPerPage was accepted" (ini {
+                    MinutesPerPage = 2.0;
+                  })}
+                  ${expectFail "the B41 ini key HoursForLootRespawn was accepted" (ini {
+                    HoursForLootRespawn = 0;
+                  })}
+                  # ...the renames...
+                  ${expectFail "the B41 ini key DisableSafehouseWhenPlayerConnected was accepted" (ini {
+                    DisableSafehouseWhenPlayerConnected = false;
+                  })}
+                  ${expectFail "the B41 ini key DiscordChannel was accepted" (ini {
+                    DiscordChannel = "pz";
+                  })}
+                  # ...and the B41 sandbox enums that became *LootNew floats, plus
+                  # the two known-bad spellings that were in the packs.
+                  ${expectFail "the B41 sandbox key FoodLoot was accepted" (sandbox {
+                    FoodLoot = 2;
+                  })}
+                  ${expectFail "the B41 sandbox key WeaponLoot was accepted" (sandbox {
+                    WeaponLoot = 2;
+                  })}
+                  ${expectFail "the invented sandbox key MeleeWeaponLootNew was accepted" (sandbox {
+                    MeleeWeaponLootNew = 0.6;
+                  })}
+                  ${expectFail "the invented sandbox key ZombieDamage was accepted" (sandbox {
+                    ZombieDamage = 2;
+                  })}
+
+                  # The B42 spellings still render.
+                  ${expectPass "the B42 sandbox key FoodLootNew was rejected" (sandbox {
+                    FoodLootNew = 0.4;
+                  })}
+                  ${expectPass "the B42 sandbox key WeaponLootNew was rejected" (sandbox {
+                    WeaponLootNew = 0.6;
+                  })}
+
+                  # B42 nested-table keys must be dotted; the flat form is an
+                  # unknown option. `Farming` is the one ambiguous name: flat is
+                  # the farming-speed enum, dotted is the XP multiplier.
+                  ${expectFail "the flat ZombieConfig key PopulationStartMultiplier was accepted" (sandbox {
+                    PopulationStartMultiplier = 1.5;
+                  })}
+                  ${expectFail "the flat ZombieLore key Speed was accepted" (sandbox {
+                    Speed = 2;
+                  })}
+                  ${expectPass "the dotted ZombieConfig key was rejected" (sandbox {
+                    "ZombieConfig.PopulationStartMultiplier" = 1.5;
+                  })}
+                  ${expectPass "the flat Farming enum was rejected" (sandbox {
+                    Farming = 3;
+                  })}
+                  ${expectPass "the dotted MultiplierConfig.Farming key was rejected" (sandbox {
+                    "MultiplierConfig.Farming" = 1.2;
+                  })}
+
+                  # ...and the dotted form actually renders a Lua table.
+                  grep -qF '    ZombieConfig = {' "$NESTED_FILE" \
+                    || fail "a dotted sandbox key did not render as a nested table"
+                  grep -qE 'PopulationStartMultiplier = 1\.5' "$NESTED_FILE" \
+                    || fail "the nested value did not land in ZombieConfig"
+
+                  # The version header must be present: without it PZ treats the
+                  # file as version 0 and migrates values (e.g. DayLength 8 -> 14).
+                  grep -qx '    VERSION = 6,' "$LUA_FILE" \
+                    || fail "SandboxVars.lua has no VERSION header — PZ would migrate the values"
+
+                  # A Lua string escapes newlines, quotes and backslashes rather
+                  # than emitting a raw newline (which is a syntax error).
+                  grep -qF 'Note = "a\nb\"c\\d"' "$LUA_FILE" \
+                    || fail "a SandboxVars string was not escaped for Lua"
+
+                  echo "render guards ok: newline, reserved-key, stale-B41 and flat-nested inputs fail; free-form, B42 and dotted keys still work"
                   touch "$out"
                 '';
 

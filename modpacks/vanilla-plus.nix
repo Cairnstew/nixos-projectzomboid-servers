@@ -67,11 +67,12 @@
     ZombieRespawn = 3; # Low
     FoodLootNew = 0.8;
     RangedWeaponLootNew = 1.2;
-    # Multipliers added in Build 42; older builds ignore unknown keys, so these
-    # are safe to leave set.
-    PopulationStartMultiplier = 1.0;
-    PopulationPeakMultiplier = 1.0;
-    RedistributeHours = 0;
-    MaximumLooted = -1; # -1 = unlimited
+    # Build 42 moved these into the `ZombieConfig` table; a flat key is an
+    # unknown option and is ignored silently. Older builds ignore the dotted
+    # keys instead, which is harmless.
+    "ZombieConfig.PopulationStartMultiplier" = 1.0;
+    "ZombieConfig.PopulationPeakMultiplier" = 1.0;
+    "ZombieConfig.RedistributeHours" = 0;
+    MaximumLooted = 0; # 0 = never pre-looted (the option is 0–200; -1 was out of range)
   };
 }
