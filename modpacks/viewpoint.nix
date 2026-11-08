@@ -434,6 +434,30 @@
     { id = "2618566294"; title = "Wild Fruits"; }
     { id = "3753259986"; title = "Ethnobotany Vanilla [B42]"; }
 
+    # ── Bushcraft / primitive survival ─────────────────────────────────────
+    # Zero-to-hero wilderness stack. Wilderness Progression adds the missing
+    # early recipes plus world-gen flint and surface-iron deposits; its
+    # Expanded companion adds crude doors, lighting and transport; Digging Pit
+    # turns endurance into dirt, stone and worms. The Wildwrought mods cover
+    # individual primitive skills. Wildwrought: Leatherworking is deliberately
+    # omitted: TFC Combine Leather in the tailoring section already combines
+    # small -> medium -> large leather. Break Big Rocks is also omitted because
+    # Wilderness Progression and Wildwrought: Prospecting already own boulder
+    # and deposit mining.
+    { id = "3688039727"; title = "Wilderness Progression"; }
+    { id = "3795706900"; title = "Wilderness Progression Expanded"; }
+    { id = "3799487545"; title = "Digging Pit"; }
+    { id = "3803599059"; title = "Wildwrought: Prospecting"; }
+    { id = "3802459802"; title = "Wildwrought: Knapping Practice"; }
+    { id = "3803016263"; title = "Wildwrought: Masonry Practice"; }
+    { id = "3803612981"; title = "Wildwrought: Primitive Research"; }
+    { id = "3803471145"; title = "Wildwrought: Flint Firestarter"; }
+    { id = "3802041812"; title = "Wildwrought: Twig Bed"; }
+    { id = "3801977205"; title = "Wildwrought: Work Log"; }
+    { id = "3804094839"; title = "Wildwrought: Loose Clay"; }
+    { id = "3803438416"; title = "Wildwrought: Washed Sand"; }
+    { id = "3799755212"; title = "Root Cellar [B42]"; }
+
     # ── Livestock / animal husbandry ───────────────────────────────────────
     # Build 42 + multiplayer. Feed That Animal ships an SP mod and an
     # incompatible MP replacement: only FeedThatAnimalMP is enabled. Animal
@@ -472,8 +496,41 @@
     # settings are changed; it adds the fishing status UI and reload-bait.
     # FishingActionMPFix is the server-authoritative MP repair and requires
     # ZombieBuddy (already first in this pack).
+    # Fishing Overhaul BR adds 100+ modelled species and taxidermy and is
+    # explicitly compatible with Vanilla Fishing Fix, which rebuilds
+    # casting/bait/equipment balance; Better Fishing stays UI-only, so all
+    # three coexist. Spear Fishing restores the primitive wooden-spear catch.
+    # The Wildwrought pair renders fish guts into oil and lets undersized
+    # catches be released.
     { id = "3570485296"; title = "TwisTonFire - Better Fishing"; }
     { id = "3776009088"; title = "[B42] MP Vanilla Fishing Complete Fix"; }
+    { id = "3780987954"; title = "Vanilla Fishing Fix"; }
+    { id = "3784235810"; title = "Fishing Overhaul BR [B42]"; }
+    { id = "3735882606"; title = "Spear Fishing [B42]"; }
+    { id = "3793432995"; title = "Fish Guts Bait"; }
+    { id = "3806118126"; title = "Wildwrought: Fish Oil"; }
+    { id = "3800719316"; title = "Wildwrought: Release Fish"; }
+
+    # ── Cooking ────────────────────────────────────────────────────────────
+    # Project Cook is the dedicated cooking interface and base/evolved-recipe
+    # overhaul; it requires NeatUI Framework (beekeeping section above) and is
+    # loaded after it. OG Cooking Expanded and Realistic Recipes are additive
+    # recipe packs for the vanilla gaps Project Cook leaves alone. Preservation
+    # is split by method: Immersive Preservation jars evolved recipes,
+    # Wildwrought Preserved Food jars raw produce and adds drying/salting, and
+    # Root Cellar in the bushcraft section stores finished food off-grid.
+    # How Long To Cook declares incompatible with timeToCook and Inventory
+    # Tetris, neither of which is in this pack. Stove shutoff joins the
+    # fire-behaviour stack above.
+    { id = "3490188370"; title = "Project Cook [B42]"; } # Project_Cook + Pixel Icon Pack
+    { id = "3727395976"; title = "[B42] OG Cooking Expanded"; }
+    { id = "3795521454"; title = "Realistic Recipes"; }
+    { id = "3560836822"; title = "[B42] Immersive Preservation: Canning and Jarring (of evolved recipes)"; }
+    { id = "3813109633"; title = "Wildwrought: Preserved Food"; }
+    { id = "3804253117"; title = "Wildwrought: Cast Iron Cookware"; }
+    { id = "3809670050"; title = "Cook Directly on Stoves & Campfires"; }
+    { id = "3803402281"; title = "How Long To Cook (Cook Thaw & Burn Timers)"; }
+    { id = "3526968739"; title = "[B42/41] Automatic Stove Shutoff"; }
 
     # ── Plumbing / water supply ────────────────────────────────────────────
     # Carthon's Water Pipes is the maintained network here, with its Viewpoint
@@ -1027,6 +1084,26 @@
     "MattSimpleAddonsFriuts"
     "EthnobotanyVanillaB42"
 
+    # ── Bushcraft / primitive survival ─────────────────────────────────────
+    # Bootstrap progression first, then its expansion, then the digging
+    # activity and the Wildwrought skill mods. Prospecting/Knapping/Masonry
+    # come before the mods that consume their outputs; Root Cellar stores the
+    # results. Wildwrought: Leatherworking is omitted (TFC Combine Leather
+    # already does small -> medium -> large).
+    "WireToNails42"          # Wilderness Progression
+    "CrudeDoorsAndShutters"  # Wilderness Progression Expanded
+    "zodi_digging_pit"
+    "WWS_Prospecting"
+    "WWS_KnappingPractice"
+    "WWS_MasonryPractice"
+    "WWS_PrimitiveResearch"
+    "WWS_FlintFirestarter"
+    "WWS_TwigBed"
+    "WWS_WorkLog"
+    "WWS_LooseClay"
+    "WWS_WashedSand"
+    "Cellar"                 # Root Cellar
+
     # ── Livestock / animal husbandry ───────────────────────────────────────
     # Stability fix first; FeedThatAnimalMP replaces the incompatible SP mod;
     # AnimalBarns is the main mod (not its safe-uninstall companion).
@@ -1056,8 +1133,30 @@
     # ── Fishing ────────────────────────────────────────────────────────────
     # Better Fishing's sandbox defaults are vanilla; FishingActionMPFix needs
     # ZombieBuddy (loaded first) and owns the MP fishing action/netcode.
+    # VanillaFishingFix and PeixesBRExpansion then rebuild balance and add the
+    # modelled species; the spear and guts mods are the primitive loop.
     "twistonfirebetterfishing"
     "FishingActionMPFix"
+    "VanillaFishingFix"
+    "PeixesBRExpansion"
+    "WoodenSpearFishingB42"
+    "FishGutsBait"
+    "WWS_FishOil"
+    "WWS_ReturnFish"
+
+    # ── Cooking ────────────────────────────────────────────────────────────
+    # NeatUI_Framework is loaded in the beekeeping section above; Project Cook
+    # and its pixel icon pack require it, so they follow it here.
+    "Project_Cook"
+    "Project_Cook_Pixel_Icon_Pack"
+    "OGCookingExpanded"
+    "RealisticRecipes"
+    "ImmersivePreservationCanningJarring"
+    "WWS_PreservedFood"
+    "WWS_IronCookware"
+    "DirectStoveCampfire"
+    "CookThawBurnTimers"
+    "AutomaticStoveShutoff"
 
     # ── Plumbing / water supply ────────────────────────────────────────────
     # waterpipes -> its Viewpoint add-on -> the NoCollision add-on. Take A Bath
