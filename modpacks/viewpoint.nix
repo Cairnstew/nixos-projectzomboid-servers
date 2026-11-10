@@ -626,14 +626,32 @@
     { id = "3803402281"; title = "How Long To Cook (Cook Thaw & Burn Timers)"; }
     { id = "3526968739"; title = "[B42/41] Automatic Stove Shutoff"; }
 
-    # ── Reading / sleep ────────────────────────────────────────────────────
+    # ── Reading / sleep / time control ─────────────────────────────────────
     # Read While Walking is the single-purpose B42.15 update and is preferred
     # over Reading Reworked (3780124271), which is broader and still 0.3.x.
     # True Sleep is the lighter of the two MP sleep mods: it keeps vanilla
     # group sleep as the default and only adds an opt-in solo nap, so it needs
     # no sandbox table like Sleep with Friends (2686624983).
     { id = "3786647452"; title = "Read While Walking - Updated (B41 + B42)"; } # SimpleReadWhileWalkingUpdated
+    # Queues every still-useful recipe magazine and skill book within reach
+    # through the vanilla ISReadABook action, then returns borrowed books.
+    # Client-side and dependency-free, so Read While Walking above still
+    # applies. Its entry is in the INVENTORY context menu; Viewpoint's
+    # first-person inventory is its own, so in first person either enable
+    # Viewpoint Interface -> "Use the game's inventory windows" or use the
+    # isometric view (same caveat as this pack's other inventory mods).
+    { id = "3779355903"; title = "DWTB Auto Reader - Recipes & Skill Books (B42.20.2)"; } # DWTB_AutoRead
     { id = "3781533687"; title = "True Sleep - Better Multiplayer Sleep"; } # TrueSleep
+    # The maintained B42 rewrite of Fast Forward (MP): pause plus three speeds,
+    # agreed by every player or forced by an admin, cancelled by movement or a
+    # nearby zombie. Ships server + client Lua and only sets GameTime's
+    # multiplier (no global pause/speed overrides), so Viewpoint's sky/render
+    # loop keeps working. Its speed panel sits under the clock at the top
+    # right, where the vanilla minimap is: turn off "Show the minimap" in
+    # Viewpoint Interface if they overlap. Do NOT also add the original
+    # FastForward (2968318536, unmaintained); this mod disables itself if that
+    # one is active.
+    { id = "3738738086"; title = "MP Fast Forward"; } # MPFastForward
 
     # ── Plumbing / water supply ────────────────────────────────────────────
     # Carthon's Water Pipes is the maintained network here, with its Viewpoint
@@ -1291,11 +1309,14 @@
     "CookThawBurnTimers"
     "AutomaticStoveShutoff"
 
-    # ── Reading / sleep ────────────────────────────────────────────────────
-    # Both are gameplay conveniences with no dependencies. TrueSleep leaves
-    # vanilla group sleep as the default and adds only an opt-in solo nap.
+    # ── Reading / sleep / time control ────────────────────────────────────
+    # Client-side reading helpers; MPFastForward also has server Lua and must
+    # load on both sides. No require= between them, so this is just the pack's
+    # reading/time group.
     "SimpleReadWhileWalkingUpdated"
+    "DWTB_AutoRead"
     "TrueSleep"
+    "MPFastForward"
 
     # ── Plumbing / water supply ────────────────────────────────────────────
     # waterpipes -> its Viewpoint add-on -> the NoCollision add-on. Take A Bath

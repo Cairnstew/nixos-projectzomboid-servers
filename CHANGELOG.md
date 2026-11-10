@@ -22,6 +22,21 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Read-all and multiplayer fast-forward for the `viewpoint` pack.**
+  `DWTB Auto Reader` (`DWTB_AutoRead`) queues every still-useful recipe
+  magazine and skill book within reach through the vanilla `ISReadABook`
+  action, then returns borrowed books; it is client-side, dependency-free and
+  works with the pack's Read While Walking. `MP Fast Forward`
+  (`MPFastForward`) is the maintained B42 rewrite of Fast Forward (MP): pause
+  plus three speeds, agreed by all players or forced by an admin, cancelled by
+  movement or a nearby zombie; it speeds reading and crafting too, so it pairs
+  with Auto Reader. It only sets `GameTime`'s multiplier instead of overriding
+  `isGamePaused`/`getGameSpeed`, which Viewpoint reads. Two Viewpoint caveats:
+  Auto Reader's entry is in the inventory context menu, so first person needs
+  Viewpoint Interface's "Use the game's inventory windows" (or the isometric
+  view), and MP Fast Forward's speed panel sits under the clock where the
+  vanilla minimap is.
+
 - **`clientHost.preset` — an opt-in mod preset for the client's own Mods menu.**
   A client-hosted world loads the pack's `Mods=` only for the hosted session;
   the client's own list is a separate setting, so Viewpoint's client-side code
