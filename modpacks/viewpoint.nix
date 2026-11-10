@@ -141,20 +141,29 @@
     { id = "3816442251"; title = "Viewpoint: Living Props"; }
     { id = "3815630947"; title = "Viewpoint Rolling Hills"; }
     { id = "3817555882"; title = "Rolling Hills Physics Addon (Project Viewpoint)"; }
-    { id = "3814398576"; title = "Surface Fix - Project Viewpoint"; }
+    # Surface Fix (3814398576) is deliberately absent. Its Java mod was built
+    # against 42.21, and 42.22 changed `IsoGridSquare.getObjects()` from
+    # `PZArrayList` to `List<IsoObject>`; on 42.22 it aborts the client while the
+    # world is meshed:
+    #   NoSuchMethodError: 'zombie.util.list.PZArrayList zombie.iso.IsoGridSquare.getObjects()'
+    #     at vpinteriors.Pz.objects -> vpinteriors.Grime.capture
+    # The upstream collection (3812346398) dropped it too. Restore it only when
+    # the author publishes a 42.22 build.
     { id = "3812151347"; title = "Door Fix - Project Viewpoint"; }
     # Viewpoint-native construction companions. Interface supplies the
     # first-person craft/build/place flow (K), 3D build preview and furniture
     # moving; it deliberately overlaps Neat Building's build window and
     # Furniture Push & Pull, but declares no incompatibility with either.
     # Proper Roofs closes half-roofs so they read correctly in first person and
-    # its tiles are ordinary buildable/dismantlable tiles. Physics & Collision
-    # adds prop rigid bodies/collision (also overlaps Furniture Push & Pull
-    # behaviourally). Workstations Overhaul is cosmetic. All require Viewpoint
-    # and load after it below.
+    # its tiles are ordinary buildable/dismantlable tiles. Workstations Overhaul
+    # is cosmetic. All require Viewpoint and load after it below.
+    #
+    # Physics & Collision (3817135911) is absent for the same 42.21 API reason:
+    # on 42.22 it fails the same `getObjects()` call and switches itself off, so
+    # it only adds an error to the log. Restore it with Surface Fix once both
+    # have a 42.22 build.
     { id = "3812616893"; title = "Viewpoint - Interface"; } # ViewpointUI
     { id = "3818941548"; title = "Viewpoint - Proper Roofs"; }
-    { id = "3817135911"; title = "Viewpoint - Physics & Collision"; }
     { id = "3828755546"; title = "Viewpoint's Workstations Overhaul"; }
     { id = "3806955469"; title = "True Cargo - Project Full HD"; }
     { id = "3781616141"; title = "[B42.20+] Vehicle Aim Roof Fix"; }
@@ -887,12 +896,16 @@
     "ViewpointLivingProps"
     "ViewpointRollingHills"
     "RollingHillsPhysics"
-    "ViewpointSurface"
+    # ViewpointSurface and ViewpointPhysicsProps are deliberately omitted: both
+    # Java mods were built against 42.21 and call
+    # `IsoGridSquare.getObjects()` as it returned `PZArrayList` then. 42.22
+    # returns `List<IsoObject>`, so Surface Fix crashes the client during
+    # meshing and Physics & Collision switches itself off. Add them back only
+    # with a 42.22 build.
     "ViewpointDoor"
     "ViewpointProperRoofs"
     "ViewpointUI"
     "ViewpointWorkstations3D"
-    "ViewpointPhysicsProps" # loadModAfter Viewpoint + PZVoxelStudioViewpoint
     "PFHDTrueCargo"
     "CarRoofFix"
     "CarEnterExitFix"

@@ -6,6 +6,20 @@ All notable changes to this project. Format follows
 
 ## [Unreleased]
 
+### Removed
+
+- **Two Viewpoint add-ons that crash on Build 42.22: Surface Fix and Physics &
+  Collision.** 42.22 changed `IsoGridSquare.getObjects()` from `PZArrayList` to
+  `List<IsoObject>`, and both Java mods were built against the old signature.
+  Surface Fix (`vpinteriors`) aborts the client while the world is meshed with
+  `NoSuchMethodError: 'zombie.util.list.PZArrayList zombie.iso.IsoGridSquare.getObjects()'`;
+  Physics & Collision (`vpp`) detects the same mismatch and switches itself off,
+  so it only adds an error to the log. The upstream collection (3812346398) no
+  longer lists either. Both are removed from the `viewpoint` pack until the
+  author publishes a 42.22 build. The same API is referenced by seven other
+  42.21-era Viewpoint add-ons in the pack, so treat them as suspect if one of
+  their code paths runs.
+
 ### Added
 
 - **`clientHost.preset` — an opt-in mod preset for the client's own Mods menu.**
