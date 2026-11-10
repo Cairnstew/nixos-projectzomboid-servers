@@ -130,11 +130,13 @@ system module cannot own. The flake's **Home Manager** module installs it — se
 | Field | Type | Notes |
 | --- | --- | --- |
 | `serverName` | str | The client-side name — the `<name>.ini` basename and the save folder. |
-| `prepare` | path | A runnable, **config-only** script: `PZ_CLIENT_ZOMBOID=~/Zomboid /nix/store/…-client-host`. It writes `Server/<name>.ini` and `Server/<name>_SandboxVars.lua` and nothing else. It never runs steamcmd and never references a Steam library. |
+| `prepare` | path | A runnable, **config-only** script: `PZ_CLIENT_ZOMBOID=~/Zomboid /nix/store/…-client-host`. It writes `Server/<name>.ini` and `Server/<name>_SandboxVars.lua`, plus — when `clientHost.preset.enable` is set — one merged preset line in `Lua/pz_modlist_settings.cfg`. It never runs steamcmd and never references a Steam library. |
 | `iniFile` | path | The Nix-rendered base `.ini`, *before* the merge. Hand this to `prepare`; installing it directly would overwrite `Seed`/`ServerPlayerID` on an existing world. |
 | `sandboxFile` | path | The Nix-rendered `<name>_SandboxVars.lua`. |
 | `mods` | listOf str | The resolved `Mods=` list. |
 | `workshopItems` | listOf str | The resolved `WorkshopItems=` list (Steam Workshop ids). |
+| `presetName` | str \| null | The effective preset name, or `null` when `clientHost.preset.enable` is off. |
+| `presetFile` | path \| null | The Nix-rendered single-line preset fragment (`<name>:id;id;…;`), or `null`. `prepare` merges it; installing it directly would drop the player's other presets. |
 
 ```nix
 # In the client user's Home Manager configuration — nothing else is needed, and
@@ -159,6 +161,17 @@ Behaviours worth knowing:
   `WorkshopItems=` populated, the Host button fetches everything through Steam
   into the library that owns the PZ install, before it reads `~/Zomboid/mods`.
   See [mod delivery](mod-delivery.md).
+- When `clientHost.preset.enable` is set, `prepare` also **merges** one named
+  preset into `~/Zomboid/Lua/pz_modlist_settings.cfg`. The preset lists the
+  pack's ordered `mods`, and exists because the Host flow's server-side `Mods=`
+  does not enable the client's own mods outside a hosted world. The merge keeps
+  the player's other presets and favourites; re-running never duplicates the
+  managed line.
+- Project Zomboid **re-orders a preset when it is applied**, using each mod's
+  `mod.info` `require=` only (`ModSelector.Model:correctAndSaveModOrder`). The
+  order written here is the pack order and is useful for sharing, but it is not
+  a promise. Mods that are not downloaded are listed by the game's “missed
+  mods” window and simply left off.
 
 ---
 
@@ -388,6 +401,8 @@ installed at all.
 | --- | --- | --- | --- |
 | `enable` | bool | `false` | Produce a `clientHosts.<attr>` entry. |
 | `name` | str | `"servertest"` | The client-side server name. PZ names both `<name>.ini` and `Saves/Multiplayer/<name>` after it — so changing it makes a **new world** rather than reusing the existing one. `servertest` is what the Host screen uses by default. |
+| `preset.enable` | bool | `false` | Merge one managed preset into `~/Zomboid/Lua/pz_modlist_settings.cfg`. It lists the pack's ordered `mods` so the client's own Mods menu can enable them outside a hosted world. It does **not** replace the Host flow's server-side `Mods=`. |
+| `preset.name` | str | `""` | Preset name in the Mods menu. Empty means the server attribute name (`viewpoint`). A name containing `:`, `;`, `\` or a newline is rejected. |
 | `openFirewall` | bool | `false` | Open `defaultPort`/`udpPort` for this client host. The server-level `openFirewall` cannot: it is fed from the enabled servers, and a client host normally has `enable = false`. Opening the ports is necessary but not sufficient behind NAT — see [troubleshooting](troubleshooting.md#a-friend-cannot-join-a-client-host). |
 
 The `.ini` is merged rather than rewritten (see
@@ -397,6 +412,14 @@ PZ install. This module does not install, copy or link mods for the client. Note
 that the client half of a Java-mod pack needs its JVM agent installed **in the
 client**, which is a launch-option (or `ProjectZomboid64.json`) change outside
 this module — see the pack's own instructions.
+
+`clientHost.preset.enable` is the one extra: it writes a **preset** into the
+client's Mods menu listing the pack's ordered mods, so the client-side half
+(Viewpoint's own code, UI mods, …) can be enabled outside a hosted world. The
+Host flow's `Mods=` only covers the session the server runs; the client's own
+list is a separate setting. The preset is merged into the existing file, so the
+player's own presets and favourites survive. See
+[mod delivery](mod-delivery.md#client-side-mod-preset).
 
 **This renders even with `enable = false`.** A client host is not a dedicated
 server, so the master switch off means no install unit, no steamcmd and no

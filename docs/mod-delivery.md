@@ -56,6 +56,50 @@ items ship a mod folder with a non-ASCII name. A C/POSIX locale (Steam exports
 launch options; see [troubleshooting](troubleshooting.md#a-client-host-fails-with-invalidpathexception-non-ascii-mod-folder).
 The dedicated server sets `LANG`/`LC_ALL=C.UTF-8` itself.
 
+### Client-side mod preset
+
+The Host flow loads the server's `Mods=` **for the hosted session**. It does not
+enable those mods in the client's own Mods menu, so outside a hosted world
+(singleplayer, or before pressing Host) the client-side half of a pack —
+Viewpoint's own code, UI mods, and so on — is not loaded.
+
+`servers.<name>.clientHost.preset.enable = true` closes that gap. It writes one
+named preset into the vanilla Build 42 preset file:
+
+```text
+~/Zomboid/Lua/pz_modlist_settings.cfg
+!fav!:…
+viewpoint:ZombieBuddy;Viewpoint;…;
+```
+
+Select it in the Mods menu's Presets dropdown and the client enables the whole
+pack. The preset is **merged**, not installed over the file: the player's own
+presets and favourites are preserved, a re-run replaces the managed line rather
+than appending a second copy, and a file that has not changed is left untouched.
+The preset name defaults to the server attribute (`viewpoint`) and can be
+overridden with `clientHost.preset.name`.
+
+Two limits are vanilla behaviour, not this module's:
+
+- **Order is not preserved.** `ModSelector.Model:correctAndSaveModOrder`
+  rebuilds the load order when a preset is applied, using each mod's `mod.info`
+  `require=` only. The pack order is written for readability and sharing, but
+  PZ does not promise it. Dependency order *is* preserved.
+- **Unavailable mods are skipped.** If an item is not downloaded, applying the
+  preset enables what is available and opens the game's “missed mods” window
+  listing the rest. Steam owns the download; the Host flow or a subscription
+  fetches it.
+
+```nix
+servers.viewpoint.clientHost = {
+  enable = true;
+  preset = {
+    enable = true;
+    # name = "viewpoint";  # default: the server attribute name
+  };
+};
+```
+
 ### Why the client cannot load from the server's directory
 
 Project Zomboid's client **enumerates Workshop mods through Steam's subscription

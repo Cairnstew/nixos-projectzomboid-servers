@@ -545,6 +545,10 @@
                     enable = false;
                     modpack = "viewpoint";
                     clientHost.enable = true;
+                    # The preset must render from the same pack list, without a
+                    # dedicated server existing. The name is left empty on
+                    # purpose: it has to fall back to the attribute name.
+                    clientHost.preset.enable = true;
                     # The firewall must be opened from the CLIENT half: this eval
                     # has `enable = false`, so the server-level `openFirewall` is
                     # not even in play.
@@ -591,6 +595,15 @@
                 (lib.optionalString (
                   oneHost == null || builtins.length (oneHost.mods or [ ]) < 100
                 ) "the viewpoint pack's Mods list did not reach clientHosts")
+                # The preset is a client-only list of the SAME mods. It must be
+                # rendered even with the dedicated half off, and its name must
+                # fall back to the server attribute.
+                (lib.optionalString (
+                  oneHost == null || (oneHost.presetName or null) != "viewpoint"
+                ) "clientHost.preset did not resolve to the server attribute name")
+                (lib.optionalString (
+                  oneHost == null || !(lib.hasPrefix "/nix/store/" (toString (oneHost.presetFile or "")))
+                ) "clientHost.preset produced no store path")
                 # `clientHost.openFirewall` has to open BOTH UDP ports. The
                 # server-level `openFirewall` never sees this server (it is
                 # filtered to enabled ones), so without the client wiring the
@@ -1181,6 +1194,7 @@
                       enable = false;
                       modpack = "viewpoint";
                       clientHost.enable = true;
+                      clientHost.preset.enable = true;
                     };
                   };
                 };
@@ -1225,16 +1239,35 @@
                   # "required mod"), so no mods load and Map= entries are skipped.
                   ! grep -q '^Mods=[^=]*,' "$ini" || fail "Mods= is comma separated; Build 42 would load nothing"
 
-                  # Only Server/ may be created. In particular no `mods/`, no
-                  # Workshop link farm, and no Saves directory.
+                  # Only the declared config may be created. The Server/ files
+                  # plus the one opt-in preset file under Lua/. In particular no
+                  # `mods/`, no Workshop link farm, and no Saves directory.
                   top="$(find "$zomboid" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')"
-                  [ "$top" = "Server " ] || fail "client prepare created more than Server/: $top"
+                  [ "$top" = "Lua Server " ] || fail "client prepare created more than Lua/ and Server/: $top"
+                  lua_files="$(find "$zomboid/Lua" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')"
+                  [ "$lua_files" = "pz_modlist_settings.cfg " ] || fail "client prepare wrote unexpected files under Lua/: $lua_files"
                   [ ! -e "$zomboid/mods" ] || fail "client prepare created ~/Zomboid/mods"
+
+                  # The preset is a client-side copy of the same ordered mods
+                  # list. It is a SEPARATE file from Server/<name>.ini, because
+                  # the Host flow's Mods= does not enable the client's own mods
+                  # outside a hosted world.
+                  preset="$zomboid/Lua/pz_modlist_settings.cfg"
+                  head -n1 "$preset" | grep -qx '!fav!:' || fail "favourite line is not first in the preset file"
+                  grep -q '^viewpoint:' "$preset" || fail "managed preset line missing"
+                  [ "$(grep -c '^viewpoint:' "$preset")" -eq 1 ] || fail "managed preset line is duplicated"
+                  mods_n="$(sed -n 's/^Mods=//p' "$ini" | tr ';' '\n' | grep -c .)"
+                  preset_n="$(sed -n 's/^viewpoint://p' "$preset" | tr ';' '\n' | grep -c .)"
+                  [ "$mods_n" -eq "$preset_n" ] || fail "preset has $preset_n ids but Mods= has $mods_n"
+                  grep -q 'ZombieBuddy;' "$preset" || fail "preset is missing ZombieBuddy"
+                  printf 'mine:ZombieBuddy;\n' >> "$preset"
+                  sed -i 's/^!fav!:/!fav!:ZombieBuddy;/' "$preset"
 
                   # The game's Host screen rewrites the file and drops every key
                   # it does not know. A second run must re-apply the declared
                   # keys, keep the world identity and leave foreign keys alone —
                   # and must not resurrect a key Build 42 does not read.
+                  managed_before="$(sed -n 's/^viewpoint://p' "$preset")"
                   printf 'Seed=keep-this\n' >> "$ini"
                   printf 'SomeUnknownKey=1\n' >> "$ini"
                   "$PREPARE"
@@ -1243,7 +1276,19 @@
                   grep -q '^Mods=.\+' "$ini" || fail "a re-run lost Mods"
                   ! grep -q '^SelfManagedMods=' "$ini" || fail "a re-run wrote SelfManagedMods for Build 42"
 
-                  echo "client-host prepare ok: config only, no mod paths, no B42 SelfManagedMods, world identity and foreign keys preserved on re-run"
+                  # The preset merge must be just as non-destructive: the
+                  # player's own preset and favourites survive, and the managed
+                  # line is replaced rather than appended a second time.
+                  grep -qx 'mine:ZombieBuddy;' "$preset" || fail "a re-run dropped the player's own preset"
+                  grep -qx '!fav!:ZombieBuddy;' "$preset" || fail "a re-run dropped favourites"
+                  [ "$(grep -c '^viewpoint:' "$preset")" -eq 1 ] || fail "a re-run duplicated the managed preset"
+                  managed_after="$(sed -n 's/^viewpoint://p' "$preset")"
+                  [ "$managed_before" = "$managed_after" ] || fail "the managed preset changed on a re-run"
+                  cp "$preset" "$TMPDIR/preset.before"
+                  "$PREPARE"
+                  cmp -s "$preset" "$TMPDIR/preset.before" || fail "the preset file is not idempotent"
+
+                  echo "client-host prepare ok: config + one merged preset only, no mod paths, no B42 SelfManagedMods, world identity/foreign keys/player presets preserved on re-run"
                   touch "$out"
                 '';
 

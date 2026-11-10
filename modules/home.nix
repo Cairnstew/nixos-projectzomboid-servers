@@ -11,12 +11,14 @@
 # the client-side server name are still described exactly ONCE, on the NixOS
 # side, and cannot drift from what the dedicated server would have used.
 #
-# The activation writes CONFIG ONLY, into `~/Zomboid/Server/`. It never touches
-# a Steam library and never runs steamcmd: the game's Host button downloads the
-# Workshop items through Steam into whichever library owns the PZ install. The
-# old "link the shared server download into the client library" option is gone,
-# because the client enumerates mods through Steam's subscription list and never
-# scans that directory — see docs/mod-delivery.md.
+# The activation writes CONFIG ONLY, into `~/Zomboid/Server/` and — when the
+# server enables it — one merged preset line in
+# `~/Zomboid/Lua/pz_modlist_settings.cfg`. It never touches a Steam library and
+# never runs steamcmd: the game's Host button downloads the Workshop items
+# through Steam into whichever library owns the PZ install. The old "link the
+# shared server download into the client library" option is gone, because the
+# client enumerates mods through Steam's subscription list and never scans that
+# directory — see docs/mod-delivery.md.
 #
 # `home.installMods` remains only as a deprecated escape hatch for a client that
 # cannot subscribe, and is isolated from Steam (its own HOME/staging under

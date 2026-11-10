@@ -8,6 +8,22 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`clientHost.preset` — an opt-in mod preset for the client's own Mods menu.**
+  A client-hosted world loads the pack's `Mods=` only for the hosted session;
+  the client's own list is a separate setting, so Viewpoint's client-side code
+  and UI mods are not loaded outside the Host flow. Setting
+  `servers.<name>.clientHost.preset.enable = true` now renders the pack's ordered
+  `mods` as one named preset (default: the server attribute, `viewpoint`) and
+  **merges** it into `~/Zomboid/Lua/pz_modlist_settings.cfg`, preserving the
+  player's other presets and favourites. The write is idempotent and
+  non-destructive; a second activation replaces the managed line rather than
+  appending a copy. The preset name is validated at build time, and ids
+  containing `:`, `;`, `\` or a newline are rejected rather than silently split.
+  Vanilla re-sorts a preset on apply using `require=` only, and reports mods that
+  are not downloaded in its “missed mods” window — both are documented limits,
+  not module behaviour. `client-host-prepare` now asserts the merge semantics,
+  and `module-eval` asserts the preset renders with `enable = false`.
+
 - **`upnp` is asserted dead on Build 42.** The 42.21 jar contains no UPnP class
   and `ServerOptions.uPnp` is never read, so `UPnP=` forwards nothing — a silent
   no-op in exactly the place a broken port forward is hardest to see. The

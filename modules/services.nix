@@ -622,9 +622,26 @@ in
             server = srv;
             name = "${clientName}.ini";
           };
+          # The preset is opt-in. Empty `preset.name` falls back to the server
+          # attribute (`viewpoint`) so a client gets a recognisable entry without
+          # having to name it twice.
+          presetName =
+            if srv.clientHost.preset.enable then
+              (if srv.clientHost.preset.name != "" then srv.clientHost.preset.name else name)
+            else
+              null;
+          presetFile =
+            if presetName == null then
+              null
+            else
+              prepare.mkModlistPreset {
+                inherit (srv) mods;
+                name = presetName;
+              };
         in
         {
           inherit (srv) mods workshopItems;
+          inherit presetName presetFile;
           serverName = clientName;
           iniFile = iniBase;
           sandboxFile = prepare.mkSandboxFile {
@@ -634,7 +651,12 @@ in
           prepare = prepare.mkClientHostScript {
             name = "${unitName name}-client-host";
             server = srv;
-            inherit iniBase clientName;
+            inherit
+              iniBase
+              clientName
+              presetName
+              presetFile
+              ;
           };
         }
       ) clientResolved;

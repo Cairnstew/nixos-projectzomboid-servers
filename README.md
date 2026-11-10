@@ -113,6 +113,11 @@ Three modes, deliberately kept apart. Full detail in
   or links a mod, never runs steamcmd, and never writes into a Steam directory.
   With `WorkshopItems=` populated the Host button fetches the items before it
   reads `~/Zomboid/mods`.
+- `clientHost.preset.enable` optionally adds **one merged preset** to
+  `~/Zomboid/Lua/pz_modlist_settings.cfg`, listing the pack's ordered mods so the
+  client's own Mods menu can enable them outside a hosted world. It is a
+  *client-side* list; the Host flow's server-side `Mods=` is separate. See
+  [client-side mod preset](docs/mod-delivery.md#client-side-mod-preset).
 - The client **cannot** load from the dedicated server's `workshopDir`: it
   enumerates Workshop mods through Steam's subscription list rather than scanning
   a library directory. That is why the old "link the server download into the
@@ -471,7 +476,7 @@ The checks:
 | `options-documented` | Every option in `modules/options.nix` appears in `docs/options.md`. |
 | `render-guards` | A newline in an `.ini` value, a reserved key in `settings` (`MaxPlayers`, `Map`, `UPnP`, …), a Build 41 key that B42 no longer reads (`FoodLoot`, `MinutesPerPage`, …) and a B42 nested-table key written flat (`PopulationStartMultiplier`) all fail evaluation with the replacement named; `SelfManagedMods` is written only for Build 41; `rconPort` without an `RCONPassword` produces a resolver warning; Lua strings escape newlines/quotes/backslashes; dotted keys render a nested table; free-form and B42 keys still work. |
 | `prep-roundtrip` | Runs the real prep script against a seeded world: the merge preserves world identity, runtime overrides win, SandboxVars is written, mods are linked and stale ones unlinked. |
-| `client-host-prepare` | The client-host script writes only `~/Zomboid/Server/` — never `mods/`, never a Steam/steamcmd path — writes no Build 42 `SelfManagedMods`, and a re-run keeps world identity and foreign keys while re-applying the declared ones. |
+| `client-host-prepare` | The client-host script writes only `~/Zomboid/Server/` plus the one opt-in preset under `~/Zomboid/Lua/` — never `mods/`, never a Steam/steamcmd path — writes no Build 42 `SelfManagedMods`, and a re-run keeps world identity, foreign keys, the player's own presets and favourites while replacing the managed preset exactly once. |
 | `pz-client-mods-isolation` | The deprecated client downloader runs steamcmd with an isolated HOME and has no Steam-library target, so it cannot rewrite `libraryfolders.vdf`. |
 | `secrets-not-in-store` | No secret value appears in any rendered store file, and `secretFileArgs` references paths only. |
 | `secret-guard` | The assertion actually **fires** — on a secret in `settings`, in `sandbox`, in a modpack's `defaultSettings` and in its `defaultSandbox` — and stays silent for a config using `secretFiles`. |

@@ -44,7 +44,13 @@
 }:
 
 let
-  inherit (lib) concatStringsSep concatMapStringsSep optionalString;
+  inherit (lib)
+    concatStringsSep
+    concatMapStringsSep
+    escapeShellArg
+    hasInfix
+    optionalString
+    ;
 in
 rec {
   # ── The base `.ini`, rendered by Nix ────────────────────────────────────────
@@ -350,11 +356,14 @@ rec {
   # the SandboxVars rendering above are shared verbatim — otherwise the mod list
   # would be written down twice and the two would drift.
   #
-  # THIS HALF IS CONFIG ONLY. It writes exactly two kinds of file, both under
+  # THIS HALF IS CONFIG ONLY. It writes two kinds of file under
   # `$PZ_CLIENT_ZOMBOID/Server/`:
   #
   #   <clientName>.ini               merged, preserving world identity
   #   <clientName>_SandboxVars.lua   owned outright
+  #
+  # plus, when the server enables `clientHost.preset`, one merged preset line in
+  # `$PZ_CLIENT_ZOMBOID/Lua/pz_modlist_settings.cfg`. See `mkModlistPreset`.
   #
   # It does not download, copy, symlink or scan a mod, never runs steamcmd, and
   # never names a Steam library. That is deliberate: with `WorkshopItems=`
@@ -382,8 +391,15 @@ rec {
       # usually absent or irrelevant, and the game names the file after what its
       # own Host screen is called (`servertest` by default).
       clientName ? server.serverName,
+      # null = do not write a mod preset. Both must be set together; the caller
+      # resolves `presetName` from `clientHost.preset`.
+      presetName ? null,
+      presetFile ? null,
       mergeIni ? ../scripts/merge_ini.py,
+      mergeModlistPreset ? ../scripts/merge_modlist_preset.py,
     }:
+    assert presetName == null -> presetFile == null;
+    assert presetName != null -> presetFile != null;
     pkgs.writeShellApplication {
       inherit name;
       runtimeInputs = [
@@ -418,13 +434,85 @@ rec {
         install -m 0644 ${mkSandboxFile { inherit server; }} \
           "$server_conf/''${pz_name}_SandboxVars.lua"
 
-        # Nothing else. Every file above is under `$PZ_CLIENT_ZOMBOID/Server/`.
+        ${optionalString (presetName != null) ''
+          # The client's own Mods-menu list is separate from the Host flow's
+          # server-side Mods=. Install one managed preset so the player can
+          # enable the whole pack outside a hosted world; merge, never replace,
+          # because the same file holds their other presets and favourites.
+          mkdir -p "$PZ_CLIENT_ZOMBOID/Lua"
+          python3 ${mergeModlistPreset} \
+            "$PZ_CLIENT_ZOMBOID/Lua/pz_modlist_settings.cfg" \
+            ${escapeShellArg presetName} \
+            ${presetFile}
+        ''}
+
+        # Every server file above is under `$PZ_CLIENT_ZOMBOID/Server/`. The one
+        # optional file outside it is the mod preset under `Lua/`; nothing here
+        # creates `mods/`, a Workshop link farm or a Steam path.
         # The Host screen rewrites this `.ini` and drops every key it does not
         # know; re-running (every activation) re-applies the declarative set,
         # while merge_ini.py keeps the world identity (Seed / ServerPlayerID).
         echo "project-zomboid: prepared client host $pz_name in $server_conf (config only; the Host flow fetches the mods)"
       '';
     };
+
+  # ── The optional client-side mod preset ─────────────────────────────────────
+  # Build 42's mod selector can save the enabled mods as a named preset
+  # (`~/Zomboid/Lua/pz_modlist_settings.cfg`). The Host flow already loads the
+  # pack's `Mods=` for the hosted session, but the client's OWN mod list is a
+  # separate setting: client-side code (Viewpoint, UI mods, …) is only loaded
+  # outside a hosted world when the player enables it in the Mods menu. This
+  # renders the pack's ordered `mods` list as one such preset.
+  #
+  # The fragment is MERGED by merge_modlist_preset.py rather than installed
+  # directly, because the same file holds the player's own presets and
+  # favourites. See the script's docstring.
+  #
+  # Ordering caveat (vanilla behaviour, not ours): PZ re-orders a preset when it
+  # is applied, using each mod's `mod.info` `require=` only
+  # (`ModSelector.Model:correctAndSaveModOrder`). Writing the pack order here is
+  # still useful for sharing/readability, but PZ does not promise it.
+  mkModlistPreset =
+    {
+      # The resolved `Mods=` list, in pack order.
+      mods,
+      # The preset name shown in the Mods menu. The caller resolves the default
+      # (the server attribute name) before calling.
+      name,
+    }:
+    let
+      badName =
+        name == ""
+        || lib.any (bad: hasInfix bad name) [
+          ":"
+          ";"
+          "\\"
+          "\n"
+          "\r"
+        ];
+      badMods = lib.filter (
+        id:
+        id == ""
+        || lib.any (bad: hasInfix bad id) [
+          ":"
+          ";"
+          "\\"
+          "\n"
+          "\r"
+        ]
+      ) mods;
+    in
+    if badName then
+      throw "project-zomboid-servers: mod preset name ${builtins.toJSON name} contains ':', ';', '\\' or a newline"
+    else if badMods != [ ] then
+      throw ''
+        project-zomboid-servers: these mod ids cannot be written to a mod preset
+        (a ':', ';', '\\' or newline would split the entry): ${builtins.toJSON badMods}
+      ''
+    else
+      pkgs.writeText "${lib.replaceStrings [ "/" ] [ "-" ] name}-mods-preset.cfg" (
+        "${name}:" + concatStringsSep ";" mods + ";\n"
+      );
 
   # ── Install / update the shared server ──────────────────────────────────────
   # One install serves every server: PZ's binaries are identical, only the

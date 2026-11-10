@@ -1323,6 +1323,32 @@ in
                   '';
                 };
 
+                preset = {
+                  enable = mkEnableOption ''
+                    a managed mod preset in the client's vanilla Mods menu
+                    (<filename>Zomboid/Lua/pz_modlist_settings.cfg</filename>)
+                  '';
+
+                  name = mkOption {
+                    type = types.str;
+                    default = "";
+                    description = ''
+                      Preset name shown in the Mods menu. Empty means the server
+                      attribute name — <literal>viewpoint</literal> for
+                      <literal>servers.viewpoint</literal>.
+
+                      The preset enables the pack's ordered <literal>mods</literal>
+                      list. It is merged into the file, so the player's own
+                      presets and favourites survive. Project Zomboid re-orders
+                      the list when the preset is applied, using each mod's
+                      <literal>require=</literal> only, so the written order is
+                      informative rather than a promise. Mods that are not
+                      downloaded are reported by the game's “missed mods” window
+                      and simply left off.
+                    '';
+                  };
+                };
+
                 openFirewall = mkOption {
                   type = types.bool;
                   default = false;
@@ -1462,7 +1488,10 @@ in
 
                 It writes only
                 <literal>$PZ_CLIENT_ZOMBOID/Server/&lt;name&gt;.ini</literal> and
-                <literal>…/&lt;name&gt;_SandboxVars.lua</literal>. It never runs
+                <literal>…/&lt;name&gt;_SandboxVars.lua</literal>, plus — when
+                <option>servers.&lt;name&gt;.clientHost.preset.enable</option> is
+                set — one merged preset line in
+                <literal>…/Lua/pz_modlist_settings.cfg</literal>. It never runs
                 SteamCMD, never references a Steam library, never touches
                 <literal>~/.local/share/Steam</literal> and never writes
                 <literal>~/Zomboid/mods</literal>.
@@ -1493,6 +1522,24 @@ in
             workshopItems = mkOption {
               type = types.listOf types.str;
               description = "The resolved `WorkshopItems=` list (Steam Workshop ids).";
+            };
+            presetName = mkOption {
+              type = types.nullOr types.str;
+              description = ''
+                Effective preset name, or <literal>null</literal> when
+                <option>servers.&lt;name&gt;.clientHost.preset.enable</option> is
+                off.
+              '';
+            };
+            presetFile = mkOption {
+              type = types.nullOr types.path;
+              description = ''
+                The Nix-rendered single-line preset fragment
+                (<literal>&lt;name&gt;:id;id;…;</literal>), or
+                <literal>null</literal> when the preset is off. Normally handed
+                to <option>prepare</option>, which merges it into
+                <literal>~/Zomboid/Lua/pz_modlist_settings.cfg</literal>.
+              '';
             };
           };
         }

@@ -339,6 +339,33 @@ does, the game's Host button fetches the items through Steam; if it does not, th
 pack rendered no Workshop ids. See [mod delivery](mod-delivery.md). The module
 does not install or link mods on the client side.
 
+### The client-side preset enables only some mods (or none)
+
+With `clientHost.preset.enable = true`, `~/Zomboid/Lua/pz_modlist_settings.cfg`
+should contain one line beginning with the preset name (`viewpoint:` by default).
+If it does not, the pack rendered no preset — check that the option is set on the
+**client** server entry, not another one.
+
+When the preset *is* there but applying it leaves mods off, the game is telling
+you they are not installed. Applying a preset enables only mods that are
+available to the client and opens the **missed mods** window for the rest; it
+does not download anything. Subscribe to the pack in Steam (or host once, which
+fetches `WorkshopItems=`), let Steam finish, then apply the preset again.
+
+Two other causes are worth ruling out:
+
+- **Wrong preset name.** The module defaults the name to the server attribute
+  (`servers.viewpoint` → `viewpoint`) and never deletes a preset it does not own.
+  If you renamed the server, both presets now exist; pick the current one.
+- **Mods not visible to Build 42 at all.** The preset can only enable mods the
+  Mods menu lists. Re-subscribing (or deleting the item's
+  `steamapps/workshop/content/108600/<id>` folder and re-downloading) is the
+  usual fix; see [mod delivery](mod-delivery.md).
+
+A preset is a *set*, not an ordered list: PZ re-sorts it by each mod's
+`require=` when applied, so the order in the file is not the load order you will
+see. That is vanilla behaviour, not something the module can pin.
+
 ### A client host fails with `InvalidPathException` (non-ASCII mod folder)
 
 The Host flow aborts and you land back in the menu, with this in

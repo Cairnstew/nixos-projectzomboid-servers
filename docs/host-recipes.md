@@ -339,10 +339,14 @@ A client host on Home Manager is therefore config only:
 imports = [ inputs.project-zomboid-servers.homeModules.default ];
 ```
 
-That writes `~/Zomboid/Server/<name>.ini` and `_SandboxVars.lua`. It never
-downloads, copies or links a mod, never runs steamcmd, and never writes a Steam
-directory. Subscribe to the pack in Steam, then host the world. See
-[mod delivery](mod-delivery.md).
+That writes `~/Zomboid/Server/<name>.ini` and `_SandboxVars.lua`. Setting
+`servers.<name>.clientHost.preset.enable = true` also **merges** a named preset
+into `~/Zomboid/Lua/pz_modlist_settings.cfg`, listing the pack's mods so the
+client's own Mods menu can enable them outside the Host flow (the Host flow's
+`Mods=` is server-side only). It never downloads, copies or links a mod, never
+runs steamcmd, and never writes a Steam directory. Subscribe to the pack in
+Steam, then host the world — or pick the preset for singleplayer. See
+[mod delivery](mod-delivery.md#client-side-mod-preset).
 
 `home.installMods` still exists as a **deprecated** escape hatch for a client
 that cannot subscribe. It installs a second copy as **local mods** in
