@@ -78,6 +78,11 @@
     # Fill bars on container buttons and magazine load indicators. Client-side
     # UI only: it changes no capacity, contents or saved data.
     { id = "3789660055"; title = "Container Capacity Indicator [B42]"; } # ContainerCapacityIndicator
+    # Condition bars on inventory items plus an optional hotbar firearm ammo
+    # readout. Client-side UI only and safe to add/remove mid-save. Chosen over
+    # Clean HotBar (3461263912), which replaces the hotbar wholesale, is still
+    # WIP and would supersede Reorder The Hotbar below.
+    { id = "3641048285"; title = "Item Condition Overlay (BUILD 42 STABLE)"; } # ItemCondition_KingEJ
     # Pin exact item instances to the top of any inventory/container pane,
     # ignoring sort filters; pins survive transfers between containers.
     { id = "3773092190"; title = "Inventory Item Pinning"; } # InventoryItemPins
@@ -90,6 +95,21 @@
     # declares incompatible= ProjectViewpointQOL and
     # ProjectViewpointControllerSupport, neither of which this pack contains.
     { id = "3819316734"; title = "Viewpoint Hands: Loot & Inventory [B42]"; } # DGVViewpointQoL
+
+    # ── Interface / HUD / tooltips ─────────────────────────────────────────
+    # Readouts only; none of these changes gameplay values. Minimal Display
+    # Bars is the standalone B42.21 build (Mod ID MinimalDisplayBarsB4220), not
+    # the original item, which must never be enabled alongside it. More Item
+    # Information is the 42.13+ variant; its 42.0 mod.info declares itself
+    # incompatible with 42.13.0 and above. SMB AutoHIDEhud is deliberately not
+    # added: Minimal Sidebar already auto-hides the inventory sidebar.
+    { id = "3775659041"; title = "Minimal Display Bars - Build 42.21 (Standalone)"; } # MinimalDisplayBarsB4220
+    { id = "3494474677"; title = "[B42] More Item Information"; } # MoreItemInformation
+    # Equipped-weapon inspect (hold reload / ; / right-click) and the extra
+    # damaged-object sprites. The latter uses Starlit Library, already loaded
+    # for Repairable Windows.
+    { id = "2948824747"; title = "Inspect Weapon"; } # RiskyInspectWeapon
+    { id = "3413150945"; title = "More Damaged Objects [42MP]"; } # MoreDamagedObjects
 
     # ── Traits & professions ───────────────────────────────────────────────
     # Expansion here is additive and points-priced, not point-inflating: no
@@ -362,8 +382,14 @@
     # stacked: Knox Buildworks (second build framework, needs ElyonLib),
     # Hammertime (author says it conflicts with other construction mods),
     # Better Building Plus (blueprint WIP on RC's Structures Framework) and
-    # Build Anything (bypasses recipe/skill gates).
+    # Build Anything (bypasses recipe/skill gates). Neat Crafting is the sister
+    # mod to Neat Building (same NeatUI framework) and replaces the vanilla
+    # Crafting window; its XP addon requires it. The [K] wall pair repairs and
+    # reports health on what you built, distinct from the door/window repair
+    # mods below.
     { id = "3536052310"; title = "Neat Building [B42]"; } # Neat_Building only, not modular variants
+    { id = "3502080466"; title = "Neat Crafting [B42]"; } # Neat_Crafting
+    { id = "3540503606"; title = "Neat Crafting & Neat Building – XP & Mod Display"; } # both addons
     { id = "515555911"; title = "More Builds"; }
     { id = "3378285185"; title = "Starlit Library"; }
     { id = "3378304610"; title = "[42MP] Repairable Windows"; }
@@ -371,6 +397,8 @@
     { id = "3202305691"; title = "Fix Inside Player Building"; }
     { id = "3810876724"; title = "Remove & Install Doors [B42.21] - Single & Double Doors"; }
     { id = "3798211972"; title = "Can Repair Doors"; }
+    { id = "3006882690"; title = "[B41&B42] Repair Wall"; } # KAMER_RepairWall
+    { id = "3002666175"; title = "[B41&B42] Show Wall Health"; } # KAMER_WallHealth
     { id = "3781002132"; title = "Craftable Tall Wooden Fences"; }
     { id = "3796645371"; title = "Functional Storm Shutters"; }
     { id = "3795855624"; title = "Barricades Rebuilt 2.3b"; }
@@ -441,6 +469,18 @@
     { id = "3687841589"; title = "Adjustable Corpse Sickness"; }
     { id = "3825280124"; title = "True Corpse Stink"; }
 
+    # ── Medical / first aid ────────────────────────────────────────────────
+    # The pack previously had no treatment QOL at all (only Knit Bandage and
+    # the infection rebalance). These are all Build 42 + multiplayer and
+    # declare no require/incompatible. Deliberately omitted: First Aid
+    # Overhaul (3746021655) — its two variants are mutually incompatible and
+    # it re-tunes the same wound/medicine layer as Proper Infected Wounds, so
+    # it needs a deliberate balance decision rather than a default add.
+    { id = "3818514049"; title = "Show Healing Progress"; } # PZShowHealingProgress
+    { id = "3774553126"; title = "Extended Burn Treatment [B42 - SP/MP]"; } # ExtendedBurnTreatment
+    { id = "3632795534"; title = "zRe Bandaged Status Info [b42.13+]"; } # zReBandagedStatusInfo
+    { id = "3782220648"; title = "[B42/MP] Replace Dirty Bandages"; } # ReplaceDirtyBandages
+
     # ── Farming / agriculture ──────────────────────────────────────────────
     # Build 42 + multiplayer, verified from each mod.info. One rebalance mod
     # (Vanilla Agriculture Fix) rather than stacking Fair Farming / Faster
@@ -484,7 +524,10 @@
     # omitted: TFC Combine Leather in the tailoring section already combines
     # small -> medium -> large leather. Break Big Rocks is also omitted because
     # Wilderness Progression and Wildwrought: Prospecting already own boulder
-    # and deposit mining.
+    # and deposit mining. Camping QoL is from the same author as the Better
+    # Fishing entry below and only adds context-menu place/pack for tents and
+    # sleeping bags, so it sits with the wilderness gear rather than as a
+    # separate system.
     { id = "3688039727"; title = "Wilderness Progression"; }
     { id = "3795706900"; title = "Wilderness Progression Expanded"; }
     { id = "3799487545"; title = "Digging Pit"; }
@@ -497,6 +540,7 @@
     { id = "3801977205"; title = "Wildwrought: Work Log"; }
     { id = "3804094839"; title = "Wildwrought: Loose Clay"; }
     { id = "3803438416"; title = "Wildwrought: Washed Sand"; }
+    { id = "3738162759"; title = "TwisTonFire - Camping QoL"; } # twistcamping
     { id = "3799755212"; title = "Root Cellar [B42]"; }
 
     # ── Livestock / animal husbandry ───────────────────────────────────────
@@ -572,6 +616,15 @@
     { id = "3809670050"; title = "Cook Directly on Stoves & Campfires"; }
     { id = "3803402281"; title = "How Long To Cook (Cook Thaw & Burn Timers)"; }
     { id = "3526968739"; title = "[B42/41] Automatic Stove Shutoff"; }
+
+    # ── Reading / sleep ────────────────────────────────────────────────────
+    # Read While Walking is the single-purpose B42.15 update and is preferred
+    # over Reading Reworked (3780124271), which is broader and still 0.3.x.
+    # True Sleep is the lighter of the two MP sleep mods: it keeps vanilla
+    # group sleep as the default and only adds an opt-in solo nap, so it needs
+    # no sandbox table like Sleep with Friends (2686624983).
+    { id = "3786647452"; title = "Read While Walking - Updated (B41 + B42)"; } # SimpleReadWhileWalkingUpdated
+    { id = "3781533687"; title = "True Sleep - Better Multiplayer Sleep"; } # TrueSleep
 
     # ── Plumbing / water supply ────────────────────────────────────────────
     # Carthon's Water Pipes is the maintained network here, with its Viewpoint
@@ -802,10 +855,22 @@
     "ProximityInventory"
     "manageContainers"
     "ContainerCapacityIndicator"
+    "ItemCondition_KingEJ"
     "InventoryItemPins"
     "PingItemsFriends"              # core; the wheel below requires it
     "PingItemsFriendsDefaultWheel"  # only one wheel may be enabled
     "DGVViewpointQoL"
+
+    # ── Interface / HUD / tooltips ─────────────────────────────────────────
+    # Read-only UI. MinimalDisplayBarsB4220 is the standalone B42.21 build and
+    # must not be paired with the original Minimal Display Bars. More Item
+    # Information is the 42.13+ variant. Inspect Weapon adds an equipped-weapon
+    # panel; More Damaged Objects only adds sprites and credits Starlit Library
+    # (loaded later, and it declares no require). All four are client-side.
+    "MinimalDisplayBarsB4220"
+    "MoreItemInformation"
+    "RiskyInspectWeapon"
+    "MoreDamagedObjects"
 
     # ── Traits & professions ───────────────────────────────────────────────
     # Build 42 registers modded traits in one pass: a broken trait mod drops
@@ -1104,6 +1169,15 @@
     "twistrecovery"
     "TrueCorpseStink"
 
+    # ── Medical / first aid ────────────────────────────────────────────────
+    # All client-side or context-menu actions; none declares a dependency.
+    # Show Healing Progress and Replace Dirty Bandages both read the wound
+    # state, so they are placed after the infection rebalance in Difficulty.
+    "PZShowHealingProgress"
+    "ExtendedBurnTreatment"
+    "zReBandagedStatusInfo"
+    "ReplaceDirtyBandages"
+
     # ── Farming / agriculture ──────────────────────────────────────────────
     # Rebalance first, then fixes, crop packs, irrigation, and finally the
     # UI mods that read every registered crop.
@@ -1147,6 +1221,7 @@
     "WWS_WorkLog"
     "WWS_LooseClay"
     "WWS_WashedSand"
+    "twistcamping"           # TwisTonFire Camping QoL
     "Cellar"                 # Root Cellar
 
     # ── Livestock / animal husbandry ───────────────────────────────────────
@@ -1202,6 +1277,12 @@
     "DirectStoveCampfire"
     "CookThawBurnTimers"
     "AutomaticStoveShutoff"
+
+    # ── Reading / sleep ────────────────────────────────────────────────────
+    # Both are gameplay conveniences with no dependencies. TrueSleep leaves
+    # vanilla group sleep as the default and adds only an opt-in solo nap.
+    "SimpleReadWhileWalkingUpdated"
+    "TrueSleep"
 
     # ── Plumbing / water supply ────────────────────────────────────────────
     # waterpipes -> its Viewpoint add-on -> the NoCollision add-on. Take A Bath
@@ -1272,17 +1353,24 @@
     # Placed after NeatUI_Framework (Beekeeping) and the Community Tile Pack
     # (Map tile packs) because Neat_Building and BarricadesRebuilt require
     # them. Neat_Building is the full variant; its UIOnly/SESCompat/Railings
-    # siblings declare it incompatible, so only this one is enabled. The two
-    # libraries load before their dependents.
+    # siblings declare it incompatible, so only this one is enabled. Neat
+    # Crafting is the sister UI and replaces the Crafting window; its XP addon
+    # must follow it (loadModAfter), while Neat_Building_AddonXP has no
+    # require. The two libraries load before their dependents.
     "StarlitLibrary"
     "RepairableWindows"
     "TchernoLib"
     "FixInsidePlayerBuilding"
     "Neat_Building"
+    "Neat_Crafting"
+    "Neat_Building_AddonXP"
+    "Neat_Crafting_AddonXP"  # require + loadModAfter Neat_Crafting
     "MoreBuilds"
     "BarricadesRebuilt"
     "RemoveAndInstallDoors"
     "AuDmodCanRepairDoorsB42"
+    "KAMER_RepairWall"
+    "KAMER_WallHealth"
     "CraftableTallWoodenFences"
     "FunctionalStormShutters"
     "FurniturePushPull"
