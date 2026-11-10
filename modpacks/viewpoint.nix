@@ -305,6 +305,17 @@
     { id = "3819092132"; title = "[RKC]HEMTT M984 Wrecker (Tow Truck)"; }
     { id = "3816356507"; title = "[RKC]HEMTT M978 Tanker Truck"; }
 
+    # ── Clothing care / wetness ────────────────────────────────────────────
+    # Wesch's adds "Wring Out All Wet Clothing" and re-equips in singleplayer.
+    # The MP fix replaces that action by load order so on a server it wrings
+    # every wet garment in place and never unequips - unequipping zeroes the
+    # server-authoritative wetness and drops the rest of the queue, which is
+    # the "one item comes off and nothing else happens" report. The MP fix
+    # must load after the original; Advanced Fabrics still loads last among
+    # clothing mods.
+    { id = "3408740647"; title = "Wesch's Better Wringing 42.20"; } # w_betterwringing
+    { id = "3785172581"; title = "[MP FIX] Wesch's Better Wringing"; } # w_betterwringing_mpfix
+
     # ── Sewing / tailoring progression ──────────────────────────────────────
     # All Build 42 and multiplayer-safe (Workshop `Multiplayer` tag, or verified
     # from the download: items/recipes/shared Lua only). Dependencies first:
@@ -1078,6 +1089,12 @@
     "ImmersiveDriving"
     "ProjectViewpointKI5VehiclePartsFix"
     "ViewpointVehicleInteriorFix"
+
+    # ── Clothing care / wetness ────────────────────────────────────────────
+    # w_betterwringing_mpfix shares the original's file path and replaces its
+    # action by load order, so it must come after w_betterwringing.
+    "w_betterwringing"
+    "w_betterwringing_mpfix"
 
     # ── Sewing / tailoring progression ──────────────────────────────────────
     # Load order: dependencies before dependents; AdvancedFabricsMP last.

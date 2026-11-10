@@ -22,6 +22,17 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Wring out all wet clothing without undressing, for the `viewpoint` pack.**
+  `Wesch's Better Wringing` (`w_betterwringing`) adds a "Wring Out All Wet
+  Clothing" context entry and re-equips a garment after a single wring in
+  singleplayer. Its `[MP FIX]` companion (`w_betterwringing_mpfix`) replaces
+  that action by load order so on a server it wrings every wet garment in place
+  and **never unequips**: B42 clothing wetness is server-authoritative, and an
+  unequip pushes wetness 0, which makes `ISWringClothing:isValid()` fail and
+  `resetQueue()` discard the re-equip and every remaining garment. That is the
+  reported "it just unequips and maybe wrings out" behaviour. The fix must load
+  after the original; vanilla's own per-item wring option is left in place.
+
 - **Read-all and multiplayer fast-forward for the `viewpoint` pack.**
   `DWTB Auto Reader` (`DWTB_AutoRead`) queues every still-useful recipe
   magazine and skill book within reach through the vanilla `ISReadABook`
