@@ -22,6 +22,26 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Corpse- and container-wide batch ripping, for the `viewpoint` pack.**
+  `Tear All Clothes [B42 MP]` (`TearAllClothesMP`, the B42.20+ fork of
+  3519629457) replaces `Rip-A-Holic` (`rip-a-holic`), whose Rip All only
+  scanned the player's inventory and bags. It adds Selected / Surrounding /
+  All batches: **Surrounding** tears clothing in nearby open containers, on
+  the floor and on corpses, and **All** adds the inventory and bags, while
+  equipped and favorited garments are left alone. Each garment runs through
+  one of the mod's own recipes, so consumption and output are
+  server-authoritative instead of a client-side item move, and socks, belts,
+  underwear, bandanas, gloves and recoverable shoes are included even where
+  B42 omits the vanilla ripping tag. Verified from the download:
+  `versionMin=42.20.0`, no `require=`, `incompatible=3519629457` (the
+  original's Workshop id — do not add the original item alongside it). It
+  drives the vanilla `RipClothing` / `RipDenimClothing` recipes and disables
+  itself with a `[TACMP]` log line if either is missing. The mod's blurb asks
+  for `DoLuaChecksum=true`; the pack keeps it `false` for its ~390 Workshop
+  items, which drops only the integrity check. Lost with Rip-A-Holic: Train
+  Tailoring and leather-from-strips (TFC Combine Leather still covers leather
+  sewing); Tear All Clothes awards 0.3 Tailoring XP per item instead.
+
 - **Wring out all wet clothing without undressing, for the `viewpoint` pack.**
   `Wesch's Better Wringing` (`w_betterwringing`) adds a "Wring Out All Wet
   Clothing" context entry and re-equips a garment after a single wring in

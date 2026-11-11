@@ -342,7 +342,16 @@
     { id = "3789037653"; title = "Tailor's Cut - Cut Clothing Holes Anywhere"; }
     { id = "3416525606"; title = "Recut"; }
     { id = "2142622992"; title = "Repair Any Clothes"; }
-    { id = "3667745474"; title = "Rip-A-Holic"; }
+    # Batch ripping lives here, not in Rip-A-Holic (3667745474, removed): its
+    # Rip All only scanned the player's inventory and bags, so clothing on
+    # corpses and in nearby containers still had to be ripped one item at a
+    # time. This fork's Selected / Surrounding / All batches reach open
+    # containers, the floor and corpses, run through its own recipes (so
+    # consumption and output are server-authoritative, not a client-side item
+    # move) and cover socks, belts, underwear, bandanas, gloves and recoverable
+    # shoes. It declares the ORIGINAL item (3519629457) incompatible, so never
+    # add that one alongside it.
+    { id = "3798812018"; title = "Tear All Clothes [B42 MP]"; } # TearAllClothesMP
     { id = "3810122988"; title = "My Tailor Is Rich - Clothing & Shoe Sizes"; }
     { id = "3822249892"; title = "Master Sewing Kit"; }
     { id = "3696197915"; title = "Suture Needles are for Sewing"; }
@@ -1115,7 +1124,11 @@
     "TailorsCut"
     "RecutB42"
     "RepairAnyClothes"
-    "rip-a-holic"
+    # Tear All Clothes MP replaces rip-a-holic: batches reach corpses/containers
+    # too, and its recipes are what the context menu queues. It has no
+    # require=, but switches itself off if the original Tear All Clothes
+    # (3519629457) is active, which is why the pack must not add that item.
+    "TearAllClothesMP"
     "batman_MyTailorIsRich"
     "MasterSewingKit"
     "SutureNeedles4Sewing"
