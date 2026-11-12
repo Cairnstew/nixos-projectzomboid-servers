@@ -50,23 +50,23 @@ checkbox is a commit-sized change with its own verification step.
 
 ## P1 — data protection
 
-- [ ] **Backups: permissions and secret content.**
+- [x] **Backups: permissions and secret content.**
   - Set `UMask=0077` on the backup unit.
   - `chmod 0600` the archive after `os.replace` (or document the group-read
     exception needed by the dashboard download endpoint).
   - Document that `Zomboid/Server` contains `RCONPassword`/`Password` and that
     off-host copies are secret material.
 
-- [ ] **Restore without root-owned artifacts.**
+- [x] **Restore without root-owned artifacts.**
   - Run the extraction as the server user, or drop to it around `tar`.
   - Add `--no-same-owner` and `--no-same-permissions`.
   - Chown or create the safety archive as the server user.
 
-- [ ] **Client mod installer path containment.**
+- [x] **Client mod installer path containment.**
   - Validate `mod.info` ids and `--ids`; reject separators, `..`, and empty ids.
   - Resolve `dest` and assert it stays under `target` before copy/`rmtree`.
 
-- [ ] **Merged `.ini` and Steam-token permissions.**
+- [x] **Merged `.ini` and Steam-token permissions.**
   - `chmod 0600` the merged `.ini` in `merge_ini.py` (the server user owns it).
   - `chmod 0700` the Steam cache directory created under `dataDir`.
   - Document the group-read blast radius.

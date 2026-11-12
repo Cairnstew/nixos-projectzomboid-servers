@@ -12,6 +12,12 @@ What is backed up, per server, relative to that server's home
     Zomboid/Server  the merged .ini, SandboxVars, spawn files
     Zomboid/Lua     server-side Lua (including PanelBridge queues)
 
+``Zomboid/Server`` contains the merged .ini, and that file contains the RCON and
+join passwords (they are written there from ``secretFiles`` at start). Archives
+are therefore SECRET MATERIAL even though the Steam token is excluded. They are
+created mode 0640 in a 0770 directory so the dashboard's group can read them;
+treat a copy moved off the host as a credential and encrypt it in transit.
+
 Deliberately NOT backed up: ``.local/share/Steam`` (the cached Steam token is a
 credential), the shared install, and the Workshop symlinks (they are derivable
 from the modpack and re-created on the next start).
@@ -193,6 +199,11 @@ def create_backup(server: dict, reason: str = "manual") -> dict:
                 f"tar failed ({result.returncode}): {result.stderr.strip()[:500]}"
             )
         os.replace(temporary, final)
+        # The unit sets UMask=0027, but a manual run may have a permissive
+        # umask. The archive contains Zomboid/Server, which holds the merged
+        # .ini and therefore the RCON/join passwords; keep it group-readable
+        # for the dashboard and never world-readable.
+        os.chmod(final, 0o640)
     finally:
         try:
             temporary.unlink()
@@ -230,6 +241,30 @@ def list_backups(server: dict) -> list[dict]:
     return entries
 
 
+def validate_archive_members(archive: Path) -> None:
+    """Refuse an archive whose members could escape the server home.
+
+    ``restore`` extracts into ``<dataDir>/<name>`` as the service user, so an
+    absolute member or one containing ``..`` would write outside the world.
+    ``tar`` has its own protections, but this check is explicit and produces a
+    message that names the offending member.
+    """
+    result = subprocess.run(
+        ["tar", "--zstd", "-tf", str(archive)],
+        capture_output=True,
+        text=True,
+        timeout=60 * 60,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"cannot list archive ({result.returncode}): {result.stderr.strip()[:500]}"
+        )
+    for name in result.stdout.splitlines():
+        path = Path(name)
+        if path.is_absolute() or ".." in path.parts:
+            raise RuntimeError(f"archive contains an unsafe member: {name}")
+
+
 def restore(server: dict, archive: str) -> dict:
     """Restore an archive into the server's home.
 
@@ -251,10 +286,22 @@ def restore(server: dict, archive: str) -> dict:
             f"(systemctl stop {server['unit']})"
         )
 
+    # Validate before taking the safety archive: a bad archive must not have
+    # side effects, and the listing pass is cheap.
+    validate_archive_members(candidate)
     safety = create_backup(server, reason="pre-restore")
     home = Path(server["home"])
     result = subprocess.run(
-        ["tar", "--zstd", "-xf", str(candidate), "-C", str(home)],
+        [
+            "tar",
+            "--zstd",
+            "--no-same-owner",
+            "--no-same-permissions",
+            "-xf",
+            str(candidate),
+            "-C",
+            str(home),
+        ],
         capture_output=True,
         text=True,
         timeout=60 * 60,

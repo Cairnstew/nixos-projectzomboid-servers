@@ -95,6 +95,21 @@ CATALOGUE_ENV = "PZ_MODPACKS_JSON"
 # uses. Not the Workshop id.
 _MOD_INFO_ID = re.compile(r"^\s*id\s*=\s*(.+?)\s*$", re.MULTILINE)
 
+# Workshop content is untrusted input: a mod author controls `mod.info`, and the
+# id becomes a DIRECTORY NAME under the client's mods folder. Restrict it to one
+# path component so `id=../../.config/autostart` cannot escape the target, and
+# `shutil.rmtree` under --force cannot delete anything outside it.
+_SAFE_MOD_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ -]*$")
+_SAFE_ITEM_ID = re.compile(r"^[0-9]+$")
+
+
+def safe_mod_id(value: str) -> bool:
+    return bool(value) and bool(_SAFE_MOD_ID.fullmatch(value))
+
+
+def safe_item_id(value: str) -> bool:
+    return bool(value) and bool(_SAFE_ITEM_ID.fullmatch(value))
+
 
 def load_catalogue(path):
     path = path or os.environ.get(CATALOGUE_ENV)
@@ -151,14 +166,24 @@ def install_local(item_dir, target, item_id, force, report):
         report.append((item_id, None, "no mod.info found — nothing installed"))
         return []
     installed = []
+    target_root = os.path.realpath(target)
     for root in roots:
         mid = mod_id(root) or f"{item_id}-{os.path.basename(root)}"
-        dest = os.path.join(target, mid)
+        if not safe_mod_id(mid):
+            report.append((item_id, mid, "unsafe mod id — skipped"))
+            continue
+        dest = os.path.join(target_root, mid)
+        if os.path.commonpath([target_root, os.path.realpath(dest)]) != target_root:
+            report.append((item_id, mid, "mod id escapes the target — skipped"))
+            continue
         if os.path.exists(dest) and not force:
             report.append((item_id, mid, "already installed (use --force to refresh)"))
             installed.append(mid)
             continue
         if os.path.exists(dest) and force:
+            if os.path.islink(dest) or not os.path.isdir(dest):
+                report.append((item_id, mid, "refusing to replace a non-directory — skipped"))
+                continue
             shutil.rmtree(dest)
         shutil.copytree(root, dest)
         report.append((item_id, mid, "installed"))
@@ -251,6 +276,12 @@ def main(argv=None):
         titles = {m["id"]: (m.get("title") or "(untitled)") for m in pack.get("workshopMods", [])}
         local_mods = list(pack.get("mods", []))
         label = args.pack
+
+    bad_ids = [i for i in items if not safe_item_id(i)]
+    if bad_ids:
+        parser.error(
+            "Workshop ids must be numeric: " + ", ".join(repr(i) for i in bad_ids)
+        )
 
     if not items:
         # A pack may legitimately have no Workshop items (a local-mods-only

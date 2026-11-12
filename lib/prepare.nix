@@ -773,6 +773,13 @@ rec {
             || echo "project-zomboid: warning: Workshop prune failed" >&2
         fi
 
+        # steamcmd caches the authenticated login under HOME/.local/share/Steam.
+        # That token is a credential; the web console and dashboard users are in
+        # the service group and must not be able to read it.
+        if [ -d "$HOME/.local/share/Steam" ]; then
+          chmod 700 "$HOME/.local/share/Steam" 2>/dev/null || true
+        fi
+
         echo "project-zomboid: game install ready in $PZ_SERVER_DIR"
         echo "project-zomboid: Workshop content ready in $PZ_WORKSHOP_DIR"
       '';

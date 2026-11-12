@@ -1147,6 +1147,8 @@
                     || fail "backup run failed"
                   archive="$(ls "$root"/backups/test/*.tar.zst | head -1)"
                   [ -n "$archive" ] || fail "no archive was created"
+                  [ "$(stat -c %a "$archive")" = 640 ] \
+                    || fail "backup archive mode is $(stat -c %a "$archive"), expected 640"
                   tar --zstd -tf "$archive" | grep -qx 'Zomboid/Saves/Multiplayer/test/map.bin' \
                     || fail "the world was not in the archive"
                   if tar --zstd -tf "$archive" | grep -q '\.local/share/Steam'; then
@@ -1159,6 +1161,26 @@
                     || fail "restore failed"
                   grep -qx 'world' "$root/home/Zomboid/Saves/Multiplayer/test/map.bin" \
                     || fail "restore did not put the original file back"
+
+                  # A crafted archive (the game user can write the backup
+                  # directory) must not be able to write outside the world.
+                  raw="$root/evil.tar"
+                  python3 - "$raw" <<'PY'
+                  import io, sys, tarfile
+                  with tarfile.open(sys.argv[1], "w") as tf:
+                      data = b"escaped\n"
+                      info = tarfile.TarInfo("../escape")
+                      info.size = len(data)
+                      tf.addfile(info, io.BytesIO(data))
+                  PY
+                  evil="$root/backups/test/test-20260101-000000.tar.zst"
+                  zstd -q -f "$raw" -o "$evil"
+                  if python3 backups.py --config "$root/config.json" restore \
+                       --server test --archive "$(basename "$evil")" >/dev/null 2>&1; then
+                    fail "restore accepted an archive with an unsafe member"
+                  fi
+                  [ ! -e "$root/home/escape" ] && [ ! -e "$root/escape" ] \
+                    || fail "an unsafe archive member escaped the server home"
 
                   # Prune: three archives with keep=2 leaves two.
                   for _ in 1 2 3; do
@@ -1408,7 +1430,7 @@
                   fail() { echo "FAIL: $1" >&2; exit 1; }
 
                   python3 - "$CLIENT" "$CATALOGUE" <<'PY' || fail "client plan assertions failed"
-                  import json, os, subprocess, sys
+                  import json, os, subprocess, sys, tempfile
 
                   client, catalogue = sys.argv[1], sys.argv[2]
                   packs = json.load(open(catalogue))
@@ -1441,6 +1463,28 @@
                   )
                   if bad.returncode == 0:
                       raise SystemExit("plan accepted an unknown pack")
+
+                  # Workshop content is untrusted: a mod.info id becomes a
+                  # directory name, and --force deletes that directory. It must
+                  # never escape the target.
+                  import importlib.util
+                  spec = importlib.util.spec_from_file_location("pz_client_mods", client)
+                  pcm = importlib.util.module_from_spec(spec)
+                  spec.loader.exec_module(pcm)
+                  assert pcm.safe_item_id("2625441155")
+                  assert not pcm.safe_item_id("../../etc")
+                  assert pcm.safe_mod_id("BritasArmorPack")
+                  assert not pcm.safe_mod_id("../../.config/autostart")
+                  with tempfile.TemporaryDirectory() as tmp:
+                      item = os.path.join(tmp, "item", "Mod")
+                      os.makedirs(item)
+                      with open(os.path.join(item, "mod.info"), "w", encoding="utf-8") as fh:
+                          fh.write("id=../../escape\n")
+                      target = os.path.join(tmp, "mods")
+                      os.makedirs(target)
+                      pcm.install_local(os.path.join(tmp, "item"), target, "123", True, [])
+                      if os.path.exists(os.path.join(tmp, "escape")):
+                          raise SystemExit("a mod.info id escaped the target directory")
 
                   print("client plan ok")
                   PY
@@ -1985,6 +2029,11 @@
                   sandbox="$data/$srv/Zomboid/Server/${srv}_SandboxVars.lua"
 
                   fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  # The merged .ini contains RCON/join passwords after
+                  # --secret-file; it must not be group- or world-readable.
+                  [ "$(stat -c %a "$ini")" = 600 ] \
+                    || fail "merged .ini mode is $(stat -c %a "$ini"), expected 600"
 
                   # ── World identity must survive ──────────────────────────────
                   grep -qx 'Seed=world-seed-abcdef' "$ini" || fail "Seed was lost — the .ini was overwritten, not merged"

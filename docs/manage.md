@@ -164,8 +164,13 @@ Zomboid/Lua     server-side Lua
 ```
 
 It excludes `.local/share/Steam` (the cached token is a credential), the shared
-install, and Workshop symlinks. If the server is running it asks RCON for a
-`save` first; a stopped server produces the cleanest archive.
+install, and Workshop symlinks. `Zomboid/Server` is included, and that directory
+contains the merged `.ini` — including the RCON and join passwords. Archives are
+created mode `0640` in a `0770` directory so the dashboard's group can read
+them; treat any copy moved off the host as a credential and encrypt it.
+
+If the server is running it asks RCON for a `save` first; a stopped server
+produces the cleanest archive.
 
 Restore is a CLI because it stops the server and replaces world files:
 
@@ -175,6 +180,9 @@ sudo project-zomboid-restore viewpoint viewpoint-20261112-043000.tar.zst
 sudo systemctl start project-zomboid-viewpoint
 ```
 
-The script refuses while the unit is active, takes a safety archive first, and
-only accepts archives inside that server's backup directory. The archive is
-plain `tar --zstd`, so a manual restore needs no tool from this repository.
+The script refuses while the unit is active, validates archive members, takes a
+safety archive first, and only accepts archives inside that server's backup
+directory. It drops to the server user before extracting (the wrapper uses
+`runuser`), so the restored files are owned correctly; `sudo` is still needed for
+the stop/start around it. The archive is plain `tar --zstd`, so a manual restore
+needs no tool from this repository.

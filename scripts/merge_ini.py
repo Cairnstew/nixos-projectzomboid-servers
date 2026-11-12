@@ -199,6 +199,11 @@ def main() -> None:
         f.write("\n".join(f"{k}={v}" for k, v in merged.items()))
         f.write("\n")
 
+    # This file holds the RCON and join passwords once --secret-file has run.
+    # PZ runs as the file's owner, so 0600 is enough; the dashboard and web
+    # console user have no need to read it (they use their own secret path).
+    os.chmod(path, 0o600)
+
 
 if __name__ == "__main__":
     main()

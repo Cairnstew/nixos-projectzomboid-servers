@@ -107,13 +107,19 @@ let
   restoreCommand = pkgs.writeShellApplication {
     name = "project-zomboid-restore";
     runtimeInputs = [
+      pkgs.util-linux
       pkgs.systemd
       pkgs.gnutar
       pkgs.zstd
       pkgs.coreutils
     ];
     text = ''
-      exec ${pkgs.python3}/bin/python3 ${./manage}/backups.py \
+      # Run as the server user, not as root: the archive comes from a directory
+      # the game user can write, and extracting it as root would let a crafted
+      # archive escape the server home and leave root-owned files behind. The
+      # caller still uses sudo to stop and start the unit.
+      exec ${pkgs.util-linux}/bin/runuser -u ${cfg.user} -- \
+        ${pkgs.python3}/bin/python3 ${./manage}/backups.py \
         --config ${manageConfigFile} restore "$@"
     '';
   };
@@ -214,6 +220,9 @@ in
         Group = cfg.group;
         ExecStart = "${pkgs.python3}/bin/python3 ${./manage}/backups.py --config ${manageConfigFile} run";
 
+        # Archives are secret material (see backups.py): group-readable for the
+        # dashboard, never world-readable.
+        UMask = "0027";
         NoNewPrivileges = true;
         PrivateTmp = true;
         PrivateDevices = true;

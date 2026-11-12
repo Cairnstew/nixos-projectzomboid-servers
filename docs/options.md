@@ -98,9 +98,14 @@ property of the proxy or the private network, not of this module.
 ### `backup`
 
 Scheduled `tar --zstd` archives of each server's `Zomboid/{Saves,db,Server,Lua}`.
-The Steam token under `.local/share/Steam` is deliberately excluded. Restore is
-a CLI (`project-zomboid-restore`), not an HTTP action: it refuses while the unit
-is active and takes a safety archive first.
+The Steam token under `.local/share/Steam` is deliberately excluded, but
+`Zomboid/Server` contains the merged `.ini` and therefore the RCON and join
+passwords: treat archives as secret material. They are created mode `0640` in a
+`0770` directory so the dashboard's group can read them; encrypt any copy that
+leaves the host. Restore is a CLI (`project-zomboid-restore`), not an HTTP
+action: it refuses while the unit is active, validates archive members, takes a
+safety archive first, and runs as the server user (use `sudo` for the
+stop/start).
 
 | Option | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -724,6 +729,12 @@ Values are read at start and written straight into the key. Evaluation **fails**
 if one of those keys appears in `settings` or `sandbox`, in a modpack's
 `defaultSettings` or `defaultSandbox`, and the renderer filters them
 independently — so a bare module import cannot leak one either.
+
+The merged `<name>.ini` in the data directory is therefore written mode `0600`
+by the prep script: Project Zomboid runs as its owner, while the web console and
+dashboard users do not need to read it (they use their own secret path). The
+cached Steam login under `<dataDir>/.local/share/Steam` is also set to `0700`,
+for the same reason.
 
 `extraArgs` is the same trap in a different place: it is baked into a
 world-readable unit file.

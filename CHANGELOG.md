@@ -34,6 +34,24 @@ All notable changes to this project. Format follows
   which is visible in the process list; the module now warns about that and the
   option docs point at proxy authentication instead.
 
+- **Backup archives are no longer world-readable.** The backup unit now sets
+  `UMask=0027` and the archive is chmodded to `0640`. This matters because the
+  archives include `Zomboid/Server`, and that directory contains the merged
+  `.ini` with the RCON and join passwords; the docs now say so. Restore also
+  validates archive members and extracts with `--no-same-owner`, running as the
+  server user through `runuser` instead of as root.
+
+- **The client mod installer rejects unsafe ids.** A Workshop mod controls its
+  `mod.info` `id=`, which becomes a directory name and, with `--force`, a
+  `shutil.rmtree` target. Ids containing path separators or `..` are skipped, the
+  destination is checked against the target directory, and `--ids` must be
+  numeric.
+
+- **The merged `.ini` and Steam login cache are private.** The prep script now
+  writes the merged `.ini` as `0600` (PZ runs as its owner) and sets the cached
+  Steam token directory under `<dataDir>/.local/share/Steam` to `0700`, so the
+  web-console/dashboard group cannot read either.
+
 ### Removed
 
 - **Two Viewpoint add-ons that crash on Build 42.22: Surface Fix and Physics &
