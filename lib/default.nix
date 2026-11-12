@@ -835,7 +835,7 @@ let
   unitName = name: "${unitPrefix}${name}";
 
   # Deterministic web-console port assignment. Shared by modules/config.nix
-  # (the advertised proxy upstreams) and modules/services.nix (the ttyd
+  # (the advertised proxy upstreams) and modules/services/ (the ttyd
   # listener), so the two can never disagree about which port a server uses.
   #
   # Ports are assigned in sorted server order and only among servers that asked

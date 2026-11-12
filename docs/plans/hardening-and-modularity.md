@@ -10,7 +10,7 @@ checkbox is a commit-sized change with its own verification step.
 
 - [x] **RCON is not opened in the firewall by default.**
   - Add `servers.<name>.openRconFirewall` (`bool`, default `false`).
-  - Use it in `modules/services.nix` instead of the unconditional `rconPort`
+  - Use it in `modules/services/server.nix` instead of the unconditional `rconPort`
     open.
   - Add `rconPort`, web-console and dashboard ports to the evaluation-time
     TCP port-collision assertion.
@@ -81,7 +81,9 @@ checkbox is a commit-sized change with its own verification step.
   461 lines. Further per-domain splitting is optional if the file grows.
 - [x] Fix the polkit-vs-sudo documentation drift in `options.nix`,
   `docs/options.md` and `docs/host-recipes.md`.
-- [ ] Split `modules/options.nix` and `modules/services.nix` by concern.
+- [x] Split `modules/options.nix` and `modules/services.nix` by concern
+  (`modules/options/` and `modules/services/`, with the shared types/context in
+  `types.nix` and `context.nix`; both top-level files are thin import lists).
 - [x] Delete the dead `pkgs/project-zomboid-server/derivation.nix`.
 - [ ] Reduce `README.md` option-table duplication.
 - [x] Add a VM smoke test with a stub `package` to exercise systemd hardening

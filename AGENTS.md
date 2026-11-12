@@ -32,7 +32,7 @@ modules/manage/*.py`.
 | --- | --- |
 | `modules/options/` | every option, split by concern; `types.nix` holds the shared submodule types |
 | `modules/config.nix` | users/groups, tmpfiles, assertions, polkit, derived upstreams |
-| `modules/services.nix` | systemd units: install, servers, consoles, ttyd, timers |
+| `modules/services/` | systemd units split by concern; `context.nix` holds the shared server/port resolution |
 | `modules/manage.nix` | `pz-manage` dashboard and backup units |
 | `modules/home.nix` | Home Manager side: writes `~/Zomboid` client config |
 | `lib/default.nix` | pure renderer/resolver/proxy helpers, `unitName`, `mkWebPort` |

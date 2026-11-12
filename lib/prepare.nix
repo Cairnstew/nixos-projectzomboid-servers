@@ -1,7 +1,7 @@
 # lib/prepare.nix
 #
 # The two pieces of logic needed to get a Project Zomboid dedicated server from
-# "nothing on disk" to "running", factored out of modules/services.nix so the
+# "nothing on disk" to "running", factored out of modules/services/ so the
 # NixOS module and the standalone runner (`nix run .#pz-dedicated-server`) share
 # ONE implementation.
 #

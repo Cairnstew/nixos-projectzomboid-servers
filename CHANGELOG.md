@@ -6,6 +6,15 @@ All notable changes to this project. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Options and unit builders are split by concern.** `modules/options/` holds
+  the declarations (`core`, `servers`, `client-hosts`, `web`, `manage`,
+  `backup`) with the shared submodule types in `types.nix`; `modules/services/`
+  holds the units with the shared server/port resolution in `context.nix`.
+  `modules/options.nix` and `modules/services.nix` are thin import lists, so
+  the module entry point and every public option are unchanged.
+
 ### Fixed
 
 - **Setting `rconPort` no longer opens the port in the firewall.** RCON is
