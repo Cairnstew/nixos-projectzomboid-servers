@@ -22,6 +22,17 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`pz-manage`: a dashboard, JSON API, RCON actions and scheduled backups.**
+  `manage.enable` runs a stdlib-only Python service on loopback with a small web
+  UI: status, uptime, memory, players (RCON), log tail, a read-only view of the
+  effective Nix config, save/broadcast/kick/ban/whitelist and
+  start/stop/restart. `backup.enable` adds a systemd timer that writes
+  `tar --zstd` archives of `Zomboid/{Saves,db,Server,Lua}` and a
+  `project-zomboid-restore` CLI. The UI never writes `viewpoint.ini`,
+  `_SandboxVars.lua`, `Mods=` or `WorkshopItems=`: the prep script re-applies
+  those on every start. Restore is a CLI because it stops the server and
+  replaces world files. See `docs/manage.md`.
+
 - **Corpse- and container-wide batch ripping, for the `viewpoint` pack.**
   `Tear All Clothes [B42 MP]` (`TearAllClothesMP`, the B42.20+ fork of
   3519629457) replaces `Rip-A-Holic` (`rip-a-holic`), whose Rip All only
@@ -381,6 +392,14 @@ All notable changes to this project. Format follows
   than before and works under either hardening posture.
 
 ### Fixed
+
+- **Large Workshop packs no longer cascade "No Connection" or time out on a
+  first install.** The install script sent one steamcmd invocation carrying
+  every missing `+workshop_download_item` argument. A 438-item pack on a flaky
+  link produced a cascade of per-item `No Connection` errors and the 45-minute
+  unit timeout killed the install with 101 items left (2026-11-11). Downloads
+  are now batched 20 at a time, verified after each pass, and retried up to
+  three times with a growing pause; the install/update timeout is 2h.
 
 - **`Mods=` is semicolon-separated, not comma-separated.** Build 42 splits the
   key on `;` only (the game's own `ServerSettingsScreen` joins and splits with
