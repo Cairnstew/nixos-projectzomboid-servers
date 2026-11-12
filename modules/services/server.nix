@@ -235,10 +235,25 @@ let
 
         # PZ does not shut down cleanly on SIGTERM — it needs its own `quit` on
         # stdin, which ExecStop does. SIGCONT is the signal its own docs pair
-        # with the fifo, and KillMode=process keeps systemd from also SIGKILLing
-        # the steam-run wrapper's children on timeout.
+        # with the fifo, and it is inert for a running JVM, so the graceful
+        # attempt can never take the world down by itself.
+        #
+        # `mixed`, NOT `process`: the main PID is steam-run's bwrap wrapper and
+        # the JVM (ProjectZomboid64) is its CHILD. With `process` the escalation
+        # reached the wrapper only, so a stop that timed out left the JVM alive
+        # in the cgroup — and a stop during mod load ALWAYS timed out, because
+        # the game starts reading the console fifo only after loading. systemd
+        # then refused to adopt the leftover on the next start (`Found left-over
+        # process … Ignoring.`), so two JVMs shared one world and one pair of
+        # ports until one died (2026-11-12: that pair drove the host into an
+        # oom-kill of the whole unit).
+        #
+        # `mixed` keeps the graceful path identical — only the main process is
+        # signalled first, so the JVM is never SIGTERMed mid-save — and makes
+        # the SIGKILL escalate to the WHOLE cgroup, so an orphan cannot survive
+        # a timed-out stop.
         KillSignal = "SIGCONT";
-        KillMode = "process";
+        KillMode = "mixed";
         # Saving on shutdown can take up to a minute on a large world.
         TimeoutStopSec = "90s";
 

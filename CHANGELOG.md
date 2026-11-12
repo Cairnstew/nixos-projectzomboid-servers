@@ -30,6 +30,17 @@ All notable changes to this project. Format follows
   opened at all; a missing or empty credential exits non-zero and shows up in
   `systemctl --failed`.
 
+- **A stop during mod load no longer orphans the JVM.** The main PID is
+  `steam-run`'s bwrap wrapper and the JVM is its child, so `KillMode=process`
+  escalated to the wrapper alone. A stop that landed before the game had started
+  reading the console FIFO always timed out (there is no reader for
+  `save`/`quit` yet), and the surviving `ProjectZomboid64` stayed in the cgroup:
+  the next start logged `Found left-over process … Ignoring.` and two JVMs
+  shared one world and one pair of ports until one died. `KillMode=mixed` keeps
+  the graceful path identical — only the main process is signalled first — and
+  sends the timeout SIGKILL to the whole cgroup. A VM check now stops a
+  not-yet-readable server and asserts the cgroup is empty afterwards.
+
 - **Setting `rconPort` no longer opens the port in the firewall.** RCON is
   plaintext TCP, and the dashboard and idle-stop check read it over loopback.
   Opening it required only a non-zero port before, which contradicted the

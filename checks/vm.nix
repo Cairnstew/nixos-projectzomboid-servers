@@ -19,9 +19,26 @@
 }:
 
 let
+  # A child that stands in for the JVM. It never reads stdin, and its store path
+  # ends in `pz-stub-jvm` so the test can find it by name — `exec -a` is not an
+  # option here, because nixpkgs' coreutils is a multi-call binary and refuses a
+  # foreign argv[0] with "coreutils: unknown program".
+  stubChild = pkgs.writeShellScript "pz-stub-jvm" ''
+    while :; do
+      ${pkgs.coreutils}/bin/sleep 3600
+    done
+  '';
+
   # `writeShellApplication` sets `meta.mainProgram`, which is what
   # `lib.getExe cfg.package` looks up. The loop keeps the unit in `active`
   # without touching the console FIFO.
+  #
+  # The child is what makes this a faithful stand-in for the real thing: the
+  # launcher execs `steam-run`, whose bwrap stays the main PID while
+  # `ProjectZomboid64` runs as its child, and neither reads the console FIFO
+  # during mod loading. A stop therefore has no working graceful path — only
+  # escalation — which is precisely the case that used to orphan the JVM. The
+  # `pz-stub-jvm` name in the child's path is what the test greps for afterwards.
   #
   # The real package carries these two app ids from versions.json and the
   # module reads them without `or`; the stub has to provide them too or
@@ -31,8 +48,9 @@ let
       name = "project-zomboid-server-stub";
       text = ''
         echo "stub project-zomboid server: $*"
+        ${stubChild} &
         while :; do
-          sleep 3600
+          ${pkgs.coreutils}/bin/sleep 3600
         done
       '';
     }
@@ -76,6 +94,12 @@ pkgs.testers.runNixOSTest {
             enable = true;
             timeout = "1m";
           };
+          # The stop test below has to reach the escalation branch, and ExecStop
+          # already spends 15s on `save`/`quit`. 20s keeps the test short while
+          # still exercising a real timeout.
+          extraServiceConfig = {
+            TimeoutStopSec = "20s";
+          };
         };
       };
 
@@ -88,6 +112,8 @@ pkgs.testers.runNixOSTest {
     };
 
   testScript = ''
+    import datetime
+
     machine.wait_for_unit("project-zomboid-demo.service")
 
     def prop(unit, name):
@@ -130,5 +156,30 @@ pkgs.testers.runNixOSTest {
     machine.succeed("systemctl start project-zomboid-demo-idle.service")
     idle_log = machine.succeed("journalctl -b -u project-zomboid-demo-idle.service")
     assert "RCON unavailable" in idle_log, idle_log
+
+    # ── A stop during "mod load" must not orphan the JVM ──────────────────
+    # The stub never reads its console FIFO, so ExecStop's `save`/`quit` reach
+    # nobody — the same wall a real server hits until it has finished loading
+    # mods. systemd can only escalate. With KillMode=process that escalation
+    # reached the main PID (the bwrap wrapper) alone and left the JVM — the
+    # child, `pz-stub-jvm` here — alive in the cgroup; the next start logged
+    # `Found left-over process … Ignoring.` and both instances shared one world
+    # and one pair of ports. KillMode=mixed must take the whole cgroup down.
+    machine.succeed("pgrep -f 'pz-stub-jvm$'")
+    machine.execute(
+        "systemctl stop project-zomboid-demo.service",
+        timeout=datetime.timedelta(seconds=120),
+    )
+    # A stop that had to SIGKILL the JVM is a failure the operator must see,
+    # not a quiet `Deactivated successfully`.
+    expect("project-zomboid-demo.service", "Result", "timeout")
+    machine.wait_until_fails(
+        "pgrep -f 'pz-stub-jvm$'", timeout=datetime.timedelta(seconds=30)
+    )
+
+    machine.succeed("systemctl start project-zomboid-demo.service")
+    machine.wait_for_unit("project-zomboid-demo.service")
+    logs = machine.succeed("journalctl -b -u project-zomboid-demo.service")
+    assert "Found left-over process" not in logs, logs
   '';
 }
