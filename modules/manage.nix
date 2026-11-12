@@ -150,8 +150,11 @@ in
         PrivateDevices = true;
         ProtectSystem = "strict";
         ProtectHome = "read-only";
-        ReadOnlyPaths = [ cfg.dataDir ];
-        ReadWritePaths = [ backupRoot ];
+        # The `-` prefix makes a missing path non-fatal: the backup tree is
+        # created by the tmpfiles rule above, and on a first switch this unit
+        # can start before that rule has run.
+        ReadOnlyPaths = [ "-${cfg.dataDir}" ];
+        ReadWritePaths = [ "-${backupRoot}" ];
         RestrictAddressFamilies = [
           "AF_INET"
           "AF_INET6"
@@ -178,8 +181,8 @@ in
         PrivateDevices = true;
         ProtectSystem = "strict";
         ProtectHome = "read-only";
-        ReadOnlyPaths = [ cfg.dataDir ];
-        ReadWritePaths = [ backupRoot ];
+        ReadOnlyPaths = [ "-${cfg.dataDir}" ];
+        ReadWritePaths = [ "-${backupRoot}" ];
         RestrictAddressFamilies = [
           "AF_INET"
           "AF_INET6"
