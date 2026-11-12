@@ -476,6 +476,13 @@ in
                   equivalent to <option>passwordFile</option>), plus
                   <literal>RCONPassword</literal>, <literal>DiscordToken</literal>
                   and <literal>WebhookAddress</literal>.
+
+                  The file must be readable by the server's service user
+                  (<option>user</option>), not only by root: the prep script runs
+                  as that user and merges the value into the <literal>.ini</literal>.
+                  An agenix secret with the default <literal>0400</literal>
+                  root ownership stops the server at
+                  <literal>cannot read secret file</literal>.
                 '';
               };
 
@@ -766,8 +773,12 @@ in
                         <option>rconPort</option> and
                         <option>secretFiles.RCONPassword</option>; evaluation
                         fails otherwise. The timer is a root oneshot because it
-                        stops a system unit, but it only reads the rendered
-                        <literal>.ini</literal> and talks to RCON on loopback.
+                        stops a system unit, but it needs no capability of its
+                        own: the port is baked in at build time and the password
+                        arrives as a systemd credential, so it never opens the
+                        data directory or the rendered <literal>.ini</literal>
+                        (which a capability-less root cannot read — doing so
+                        made the whole check a silent no-op).
                       '';
                     };
                   };

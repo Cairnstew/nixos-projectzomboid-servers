@@ -10,6 +10,14 @@ conservative:
 * It re-queries the player count immediately before stopping, so a player who
   joins between the timer firing and the stop is not kicked.
 
+Everything it needs arrives as an argument: the RCON port from the module at
+build time, and the password as a systemd credential. It deliberately does NOT
+read the rendered `.ini`. That file lives in a `0770` data directory and is
+`0600`, so a unit with `CapabilityBoundingSet=""` cannot read it — the check
+then failed and returned 0, so the timer reported success once a minute
+forever while the server stayed up (2026-11-12). Anything this script cannot
+read is now a non-zero exit, which surfaces in `systemctl --failed`.
+
 State is one file per server under the module's run directory; it records when
 the server was first seen with zero players. The file is removed as soon as a
 player is seen, so the next empty period starts from zero.
@@ -46,21 +54,14 @@ def parse_duration(value: str) -> int:
     return int(number) * UNIT_SECONDS[unit]
 
 
-def read_ini(path: Path) -> dict[str, str]:
-    """Read the ``Key=value`` lines PZ writes, last value winning.
+def read_password(path: Path) -> str:
+    """Read an RCON password from a systemd credential (or any plain file).
 
-    PZ rewrites this file itself and the prep script merges into it, so it is a
-    plain ini without sections or escapes. Splitting on the FIRST ``=`` keeps a
-    password that itself contains ``=`` intact.
+    Only the trailing newline is stripped. A password may legitimately contain
+    spaces or `=`, and trimming more than the line ending would silently change
+    it — which PZ answers with a closed RCON listener, not an error.
     """
-    values: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        values[key.strip()] = value.strip()
-    return values
+    return path.read_text(encoding="utf-8", errors="replace").rstrip("\r\n")
 
 
 def unit_active(unit: str) -> bool:
@@ -86,7 +87,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--unit", required=True, help="systemd unit to stop")
     parser.add_argument(
-        "--ini", required=True, type=Path, help="rendered <server>.ini with RCONPort/RCONPassword"
+        "--port", required=True, type=int, help="RCON TCP port on 127.0.0.1"
+    )
+    parser.add_argument(
+        "--password-file",
+        required=True,
+        type=Path,
+        # `%d/rcon-password` in the unit: systemd expands `%d` to the credential
+        # directory it populated from LoadCredential.
+        help="file holding the RCON password (a systemd credential)",
     )
     parser.add_argument(
         "--state", required=True, type=Path, help="file recording when the server became empty"
@@ -106,23 +115,31 @@ def main(argv: list[str] | None = None) -> int:
         args.state.unlink(missing_ok=True)
         return 0
 
+    # A missing or empty password is a configuration error, not "nothing to do":
+    # returning 0 here is what made a permanently broken idle check look healthy
+    # in `systemctl` output.
     try:
-        ini = read_ini(args.ini)
+        password = read_password(args.password_file)
     except OSError as exc:
-        print(f"{args.unit}: cannot read {args.ini}: {exc}; not stopping", file=sys.stderr)
-        return 0
-
-    try:
-        port = int(ini.get("RCONPort") or 0)
-    except ValueError:
-        port = 0
-    password = ini.get("RCONPassword") or ""
-    if port == 0 or not password:
         print(
-            f"{args.unit}: RCON is not configured in {args.ini}; not stopping",
+            f"{args.unit}: cannot read the RCON password from {args.password_file}: {exc}",
             file=sys.stderr,
         )
-        return 0
+        return 1
+    if not password:
+        print(
+            f"{args.unit}: the RCON password in {args.password_file} is empty",
+            file=sys.stderr,
+        )
+        return 1
+
+    port = args.port
+    if port == 0:
+        print(
+            f"{args.unit}: no RCON port configured; cannot count players",
+            file=sys.stderr,
+        )
+        return 2
 
     try:
         count = player_count(port, password)

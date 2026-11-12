@@ -67,8 +67,24 @@ pkgs.testers.runNixOSTest {
           defaultPort = 16261;
           udpPort = 16262;
           autoStart = true;
+          # Idle shutdown is the other unit that has to read something outside
+          # its own sandbox. RCON is not reachable in this VM, which is fine:
+          # the point is that the oneshot gets far enough to try.
+          rconPort = 27017;
+          secretFiles.RCONPassword = "/etc/pz-rcon";
+          idleStop = {
+            enable = true;
+            timeout = "1m";
+          };
         };
       };
+
+      # A stand-in for the agenix secret. It has to be readable by the SERVICE
+      # USER, not just by root: the prep script merges `RCONPassword=` into the
+      # .ini as that user, so a root-only 0400 secret (agenix's default) breaks
+      # the start. The idle oneshot still gets it through LoadCredential, which
+      # is what the test exercises.
+      environment.etc."pz-rcon".text = "vm-test-rcon-password\n";
     };
 
   testScript = ''
@@ -103,5 +119,16 @@ pkgs.testers.runNixOSTest {
     expect("project-zomboid-manage.service", "ProtectSystem", "strict")
     expect("project-zomboid-backup.service", "NoNewPrivileges", "yes")
     expect("project-zomboid-backup.service", "CapabilityBoundingSet", "")
+
+    # ── The idle oneshot can actually read its inputs ─────────────────────
+    # It used to read the `0600` rendered .ini as a capability-less root and
+    # silently `return 0` when that failed, so the timer reported success once a
+    # minute forever while the server stayed up. The port is now baked into the
+    # unit and the password arrives as a systemd credential: if either input
+    # were missing or unreadable the oneshot would exit non-zero and this start
+    # would fail instead of logging the conservative "RCON unavailable" line.
+    machine.succeed("systemctl start project-zomboid-demo-idle.service")
+    idle_log = machine.succeed("journalctl -b -u project-zomboid-demo-idle.service")
+    assert "RCON unavailable" in idle_log, idle_log
   '';
 }

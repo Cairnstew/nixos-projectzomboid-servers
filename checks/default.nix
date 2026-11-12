@@ -189,6 +189,40 @@ let
             services.project-zomboid-alpha-idle.serviceConfig.ExecStart or ""
           ))
         ) "alpha idle-stop did not receive the configured timeout")
+        (lib.optionalString (
+          services ? project-zomboid-alpha-idle
+          && !(lib.hasInfix "--port 27017" (
+            services.project-zomboid-alpha-idle.serviceConfig.ExecStart or ""
+          ))
+        ) "alpha idle-stop did not receive the configured RCON port")
+        (lib.optionalString (
+          services ? project-zomboid-alpha-idle
+          && !(lib.hasInfix "--password-file %d/rcon-password" (
+            services.project-zomboid-alpha-idle.serviceConfig.ExecStart or ""
+          ))
+        ) "alpha idle-stop does not read the RCON password from a credential")
+        # The root oneshot keeps `CapabilityBoundingSet=""`, so it cannot read a
+        # `0770` data dir or the `0600` `.ini` inside it. Reading either one is
+        # the bug this pairs with: the check returned 0 and the timer reported
+        # success forever while the server stayed up.
+        (lib.optionalString (
+          services ? project-zomboid-alpha-idle
+          && lib.hasInfix "--ini" (services.project-zomboid-alpha-idle.serviceConfig.ExecStart or "")
+        ) "alpha idle-stop parses the rendered .ini, which its capability set cannot read")
+        (lib.optionalString (
+          services ? project-zomboid-alpha-idle
+          && lib.hasInfix "/var/lib/project-zomboid" (
+            services.project-zomboid-alpha-idle.serviceConfig.ExecStart or ""
+          )
+        ) "alpha idle-stop references the data dir, which its capability set cannot read")
+        (lib.optionalString (
+          services ? project-zomboid-alpha-idle
+          && !(lib.hasInfix "rcon-password:/run/secrets/pz-rcon" (
+            lib.concatStringsSep " " (
+              lib.toList (services.project-zomboid-alpha-idle.serviceConfig.LoadCredential or [ ])
+            )
+          ))
+        ) "alpha idle-stop does not load the RCONPassword secret as a credential")
       ];
 
       # Force `config.assertions`. NixOS evaluates them as part of building
@@ -697,11 +731,12 @@ in
         print("RCON framing ok")
         PY
 
-        # ── Idle-stop duration and ini parsing ──────────────────────
+        # ── Idle-stop duration and credential parsing ───────────────
         python3 - <<'PY' || fail "idle-stop parsing assertions failed"
         import time
         from pathlib import Path
-        from idle_stop import parse_duration, read_ini
+        import idle_stop
+        from idle_stop import parse_duration, read_password
         import server as manage_server
 
         assert parse_duration("90s") == 90
@@ -725,11 +760,29 @@ in
         assert not manage_server.same_origin_only({"Sec-Fetch-Site": "cross-site"})
         assert not manage_server.same_origin_only({"Sec-Fetch-Site": "same-site"})
 
-        ini = Path("idle-test.ini")
-        ini.write_text("RCONPort=27017\nRCONPassword=a=b=c\n# comment\n", encoding="utf-8")
-        values = read_ini(ini)
-        assert values["RCONPort"] == "27017"
-        assert values["RCONPassword"] == "a=b=c"
+        # The password is a systemd credential file: only the line ending is
+        # stripped, so a password containing spaces or `=` survives intact.
+        pw = Path("idle-rcon-password")
+        pw.write_text("a=b=c\n", encoding="utf-8")
+        assert read_password(pw) == "a=b=c"
+        pw.write_text(" spaced value \n", encoding="utf-8")
+        assert read_password(pw) == " spaced value "
+
+        # A credential that cannot be read, or is empty, must FAIL. Both cases
+        # used to `return 0`, so the oneshot reported `Deactivated successfully`
+        # once a minute while the server was never stopped (2026-11-12).
+        idle_stop.unit_active = lambda unit: True
+        state = Path("idle-credential-state")
+        base = [
+            "--unit", "u",
+            "--port", "27017",
+            "--state", str(state),
+            "--timeout", "1m",
+        ]
+        assert idle_stop.main(base + ["--password-file", "no-such-credential"]) != 0
+        empty = Path("idle-empty-credential")
+        empty.write_text("\n", encoding="utf-8")
+        assert idle_stop.main(base + ["--password-file", str(empty)]) != 0
 
         # The dashboard reads the idle timestamp the root timer writes.
         state = Path("idle-state")

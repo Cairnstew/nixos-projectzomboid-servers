@@ -356,8 +356,8 @@ let
   # Both are timers around the existing server unit. The start timer activates
   # the service directly (`Unit=`), so it needs no companion service of its own.
   # The idle timer runs a small root oneshot because stopping a system unit is
-  # privileged; the script itself only reads the rendered `.ini` and talks to
-  # RCON on loopback.
+  # privileged; the script itself only counts players over RCON on loopback,
+  # with the port baked in and the password handed to it as a credential.
   startTimerServers = lib.filterAttrs (_: srv: srv.schedule.start != [ ]) resolved;
   idleStopServers = lib.filterAttrs (_: srv: srv.idleStop.enable) resolved;
 
@@ -377,8 +377,13 @@ let
     name: srv:
     let
       unit = unitName name;
-      ini = "${cfg.dataDir}/${name}/Zomboid/Server/${srv.serverName}.ini";
       state = "${cfg.runDir}/${name}.idle-since";
+      # The password arrives as a systemd credential, expanded by systemd as
+      # `%d/<name>`. Nothing here passes a path into the data directory: that
+      # directory is `0770` and the `.ini` inside it is `0600`, so a root unit
+      # with an empty capability bounding set cannot read either — which is
+      # exactly why this check used to do nothing at all (2026-11-12).
+      credential = "rcon-password";
     in
     lib.nameValuePair "${unit}-idle" {
       description = "Stop ${srv.description} after it has been empty for ${srv.idleStop.timeout}";
@@ -386,7 +391,14 @@ let
       serviceConfig = {
         Type = "oneshot";
         User = "root";
-        ExecStart = "${pkgs.python3}/bin/python3 ${../manage}/idle_stop.py --unit ${unit} --ini ${ini} --state ${state} --timeout ${srv.idleStop.timeout}";
+        # The port is known at build time — the same value the module writes as
+        # `RCONPort=` — so the script never has to parse the rendered `.ini`.
+        ExecStart = "${pkgs.python3}/bin/python3 ${../manage}/idle_stop.py --unit ${unit} --port ${toString srv.rconPort} --password-file %d/${credential} --state ${state} --timeout ${srv.idleStop.timeout}";
+        # A credential is copied by PID1 into a private tmpfs for the unit, so
+        # the secret is read by systemd before the sandbox is applied and the
+        # script only ever sees a file it owns. The source path is a runtime
+        # path (agenix), never a value, so nothing lands in the store.
+        LoadCredential = "${credential}:${srv.secretFiles.RCONPassword}";
         # PZ's own stop path sends `save`, waits 15s, then `quit`; the server
         # unit allows up to 90s for that. Give the oneshot room to wait for it.
         TimeoutStartSec = "180s";
@@ -402,8 +414,10 @@ let
         ProtectHostname = true;
         RestrictSUIDSGID = true;
         RestrictRealtime = true;
-        # The script talks to systemd over the private socket and parses the
-        # rendered `.ini`; it never needs a capability of its own.
+        # The script talks to systemd over the private socket and to RCON on
+        # loopback, and reads its password from the credential directory; it
+        # never needs a capability of its own. That is only true because it no
+        # longer opens anything under `cfg.dataDir`.
         CapabilityBoundingSet = "";
         RestrictAddressFamilies = [
           "AF_INET"

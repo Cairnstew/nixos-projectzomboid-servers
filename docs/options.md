@@ -363,6 +363,13 @@ evaluation fails otherwise. The check is conservative: an unreachable RCON is
 not treated as empty, and the player count is re-queried immediately before the
 stop so a just-joined player is not kicked.
 
+The timer is a root oneshot, but it holds no capability: the RCON port is baked
+into the unit at build time and the password reaches it as a systemd credential
+(`LoadCredential=`), so the check never opens the `0770` data directory or the
+`0600` `.ini` inside it. If the credential is missing or empty the unit exits
+non-zero, so a broken check shows up in `systemctl --failed` instead of
+reporting success once a minute.
+
 | Option | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `idleStop.enable` | bool | `false` | Run the idle-shutdown timer. |
@@ -729,6 +736,13 @@ Values are read at start and written straight into the key. Evaluation **fails**
 if one of those keys appears in `settings` or `sandbox`, in a modpack's
 `defaultSettings` or `defaultSandbox`, and the renderer filters them
 independently — so a bare module import cannot leak one either.
+
+The file has to be readable by the **service user**, not just by root: the prep
+script runs as that user and is what merges the value into the `.ini`. An
+agenix secret with its default `0400 root` ownership therefore fails at start
+with `cannot read secret file …: Permission denied`; give it
+`age.secrets.<name>.owner`/`mode` (or a group both share) so the service user can
+read it.
 
 The merged `<name>.ini` in the data directory is therefore written mode `0600`
 by the prep script: Project Zomboid runs as its owner, while the web console and

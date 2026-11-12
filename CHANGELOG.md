@@ -19,6 +19,17 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **`idleStop` actually stops an idle server now.** The idle oneshot ran as
+  `root` with `CapabilityBoundingSet=""`, which drops `CAP_DAC_OVERRIDE` — so it
+  was an ordinary "other" for the `0770` data directory and the `0600` rendered
+  `.ini` inside it. The read failed, the script printed
+  `cannot read …; not stopping` and **returned 0**, so the unit reported
+  `Deactivated successfully` once a minute forever while the server stayed up.
+  The RCON port is now passed at build time and the password arrives as a
+  systemd credential (`LoadCredential=`), so nothing under the data directory is
+  opened at all; a missing or empty credential exits non-zero and shows up in
+  `systemctl --failed`.
+
 - **Setting `rconPort` no longer opens the port in the firewall.** RCON is
   plaintext TCP, and the dashboard and idle-stop check read it over loopback.
   Opening it required only a non-zero port before, which contradicted the
