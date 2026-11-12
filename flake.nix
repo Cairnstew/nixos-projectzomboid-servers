@@ -192,7 +192,7 @@
             managementSystem = {
               systemd-socket.enable = true;
             };
-            webConsole = false;
+            webConsole = true;
             port = null;
             clientHost = {
               enable = false;

@@ -166,16 +166,13 @@ let
   # Plain data, no coupling to any particular reverse-proxy module. Consumers map
   # this into their own upstream option — see README 'Reverse proxy'.
   #
-  # Ports are assigned in sorted server order so they stay stable as long as
-  # servers are not renamed. This mirrors services.nix's `webPort`; if you change
-  # one, change both.
+  # The port assignment itself lives in `lib` so this file and services.nix use
+  # exactly the same function; see `pz.mkWebPort`.
   webServers = lib.filterAttrs (_: srv: cfg.web.enable && srv.webConsole) resolved;
-  webPort =
-    name:
-    if resolved.${name}.port != null then
-      resolved.${name}.port
-    else
-      cfg.web.portBase + (lib.length (builtins.filter (n: n < name) (builtins.attrNames webServers)));
+  webPort = pz.mkWebPort {
+    inherit (cfg.web) portBase;
+    inherit resolved webServers;
+  };
 
   # The dashboard runs as the web-console user by default, because that user is
   # already the one granted the scoped polkit rule below. A host may point it

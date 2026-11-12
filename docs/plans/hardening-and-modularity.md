@@ -73,12 +73,15 @@ checkbox is a commit-sized change with its own verification step.
 
 ## P2 — structure and remaining hardening
 
+- [x] Move `webPort` into `lib/mkWebPort`; align `serverDefaults.webConsole`
+  with the option default.
+- [ ] Move `unitName`/prefix into `lib/` and use it from the polkit rule,
+  `manage.nix` and the Python-facing JSON.
 - [ ] Extract `flake.nix` checks into `checks/*.nix`; keep `flake.nix` thin.
-- [ ] Move `webPort`, `unitName`/prefix, and `serverDefaults` into `lib/`.
-- [ ] Fix the polkit-vs-sudo documentation drift in `options.nix`,
+- [x] Fix the polkit-vs-sudo documentation drift in `options.nix`,
   `docs/options.md` and `docs/host-recipes.md`.
 - [ ] Split `modules/options.nix` and `modules/services.nix` by concern.
-- [ ] Delete the dead `pkgs/project-zomboid-server/derivation.nix`.
+- [x] Delete the dead `pkgs/project-zomboid-server/derivation.nix`.
 - [ ] Reduce `README.md` option-table duplication.
 - [ ] Add a VM smoke test with a stub `package` to exercise systemd hardening.
 - [ ] Add `AGENTS.md`/`CONTRIBUTING.md` with check/format/commit conventions.

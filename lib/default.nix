@@ -828,6 +828,25 @@ let
       key: "--secret-file ${key}=${(secretFilesOf resolved).${key}}"
     ) (lib.attrNames (secretFilesOf resolved));
 
+  # Deterministic web-console port assignment. Shared by modules/config.nix
+  # (the advertised proxy upstreams) and modules/services.nix (the ttyd
+  # listener), so the two can never disagree about which port a server uses.
+  #
+  # Ports are assigned in sorted server order and only among servers that asked
+  # for a console, so renaming a server can move the ports of later ones but
+  # adding a server cannot renumber an earlier one.
+  mkWebPort =
+    {
+      portBase,
+      resolved,
+      webServers,
+    }:
+    name:
+    if resolved.${name}.port != null then
+      resolved.${name}.port
+    else
+      portBase + (lib.length (builtins.filter (n: n < name) (builtins.attrNames webServers)));
+
   # ── Reverse-proxy integration, without depending on anyone's proxy module ──
   # Returns `[{ name, port, path, stripPrefix, displayName; }]` for the
   # web-console servers. Consumers wire it into their own upstream option:
@@ -866,6 +885,7 @@ in
     secretFileArgs
     iniUpdates
     resolveServer
+    mkWebPort
     mkProxyUpstreams
     emptyPack
     ;

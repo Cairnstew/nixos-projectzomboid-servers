@@ -526,14 +526,11 @@ let
   # ── Web consoles ───────────────────────────────────────────────────────────
   webServers = lib.filterAttrs (_: srv: cfg.web.enable && srv.webConsole) resolved;
 
-  # Ports are assigned in sorted server order, so they stay stable as long as
-  # servers are not renamed.
-  webPort =
-    name:
-    if resolved.${name}.port != null then
-      resolved.${name}.port
-    else
-      cfg.web.portBase + (lib.length (builtins.filter (n: n < name) (builtins.attrNames webServers)));
+  # One implementation, shared with config.nix's advertised upstreams.
+  webPort = pz.mkWebPort {
+    inherit (cfg.web) portBase;
+    inherit resolved webServers;
+  };
 
   mkWebShim =
     name:
