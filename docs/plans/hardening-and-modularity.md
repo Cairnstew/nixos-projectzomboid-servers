@@ -84,9 +84,13 @@ checkbox is a commit-sized change with its own verification step.
 - [ ] Split `modules/options.nix` and `modules/services.nix` by concern.
 - [x] Delete the dead `pkgs/project-zomboid-server/derivation.nix`.
 - [ ] Reduce `README.md` option-table duplication.
-- [ ] Add a VM smoke test with a stub `package` to exercise systemd hardening.
+- [x] Add a VM smoke test with a stub `package` to exercise systemd hardening
+  (`checks/vm.nix`; boots a real system, starts the game unit against the stub,
+  and asserts the hardening plus the prep-script write path).
 - [x] Add `AGENTS.md` with check/format/commit conventions.
-- [ ] Add the remaining systemd hardening directives with per-unit opt-outs.
+- [x] Add the remaining systemd hardening directives with per-unit opt-outs
+  (`extraServiceConfig` still merges last). Game/install keep capabilities and
+  namespaces for steam-run/bwrap and 32-bit steamcmd.
 
 ## Verification after each step
 

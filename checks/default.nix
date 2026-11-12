@@ -147,6 +147,16 @@ let
           (lib.optionalString (
             !hasEnv unit "LC_ALL=C.UTF-8"
           ) "${unit} has no LC_ALL=C.UTF-8 — a non-ASCII mod folder would fail to load")
+          # Hardening that cannot break the steam-run/bwrap path. If one of
+          # these is ever dropped, the unit silently becomes less contained,
+          # so the check asserts the ones the module promises.
+          (lib.optionalString ((sc.NoNewPrivileges or false) != true) "${unit} lost NoNewPrivileges")
+          (lib.optionalString ((sc.ProtectSystem or "") != "strict") "${unit} lost ProtectSystem=strict")
+          (lib.optionalString ((sc.ProtectHome or null) != true) "${unit} lost ProtectHome")
+          (lib.optionalString (
+            (sc.ProtectKernelTunables or false) != true
+          ) "${unit} lost ProtectKernelTunables")
+          (lib.optionalString ((sc.LockPersonality or false) != true) "${unit} lost LockPersonality")
         ]
       ) (lib.attrNames cfg.servers);
 
@@ -232,6 +242,21 @@ let
           services ? project-zomboid-update
           && (services.project-zomboid-update.serviceConfig.User or "") != "root"
         ) "the scheduled updater is not root (it needs systemctl try-restart)")
+        # Both shared units are network-facing; keep the sandbox if either is
+        # edited later. The install unit deliberately has no LockPersonality
+        # (steamcmd is 32-bit), so it is checked for the other directives only.
+        (lib.optionalString (
+          services ? project-zomboid-install
+          && (services.project-zomboid-install.serviceConfig.NoNewPrivileges or false) != true
+        ) "the install unit lost NoNewPrivileges")
+        (lib.optionalString (
+          services ? project-zomboid-install
+          && (services.project-zomboid-install.serviceConfig.ProtectSystem or "") != "strict"
+        ) "the install unit lost ProtectSystem=strict")
+        (lib.optionalString (
+          services ? project-zomboid-update
+          && (services.project-zomboid-update.serviceConfig.CapabilityBoundingSet or null) != ""
+        ) "the scheduled updater did not drop its capability bounding set")
         (lib.optionalString (
           danglingDeps != [ ]
         ) "units require undefined dependencies: ${lib.concatStringsSep ", " danglingDeps}")
@@ -534,6 +559,10 @@ let
 
 in
 {
+  # A real boot is the only way to prove systemd accepts the unit sandbox and
+  # that ProtectSystem/ReadWritePaths leave the prep script able to write.
+  vm-hardening = import ./vm.nix { inherit pkgs; };
+
   launcher =
     let
       pkg = pkgs.callPackage (root + "/pkgs/project-zomboid-server") { };

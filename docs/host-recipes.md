@@ -531,6 +531,15 @@ services.project-zomboid-servers.startLimitBurst = 3;
 A tighter `startLimitBurst` means a server that cannot start — bad port, missing
 install, OOM — fails fast instead of restart-storming the host.
 
+**Unit sandbox.** Every unit runs with `NoNewPrivileges`, `ProtectSystem=strict`
+(plus the few writable paths it needs), `ProtectHome`, the kernel/clock/hostname
+protections and `CapabilityBoundingSet=""` where it needs no capability. The game
+and install units keep their capabilities and namespaces on purpose: steam-run's
+bwrap shim and the 32-bit steamcmd fail without them. `extraServiceConfig` is
+merged **after** these defaults, so a host can weaken a unit deliberately — do
+that rather than forking the module. `checks/vm.nix` boots a stub server to
+prove the sandbox still lets the prep script and unit start.
+
 **Consoles.** `web.bind` defaults to loopback and `web.openFirewall` to false.
 Expose through a proxy or a tailnet IP, not a raw port.
 

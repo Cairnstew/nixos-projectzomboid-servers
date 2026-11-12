@@ -413,6 +413,12 @@ let
         # Hardening, chosen to stay compatible with steam-run's bwrap user
         # namespace: PrivateUsers/PrivateDevices break the FHS shim, and the
         # install plus the data dir must stay writable under ProtectSystem.
+        #
+        # `RestrictNamespaces` and `CapabilityBoundingSet=""` are deliberately
+        # NOT set here either: bwrap creates its own user/mount namespace and
+        # needs the capabilities that come with it, so restricting either one
+        # produces a server that fails at startup with no useful error. The
+        # directives below are the ones that do not touch that path.
         PrivateTmp = true;
         ProtectSystem = "strict";
         ReadWritePaths = [
@@ -425,6 +431,15 @@ let
           "AF_INET6"
           "AF_UNIX"
         ];
+        NoNewPrivileges = true;
+        LockPersonality = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        RestrictSUIDSGID = true;
+        RestrictRealtime = true;
         UMask = "0027";
       }
       // console.serviceConfig
@@ -501,6 +516,17 @@ let
         ProtectHome = true;
         PrivateTmp = true;
         NoNewPrivileges = true;
+        LockPersonality = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        RestrictSUIDSGID = true;
+        RestrictRealtime = true;
+        # The script talks to systemd over the private socket and parses the
+        # rendered `.ini`; it never needs a capability of its own.
+        CapabilityBoundingSet = "";
         RestrictAddressFamilies = [
           "AF_INET"
           "AF_INET6"
@@ -656,6 +682,10 @@ let
         ProtectClock = true;
         ProtectHostname = true;
         RestrictSUIDSGID = true;
+        RestrictRealtime = true;
+        SystemCallArchitectures = "native";
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
         CapabilityBoundingSet = "";
       };
     };
@@ -803,6 +833,11 @@ in
               # The downloader is network-facing and only owns these trees.
               # Keep the same UMask as the server units so a file it creates is
               # readable by the service group, never world-readable.
+              #
+              # `LockPersonality` and `SystemCallArchitectures` are left off on
+              # purpose: steamcmd is a 32-bit binary, and locking the execution
+              # domain or personality makes it fail to start. The rest of the
+              # sandbox does not depend on either.
               UMask = "0027";
               PrivateTmp = true;
               ProtectSystem = "strict";
@@ -817,6 +852,14 @@ in
                 "AF_INET6"
                 "AF_UNIX"
               ];
+              NoNewPrivileges = true;
+              ProtectKernelTunables = true;
+              ProtectKernelModules = true;
+              ProtectControlGroups = true;
+              ProtectClock = true;
+              ProtectHostname = true;
+              RestrictSUIDSGID = true;
+              RestrictRealtime = true;
             };
           };
         })
@@ -842,6 +885,17 @@ in
               PrivateTmp = true;
               ProtectSystem = "strict";
               ProtectHome = true;
+              LockPersonality = true;
+              ProtectKernelTunables = true;
+              ProtectKernelModules = true;
+              ProtectControlGroups = true;
+              ProtectClock = true;
+              ProtectHostname = true;
+              RestrictSUIDSGID = true;
+              RestrictRealtime = true;
+              # Root, but only to ask systemd to restart units: no capability
+              # beyond the D-Bus/private-socket connection is needed.
+              CapabilityBoundingSet = "";
               RestrictAddressFamilies = [ "AF_UNIX" ];
             };
           };

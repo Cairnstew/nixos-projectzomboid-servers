@@ -52,6 +52,16 @@ All notable changes to this project. Format follows
   Steam token directory under `<dataDir>/.local/share/Steam` to `0700`, so the
   web-console/dashboard group cannot read either.
 
+- **Every unit now carries the sandbox directives that fit its job.** The game,
+  install, updater, dashboard, backup, backup-directory and idle-stop units
+  gained `NoNewPrivileges`, the kernel/control-group/clock/hostname protections,
+  `LockPersonality` where the binary is native, `RestrictSUIDSGID`,
+  `RestrictRealtime`, and `CapabilityBoundingSet=""` for the units that never
+  need a capability. The game and install units deliberately keep their
+  capabilities and namespaces: steam-run's bwrap user namespace and the 32-bit
+  steamcmd fail without them. `extraServiceConfig` still merges last, so a host
+  can weaken a unit deliberately.
+
 ### Removed
 
 - **Two Viewpoint add-ons that crash on Build 42.22: Surface Fix and Physics &
@@ -67,6 +77,13 @@ All notable changes to this project. Format follows
   their code paths runs.
 
 ### Added
+
+- **A NixOS VM smoke test for the unit sandbox.** `checks/vm.nix` boots a real
+  system with a stub server package, starts the game unit, and asserts the
+  hardening properties plus that the prep script can still write the data
+  directory. It also checks the dashboard and backup units accept their sandbox.
+  Evaluation-only checks cannot catch systemd rejecting a directive or a
+  read-only mount blocking the merge.
 
 - **The dashboard shows scheduled starts and idle-shutdown countdowns.** The
   `Schedule` panel lists each server's `schedule.start` expressions and the next

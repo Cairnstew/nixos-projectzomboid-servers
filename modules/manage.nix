@@ -151,6 +151,21 @@ in
         Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = lib.getExe backupDirScript;
+        # This one-shot needs CAP_CHOWN/CAP_FOWNER to hand the tree to the
+        # service user, so it keeps its capabilities and a writable filesystem;
+        # only the directives that cannot interfere with `install -d` are set.
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectHome = "read-only";
+        LockPersonality = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        RestrictSUIDSGID = true;
+        RestrictRealtime = true;
+        RestrictAddressFamilies = [ ];
       };
     };
 
@@ -200,6 +215,18 @@ in
           "AF_INET6"
           "AF_UNIX"
         ];
+        LockPersonality = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        RestrictSUIDSGID = true;
+        RestrictRealtime = true;
+        SystemCallArchitectures = "native";
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        CapabilityBoundingSet = "";
       };
     };
 
@@ -235,6 +262,18 @@ in
           "AF_INET6"
           "AF_UNIX"
         ];
+        LockPersonality = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        RestrictSUIDSGID = true;
+        RestrictRealtime = true;
+        SystemCallArchitectures = "native";
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        CapabilityBoundingSet = "";
       };
     };
 

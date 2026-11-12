@@ -42,6 +42,7 @@ modules/manage/*.py`.
 | `scripts/` | Python helpers (merge, maps, prune, Workshop, client mods) |
 | `docs/options.md` | the complete option reference, checked by CI |
 | `checks/default.nix` | every `nix flake check` derivation; takes a context attrset |
+| `checks/vm.nix` | NixOS VM smoke test for the unit sandbox (stub package) |
 
 ## Conventions
 
