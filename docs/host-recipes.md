@@ -510,7 +510,9 @@ servers.main.settings.DoLuaChecksum = false;
 **Firewall and ports.** `openFirewall` opens exactly this server's two UDP ports
 and nothing else. Leave `upnp` at its default `false` — automatic port
 forwarding punches holes in a firewall you deliberately kept closed, and cannot
-work behind a container at all.
+work behind a container at all. RCON is not opened by `rconPort`; the dashboard
+and idle-stop read it over loopback. Set `openRconFirewall = true` only for an
+external RCON client, and restrict the rule to it.
 
 **Resource caps**, so one server cannot starve the host or its siblings:
 

@@ -125,6 +125,11 @@ URLs are relative, so it works under any prefix. Authentication belongs to the
 proxy (basic auth, a tailnet, or a ZeroTier ACL) — the service has no user
 database and no RBAC.
 
+Loopback is **not** an authorization boundary: every local user can connect to
+`127.0.0.1`, and the dashboard can start/stop units through the polkit rule.
+Keep it behind a proxy on a multi-user host, or accept that local users share
+control.
+
 ## API
 
 All JSON. Mutating `/api/*` requests require `X-PZ-Manage: 1` (a CSRF guard a
