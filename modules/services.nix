@@ -92,8 +92,8 @@ let
       lib.attrValues clientResolved
     );
 
-  unitName = name: "project-zomboid-${name}";
-  installUnit = "project-zomboid-install";
+  unitName = pz.unitName;
+  installUnit = unitName "install";
 
   # The effective JVM flag string for one server: the optional agent first, then
   # jvmOpts. Order matters — a -javaagent must be present at premain, before any
@@ -586,8 +586,9 @@ let
     name:
     let
       needsAuth = cfg.web.username != null && cfg.web.passwordFile != null;
+      unit = unitName name;
     in
-    lib.nameValuePair "project-zomboid-${name}-web" {
+    lib.nameValuePair "${unit}-web" {
       description = "Project Zomboid web console: ${name}";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
@@ -598,7 +599,7 @@ let
       serviceConfig = {
         ExecStart = lib.getExe (
           pkgs.writeShellApplication {
-            name = "project-zomboid-${name}-web-launcher";
+            name = "${unit}-web-launcher";
             runtimeInputs = [
               pkgs.ttyd
               pkgs.coreutils

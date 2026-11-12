@@ -75,7 +75,7 @@ checkbox is a commit-sized change with its own verification step.
 
 - [x] Move `webPort` into `lib/mkWebPort`; align `serverDefaults.webConsole`
   with the option default.
-- [ ] Move `unitName`/prefix into `lib/` and use it from the polkit rule,
+- [x] Move `unitName`/prefix into `lib/` and use it from the polkit rule,
   `manage.nix` and the Python-facing JSON.
 - [ ] Extract `flake.nix` checks into `checks/*.nix`; keep `flake.nix` thin.
 - [x] Fix the polkit-vs-sudo documentation drift in `options.nix`,

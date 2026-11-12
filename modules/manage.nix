@@ -62,7 +62,7 @@ let
         name = name;
         serverName = srv.serverName;
         description = srv.description;
-        unit = "project-zomboid-${name}";
+        unit = pz.unitName name;
         home = "${cfg.dataDir}/${name}";
         zomboidDir = "${cfg.dataDir}/${name}/Zomboid";
         logsDir = "${cfg.dataDir}/${name}/Zomboid/Logs";
@@ -81,7 +81,7 @@ let
         map = srv.pinnedMap;
         schedule = srv.schedule;
         idleStop = srv.idleStop;
-        startTimer = if srv.schedule.start != [ ] then "project-zomboid-${name}-start.timer" else null;
+        startTimer = if srv.schedule.start != [ ] then "${pz.unitName name}-start.timer" else null;
         idleStateFile = "${cfg.runDir}/${name}.idle-since";
         settings = removeAttrs srv.settings pz.secretIniKeys;
         sandbox = removeAttrs srv.sandbox pz.secretIniKeys;

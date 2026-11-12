@@ -828,6 +828,12 @@ let
       key: "--secret-file ${key}=${(secretFilesOf resolved).${key}}"
     ) (lib.attrNames (secretFilesOf resolved));
 
+  # One spelling for every unit this module owns. The polkit rule matches the
+  # prefix, manage.nix puts the name in the dashboard JSON, and services.nix
+  # names the systemd units; a mismatch silently breaks unit control.
+  unitPrefix = "project-zomboid-";
+  unitName = name: "${unitPrefix}${name}";
+
   # Deterministic web-console port assignment. Shared by modules/config.nix
   # (the advertised proxy upstreams) and modules/services.nix (the ttyd
   # listener), so the two can never disagree about which port a server uses.
@@ -885,6 +891,8 @@ in
     secretFileArgs
     iniUpdates
     resolveServer
+    unitPrefix
+    unitName
     mkWebPort
     mkProxyUpstreams
     emptyPack

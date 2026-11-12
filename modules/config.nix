@@ -433,7 +433,7 @@ in
           if (action.id == "org.freedesktop.systemd1.manage-units" &&
               (${lib.concatMapStringsSep " || " (user: "subject.user == \"${user}\"") unitManagers})) {
             var unit = action.lookup("unit");
-            if (unit && unit.indexOf("project-zomboid-") === 0) {
+            if (unit && unit.indexOf("${pz.unitPrefix}") === 0) {
               return polkit.Result.YES;
             }
           }
