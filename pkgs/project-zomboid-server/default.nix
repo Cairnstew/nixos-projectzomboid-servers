@@ -62,6 +62,8 @@ let
 
       Environment:
         PZ_SERVER_DIR          install dir containing start-server.sh (required)
+        PZ_SERVER_HOME         per-server Zomboid home (required; or set PZ_DATA_DIR)
+        PZ_DATA_DIR            base data dir, used as PZ_SERVER_HOME/<server-name>
         PZ_JVM_OPTS            JVM flags, e.g. "-Xmx8G -Xms4G" (optional)
         PZ_ADMIN_USERNAME      Build 42 admin account name (optional)
         PZ_ADMIN_PASSWORD_FILE file holding its password (required with the above)
@@ -93,18 +95,27 @@ let
         #
         #     `-Duser.home` is NOT optional. PZ's Java resolves the `Zomboid`
         #     directory from `user.home`, which the JVM takes from the passwd
-        #     entry, NOT from `$HOME` — so without this flag every server on a
-        #     host shares `<dataDir>/Zomboid` (the service user's home) and
-        #     ignores the per-server `<dataDir>/<name>/Zomboid` that the prep
-        #     script writes. That produced a fresh default world with RCON off
-        #     on the first Viewpoint start (2026-11-12). It goes first so a
-        #     caller can still override it with an explicit `-Duser.home` in
-        #     PZ_JVM_OPTS; the last occurrence wins.
-        if [ -z "''${HOME-}" ]; then
-          echo "project-zomboid-server: HOME is not set; it determines the Zomboid data directory" >&2
+        #     entry, NOT from `$HOME`. Without this flag every server on a host
+        #     shares `<dataDir>/Zomboid` (the service user's home) and ignores
+        #     the per-server `<dataDir>/<name>/Zomboid` that the prep script
+        #     writes. That produced a fresh default world with RCON off on the
+        #     first Viewpoint start (2026-11-12).
+        #
+        #     `HOME` must stay the DATA dir, because Steam's cached login is
+        #     `<dataDir>/.local/share/Steam`; only PZ's data is per-server. The
+        #     module therefore sets PZ_SERVER_HOME=<dataDir>/<name>, and the
+        #     standalone runner may set it too. It goes first so a caller can
+        #     still override it with an explicit `-Duser.home` in PZ_JVM_OPTS;
+        #     the last occurrence wins.
+        if [ -n "''${PZ_SERVER_HOME-}" ]; then
+          pz_home="$PZ_SERVER_HOME"
+        elif [ -n "''${PZ_DATA_DIR-}" ]; then
+          pz_home="$PZ_DATA_DIR/$server_name"
+        else
+          echo "project-zomboid-server: set PZ_SERVER_HOME (or PZ_DATA_DIR) so the Zomboid directory is per-server" >&2
           exit 1
         fi
-        jvm_opts=("-Duser.home=$HOME")
+        jvm_opts=("-Duser.home=$pz_home")
         if [ -n "''${PZ_JVM_OPTS-}" ]; then
           extra_opts=()
           read -r -a extra_opts <<< "''${PZ_JVM_OPTS-}"

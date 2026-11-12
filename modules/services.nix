@@ -207,7 +207,8 @@ let
       # unambiguous spelling.
       exportEnv = lib.concatStringsSep "\n" (
         [
-          "export HOME=\"${cfg.dataDir}/${name}\""
+          "export HOME=\"${cfg.dataDir}\""
+          "export PZ_SERVER_HOME=\"${cfg.dataDir}/${name}\""
           "export PZ_SERVER_DIR=\"${cfg.serverDir}\""
           "export PZ_JVM_OPTS=\"${mkJvmOpts srv}\""
         ]
@@ -370,7 +371,12 @@ let
         Group = cfg.group;
         WorkingDirectory = cfg.serverDir;
         Environment = [
-          "HOME=${cfg.dataDir}/${name}"
+          # Steam's cached login lives under the SERVICE USER's home
+          # (<dataDir>/.local/share/Steam), so HOME stays the data dir. PZ's own
+          # `Zomboid` directory is per-server and is pinned separately via
+          # PZ_SERVER_HOME -> -Duser.home in the launcher.
+          "HOME=${cfg.dataDir}"
+          "PZ_SERVER_HOME=${cfg.dataDir}/${name}"
           # Java derives its filename encoding from the process locale, and a
           # systemd service gets none (no LANG/LC_ALL — NixOS sets neither), so
           # the JVM falls back to ANSI_X3.4-1968. With that encoding it throws

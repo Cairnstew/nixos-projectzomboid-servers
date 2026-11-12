@@ -401,8 +401,9 @@ All notable changes to this project. Format follows
   script writes. On the first Viewpoint start that produced a fresh default
   world (`PublicName=My PZ Server`, `MaxPlayers=32`) with RCON off, while the
   real world and its `RCONPassword` sat unread in `viewpoint/Zomboid`. The
-  launcher now pins `-Duser.home="$HOME"` ahead of `PZ_JVM_OPTS`, and the
-  `launcher` check asserts it.
+  launcher now pins `-Duser.home="$PZ_SERVER_HOME"` ahead of `PZ_JVM_OPTS`,
+  while `HOME` stays the data dir so Steam finds its cached login at
+  `<dataDir>/.local/share/Steam`; the `launcher` check asserts both.
 
 - **Large Workshop packs no longer cascade "No Connection" or time out on a
   first install.** The install script sent one steamcmd invocation carrying

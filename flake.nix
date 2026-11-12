@@ -846,9 +846,11 @@
                   # <dataDir>/<name>/Zomboid that the prep script writes. That
                   # produced a fresh default world with RCON off on the first
                   # Viewpoint start (2026-11-12).
-                  grep -qF -- '-Duser.home=$HOME' "$LAUNCHER/bin/project-zomboid-server" \
-                    || fail "the launcher does not pin -Duser.home to HOME"
-                  echo "launcher ok: -Duser.home is pinned to HOME"
+                  grep -qF -- '-Duser.home=$pz_home' "$LAUNCHER/bin/project-zomboid-server" \
+                    || fail "the launcher does not pin -Duser.home to PZ_SERVER_HOME"
+                  grep -qF -- 'PZ_SERVER_HOME' "$LAUNCHER/bin/project-zomboid-server" \
+                    || fail "the launcher does not accept PZ_SERVER_HOME"
+                  echo "launcher ok: -Duser.home is pinned to PZ_SERVER_HOME"
                   touch "$out"
                 '';
 
