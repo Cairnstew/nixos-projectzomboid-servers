@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Project Zomboid</title>
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="dot" aria-hidden="true"></span>
+        <h1 id="title">Project Zomboid</h1>
+      </div>
+      <nav id="servers" class="tabs" aria-label="Servers"></nav>
+      <div class="topbar-right">
+        <span id="updated" class="muted"></span>
+        <button id="refresh" class="ghost" type="button" title="Refresh now">↻</button>
+      </div>
+    </header>
+
+    <div id="banner" class="banner hidden" role="status"></div>
+
+    <main id="app" class="layout">
+      <section class="panel span-2" aria-labelledby="status-heading">
+        <h2 id="status-heading">Status</h2>
+        <div id="status" class="cards"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="actions-heading">
+        <h2 id="actions-heading">Actions</h2>
+        <div id="actions" class="actions"></div>
+        <p class="muted small">
+          Start/stop/restart go through systemd and polkit. Everything else is a
+          transient RCON command — nothing here edits the Nix-rendered config.
+        </p>
+      </section>
+
+      <section class="panel span-2" aria-labelledby="players-heading">
+        <h2 id="players-heading">
+          Players <span id="player-count" class="muted"></span>
+        </h2>
+        <div id="players"></div>
+      </section>
+
+      <section class="panel span-2" aria-labelledby="logs-heading">
+        <h2 id="logs-heading">
+          Console <span class="muted small">server log tail, read-only</span>
+        </h2>
+        <pre id="logs" class="logs" tabindex="0">Loading…</pre>
+      </section>
+
+      <section class="panel span-2" aria-labelledby="config-heading">
+        <h2 id="config-heading">
+          Configuration
+          <span class="muted small">read-only — Nix is the source of truth</span>
+        </h2>
+        <p id="config-note" class="muted small"></p>
+        <div id="config"></div>
+      </section>
+
+      <section class="panel span-2" aria-labelledby="backups-heading">
+        <h2 id="backups-heading">Backups</h2>
+        <div class="backup-toolbar">
+          <button id="backup-create" type="button">Create backup</button>
+          <span id="backup-dir" class="muted small"></span>
+        </div>
+        <div id="backups"></div>
+        <p class="muted small">
+          Restore is deliberately not a web action: stop the unit, then run
+          <code>project-zomboid-restore &lt;server&gt; &lt;archive&gt;</code>.
+          The script refuses while the server is active and takes a safety
+          archive first.
+        </p>
+      </section>
+    </main>
+
+    <script src="assets/app.js"></script>
+  </body>
+</html>

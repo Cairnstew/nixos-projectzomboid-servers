@@ -692,8 +692,12 @@ in
                 "PZ_WORKSHOP_DIR=${cfg.workshopDir}"
               ];
               ExecStart = lib.getExe installScript;
-              # A first install pulls the whole game over the network.
-              TimeoutStartSec = "45min";
+              # A first install pulls the whole game plus every Workshop item
+              # over the network. 45min was not enough for a 438-item pack on a
+              # flaky link (2026-11-11: it timed out with 101 items left). The
+              # script now downloads in batches of 20 with three passes, so this
+              # is a generous safety net rather than the expected duration.
+              TimeoutStartSec = "2h";
             };
           };
         })
@@ -716,7 +720,7 @@ in
                 "PZ_WORKSHOP_DIR=${cfg.workshopDir}"
               ];
               ExecStart = lib.getExe mkUpdateTimer;
-              TimeoutStartSec = "45min";
+              TimeoutStartSec = "2h";
             };
           };
         })

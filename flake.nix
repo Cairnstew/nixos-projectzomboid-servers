@@ -846,6 +846,152 @@
                   touch "$out"
                 '';
 
+            # ── pz-manage: RCON framing and backup roundtrip, offline ──────────
+            # The dashboard's two risky pieces are a hand-written Source RCON
+            # client and a tar-based backup/restore. Both are exercised here
+            # with a fake server and a temp world, so a protocol or path change
+            # fails CI rather than a live server.
+            manage =
+              pkgs.runCommand "pz-manage-check"
+                {
+                  nativeBuildInputs = [
+                    pkgs.python3
+                    pkgs.coreutils
+                    pkgs.gnutar
+                    pkgs.zstd
+                  ];
+                  MANAGE = ./modules/manage;
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+                  cp -r "$MANAGE" "$TMPDIR/manage"
+                  chmod -R u+w "$TMPDIR/manage"
+                  cd "$TMPDIR/manage"
+
+                  # ── Source RCON: auth, the empty pre-auth reply, multi-packet
+                  python3 - <<'PY' || fail "RCON client assertions failed"
+                  import socket, struct, threading, time
+                  from rcon import RconClient, RconError, parse_players
+
+                  def recv_exact(sock, size):
+                      data = b""
+                      while len(data) < size:
+                          chunk = sock.recv(size - len(data))
+                          if not chunk:
+                              raise EOFError
+                          data += chunk
+                      return data
+
+                  def recv_packet(sock):
+                      (size,) = struct.unpack("<i", recv_exact(sock, 4))
+                      payload = recv_exact(sock, size)
+                      req_id, kind = struct.unpack("<ii", payload[:8])
+                      return req_id, kind, payload[8:-2].decode()
+
+                  def send_packet(sock, req_id, kind, body):
+                      payload = struct.pack("<ii", req_id, kind) + body.encode() + b"\x00\x00"
+                      sock.sendall(struct.pack("<i", len(payload)) + payload)
+
+                  def serve(port, password):
+                      listener = socket.socket()
+                      listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                      listener.bind(("127.0.0.1", port))
+                      listener.listen(1)
+                      conn, _ = listener.accept()
+                      req_id, kind, body = recv_packet(conn)
+                      assert kind == 3
+                      if body != password:
+                          send_packet(conn, -1, 2, "")
+                      else:
+                          send_packet(conn, req_id, 0, "")   # PZ's empty pre-auth reply
+                          send_packet(conn, req_id, 2, "")   # AUTH_RESPONSE
+                          while True:
+                              try:
+                                  req_id, kind, body = recv_packet(conn)
+                              except EOFError:
+                                  break
+                              if kind != 2:
+                                  continue
+                              if body == "big":
+                                  send_packet(conn, req_id, 0, "x" * 4086)
+                                  send_packet(conn, req_id, 0, "y" * 10)
+                              else:
+                                  send_packet(conn, req_id, 0, "Players connected (2):\n-A\n-B\n")
+                      conn.close()
+                      listener.close()
+
+                  thread = threading.Thread(target=serve, args=(27099, "pw"), daemon=True)
+                  thread.start()
+                  time.sleep(0.2)
+                  with RconClient("127.0.0.1", 27099, "pw") as client:
+                      reply = client.command("players")
+                      assert reply == "Players connected (2):\n-A\n-B\n", repr(reply)
+                      big = client.command("big")
+                      assert len(big) == 4096 and big[0] == "x" and big[-1] == "y", len(big)
+
+                  parsed = parse_players("Players connected (2):\n-A\n-B\n")
+                  assert parsed["players"] == ["A", "B"] and parsed["count"] == 2
+                  assert not parsed["ambiguous"]
+                  assert parse_players("Players connected (1):\n-x\n-Alice\n")["ambiguous"]
+                  print("RCON framing ok")
+                  PY
+
+                  # ── Backup / prune / restore roundtrip ─────────────────────
+                  root="$TMPDIR/pz"
+                  mkdir -p "$root/home/Zomboid/Server" \
+                           "$root/home/Zomboid/Saves/Multiplayer/test" \
+                           "$root/home/Zomboid/db" \
+                           "$root/backups/test"
+                  printf 'Seed=keep\n' > "$root/home/Zomboid/Server/test.ini"
+                  printf 'world\n' > "$root/home/Zomboid/Saves/Multiplayer/test/map.bin"
+                  printf 'db\n' > "$root/home/Zomboid/db/test.db"
+
+                  cat > "$root/config.json" <<'JSON'
+                  {
+                    "servers": [
+                      {
+                        "name": "test",
+                        "unit": "project-zomboid-test",
+                        "home": "HOME",
+                        "backupDirectory": "BACKUPS",
+                        "backupKeep": 2,
+                        "rconPort": 0,
+                        "rconPasswordFile": null
+                      }
+                    ]
+                  }
+                  JSON
+                  sed -i "s|HOME|$root/home|; s|BACKUPS|$root/backups/test|" "$root/config.json"
+
+                  python3 backups.py --config "$root/config.json" run --server test \
+                    || fail "backup run failed"
+                  archive="$(ls "$root"/backups/test/*.tar.zst | head -1)"
+                  [ -n "$archive" ] || fail "no archive was created"
+                  tar --zstd -tf "$archive" | grep -qx 'Zomboid/Saves/Multiplayer/test/map.bin' \
+                    || fail "the world was not in the archive"
+                  if tar --zstd -tf "$archive" | grep -q '\.local/share/Steam'; then
+                    fail "the Steam token directory was archived"
+                  fi
+
+                  printf 'changed\n' > "$root/home/Zomboid/Saves/Multiplayer/test/map.bin"
+                  python3 backups.py --config "$root/config.json" restore \
+                    --server test --archive "$(basename "$archive")" \
+                    || fail "restore failed"
+                  grep -qx 'world' "$root/home/Zomboid/Saves/Multiplayer/test/map.bin" \
+                    || fail "restore did not put the original file back"
+
+                  # Prune: three archives with keep=2 leaves two.
+                  for _ in 1 2 3; do
+                    python3 backups.py --config "$root/config.json" run --server test >/dev/null \
+                      || fail "backup run failed during prune test"
+                  done
+                  count="$(ls "$root"/backups/test/*.tar.zst | wc -l)"
+                  [ "$count" -le 2 ] || fail "retention kept $count archives, expected <= 2"
+
+                  echo "pz-manage ok: RCON framing, backup, prune and restore"
+                  touch "$out"
+                '';
+
             # ── The Workshop helpers behave, offline ───────────────────────────
             # `expand` is a network tool, so only its PURE parts (child order,
             # Nix escaping) are exercised here while `emit` runs for real over

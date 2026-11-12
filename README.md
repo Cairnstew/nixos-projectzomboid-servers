@@ -27,6 +27,7 @@ the closest equivalent for Minecraft server fleets.
 | **[docs/options.md](docs/options.md)** | Every option, with type and default. Completeness-checked in CI. |
 | **[docs/mod-delivery.md](docs/mod-delivery.md)** | The three mod delivery modes, version drift, and `SelfManagedMods`. |
 | **[docs/host-recipes.md](docs/host-recipes.md)** | Fleets, web consoles, your own modpack, secrets, hardening. |
+| **[docs/manage.md](docs/manage.md)** | The `pz-manage` dashboard, RCON actions, and scheduled backups. |
 | **[docs/troubleshooting.md](docs/troubleshooting.md)** | Symptom → cause → fix, including every bug this project has actually shipped. |
 | [examples/single-server](examples/single-server) | A complete, `nix flake check`-able one-server configuration. |
 | [CHANGELOG.md](CHANGELOG.md) | What changed, and which changes were corrections rather than features. |

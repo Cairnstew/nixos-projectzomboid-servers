@@ -21,5 +21,6 @@
     ./options.nix
     ./config.nix
     ./services.nix
+    ./manage.nix
   ];
 }

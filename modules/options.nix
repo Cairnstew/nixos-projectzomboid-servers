@@ -1620,5 +1620,159 @@ in
         description = "Open the console ports. Off by default — consoles are meant to sit behind a proxy.";
       };
     };
+
+    # ── Management dashboard ─────────────────────────────────────────────────
+
+    manage = {
+      enable = mkEnableOption "the pz-manage dashboard and JSON API";
+
+      bind = mkOption {
+        type = types.str;
+        default = "127.0.0.1";
+        description = ''
+          Interface to bind. Defaults to loopback: the dashboard is meant to be
+          exposed through the host's reverse proxy (with its authentication),
+          a tailnet, or a ZeroTier network — never the public internet. RCON is
+          plaintext and the service has no user database of its own.
+        '';
+      };
+
+      port = mkOption {
+        type = types.port;
+        default = 27080;
+        description = "Loopback TCP port for the dashboard and its API.";
+      };
+
+      user = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          User the dashboard runs as. <literal>null</literal> uses
+          <option>web.user</option>, which is already granted a scoped polkit
+          rule for <literal>manage-units</literal> on the
+          <literal>project-zomboid-*</literal> units. It must be in
+          <option>group</option> to read the data directory and any
+          <option>secretFiles</option> the host marks group-readable.
+        '';
+      };
+
+      title = mkOption {
+        type = types.str;
+        default = "Project Zomboid";
+        description = "Heading shown by the dashboard.";
+      };
+
+      consoleBase = mkOption {
+        type = types.str;
+        default = "/pz";
+        description = ''
+          URL prefix the host's reverse proxy uses for the ttyd consoles. Only
+          used to render the console link; the dashboard does not proxy it.
+        '';
+      };
+
+      refreshSeconds = mkOption {
+        type = types.int;
+        default = 5;
+        description = "How often the dashboard refreshes status, players and the log tail.";
+      };
+
+      allowActions = mkOption {
+        type = types.listOf (
+          types.enum [
+            "save"
+            "broadcast"
+            "kick"
+            "ban"
+            "unban"
+            "whitelist-add"
+            "whitelist-remove"
+            "reload-options"
+            "start"
+            "stop"
+            "restart"
+          ]
+        );
+        default = [
+          "save"
+          "broadcast"
+          "kick"
+          "ban"
+          "unban"
+          "whitelist-add"
+          "whitelist-remove"
+          "reload-options"
+          "start"
+          "stop"
+          "restart"
+        ];
+        description = ''
+          Actions the API will perform. Each maps to one fixed RCON command or
+          one <command>systemctl</command> verb — there is no raw RCON terminal
+          and no arbitrary command execution. Remove an entry to disable that
+          action without changing the dashboard.
+
+          <option>start</option>, <option>stop</option> and
+          <option>restart</option> go through the polkit rule the module
+          installs for <option>web.user</option>; they never spawn the game
+          process directly.
+        '';
+      };
+
+      openFirewall = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Open <option>port</option>. Off by default — use a proxy or a private network.";
+      };
+    };
+
+    # ── Backups ──────────────────────────────────────────────────────────────
+
+    backup = {
+      enable = mkEnableOption "scheduled world backups";
+
+      directory = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "/mnt/backup/project-zomboid";
+        description = ''
+          Root directory for archives. <literal>null</literal> uses
+          <literal>''${dataDir}/backups</literal>. Each server gets a
+          subdirectory named after it.
+
+          The backup unit runs as the server user, so this path must be
+          writable by <option>user</option>. Point it at another disk if the
+          data disk is not where backups belong.
+        '';
+      };
+
+      keep = mkOption {
+        type = types.int;
+        default = 7;
+        description = ''
+          Number of archives to keep per server. Older archives are deleted
+          after a successful new one. <literal>0</literal> disables pruning
+          (keep everything) — be careful on a small disk.
+        '';
+      };
+
+      schedule = mkOption {
+        type = types.str;
+        default = "daily";
+        example = "*-*-* 04:30:00";
+        description = ''
+          <literal>OnCalendar</literal> for the backup timer. The default runs
+          once a day; systemd's calendar syntax accepts values such as
+          <literal>hourly</literal>, <literal>*-*-* 04:30:00</literal>, or
+          <literal>Mon..Fri 03:00</literal>.
+        '';
+      };
+
+      randomDelaySec = mkOption {
+        type = types.int;
+        default = 1800;
+        description = "Random delay added to the timer, so a fleet does not back up at the same instant.";
+      };
+    };
   };
 }

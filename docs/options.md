@@ -41,6 +41,8 @@ the [README](../README.md) and [host recipes](host-recipes.md).
 | `webConsoleUpstreams` | listOf submodule | *(read-only)* | Derived. See [webConsoleUpstreams](#webconsoleupstreams). |
 | `clientHosts` | attrsOf submodule | *(read-only)* | Derived from `servers.<name>.clientHost.enable`. See [clientHosts](#clienthosts). |
 | `web` | submodule | disabled | See [web](#web). |
+| `manage` | submodule | disabled | Dashboard + JSON API. See [manage](#manage). |
+| `backup` | submodule | disabled | Scheduled archives. See [backup](#backup). |
 
 ### `managementSystem`
 
@@ -67,6 +69,46 @@ default: consoles are meant to sit behind a proxy, on loopback.
 | `web.username` | str \| null | `null` | HTTP basic auth. Requires `passwordFile`. |
 | `web.passwordFile` | path \| null | `null` | e.g. an agenix secret. |
 | `web.openFirewall` | bool | `false` | Opens the console ports. Off: put a proxy in front instead. |
+
+### `manage`
+
+The `pz-manage` dashboard: a small Python service (stdlib only) that reads
+systemd and RCON, performs a fixed allow-list of transient actions, and renders
+the effective Nix config read-only. It never writes `viewpoint.ini`,
+`_SandboxVars.lua`, `Mods=` or `WorkshopItems=` — those are re-applied on every
+start, so a web editor for them would be a lie.
+
+The UI is served at `/` (put it behind a proxy at `/pz-admin/`), and the JSON
+API is documented in `modules/manage/server.py`. It binds loopback by default:
+RCON is plaintext and the service has no user database, so authentication is a
+property of the proxy or the private network, not of this module.
+
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `manage.enable` | bool | `false` | Run the dashboard and API. |
+| `manage.bind` | str | `127.0.0.1` | Interface. Keep it on loopback and proxy it. |
+| `manage.port` | port | `27080` | Loopback TCP port. |
+| `manage.user` | str \| null | `null` | `null` = `web.user`. The user must be in `group` and gets the same scoped polkit rule. |
+| `manage.title` | str | `Project Zomboid` | Dashboard heading. |
+| `manage.consoleBase` | str | `/pz` | Console URL prefix, only for the link the dashboard renders. |
+| `manage.refreshSeconds` | int | `5` | Status/players/log refresh interval. |
+| `manage.allowActions` | listOf enum | all verbs | `save`, `broadcast`, `kick`, `ban`, `unban`, `whitelist-add`, `whitelist-remove`, `reload-options`, `start`, `stop`, `restart`. Each maps to one fixed RCON command or systemctl verb — there is no raw RCON terminal. |
+| `manage.openFirewall` | bool | `false` | Opens `manage.port`. Off: use a proxy or a private network. |
+
+### `backup`
+
+Scheduled `tar --zstd` archives of each server's `Zomboid/{Saves,db,Server,Lua}`.
+The Steam token under `.local/share/Steam` is deliberately excluded. Restore is
+a CLI (`project-zomboid-restore`), not an HTTP action: it refuses while the unit
+is active and takes a safety archive first.
+
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `backup.enable` | bool | `false` | Run the timer and install `project-zomboid-restore`. |
+| `backup.directory` | str \| null | `null` | `null` = `<dataDir>/backups`; one subdirectory per server. Created with `0770 <user>:<group>`. |
+| `backup.keep` | int | `7` | Archives kept per server. `0` disables pruning. |
+| `backup.schedule` | str | `daily` | systemd `OnCalendar`, e.g. `*-*-* 04:30:00`. |
+| `backup.randomDelaySec` | int | `1800` | Random delay added to the timer. |
 
 ### `webConsoleUpstreams`
 

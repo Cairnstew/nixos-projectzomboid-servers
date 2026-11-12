@@ -675,35 +675,52 @@ rec {
         download_missing() {
           [ "''${#missing[@]}" -gt 0 ] || return 0
           echo "project-zomboid: downloading ''${#missing[@]} Workshop item(s) as $login"
-          local args=()
+          local batch=()
+          local count=0
           for id in "''${missing[@]}"; do
-            args+=(+workshop_download_item ${steamAppId} "$id")
+            batch+=(+workshop_download_item ${steamAppId} "$id")
+            count=$((count + 1))
+            # Small batches. One invocation carrying hundreds of
+            # `+workshop_download_item` arguments makes SteamCMD open a
+            # connection per item with no backpressure, and a flaky link then
+            # produces a cascade of "No Connection" failures — which is exactly
+            # what a 438-item pack hit on 2026-11-11. Twenty at a time keeps
+            # each invocation bounded and lets the verification pass retry only
+            # what actually failed.
+            if [ $((count % 20)) -eq 0 ]; then
+              steamcmd_workshop "''${batch[@]}" || true
+              batch=()
+              sleep 2
+            fi
           done
-          # NOT fatal under `set -e`: steamcmd's exit status says nothing useful
-          # about an individual item, so a failed batch is judged by what landed
-          # on disk in the verification pass below.
-          steamcmd_workshop "''${args[@]}" || true
+          if [ "''${#batch[@]}" -gt 0 ]; then
+            steamcmd_workshop "''${batch[@]}" || true
+          fi
         }
 
         # One batched download, then verify each item actually arrived. The
         # verification is the point: before this existed, a failed `Access
         # Denied` item was skipped and the servers started with mods missing.
+        #
+        # Up to three passes, with a growing pause. SteamCMD's per-item exit
+        # status says nothing useful, so the only trustworthy signal is "is the
+        # directory non-empty"; each pass re-downloads only the items that are
+        # still absent.
         if [ "''${#missing[@]}" -gt 0 ]; then
-          download_missing
-          declare -a still=()
-          for id in "''${missing[@]}"; do
-            item_present "$id" || still+=("$id")
-          done
-          if [ "''${#still[@]}" -gt 0 ]; then
-            echo "project-zomboid: retrying ''${#still[@]} item(s) that did not arrive" >&2
-            missing=("''${still[@]}")
+          attempt=0
+          while [ "''${#missing[@]}" -gt 0 ] && [ "$attempt" -lt 3 ]; do
+            attempt=$((attempt + 1))
             download_missing
             still=()
             for id in "''${missing[@]}"; do
               item_present "$id" || still+=("$id")
             done
-          fi
-          missing=("''${still[@]+"''${still[@]}"}")
+            missing=("''${still[@]+"''${still[@]}"}")
+            if [ "''${#missing[@]}" -gt 0 ] && [ "$attempt" -lt 3 ]; then
+              echo "project-zomboid: ''${#missing[@]} item(s) still missing; retrying in $((attempt * 5))s" >&2
+              sleep $((attempt * 5))
+            fi
+          done
         fi
 
         if [ "''${#missing[@]}" -gt 0 ]; then

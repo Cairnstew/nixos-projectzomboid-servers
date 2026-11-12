@@ -113,7 +113,7 @@ jobs:
 
       - name: python compiles
         run: |
-          nix shell nixpkgs#python3 -c python3 -m py_compile scripts/*.py
+          nix shell nixpkgs#python3 -c python3 -m py_compile scripts/*.py modules/manage/*.py
 
   links:
     name: documentation links

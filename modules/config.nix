@@ -125,6 +125,12 @@ let
       resolved.${name}.port
     else
       cfg.web.portBase + (lib.length (builtins.filter (n: n < name) (builtins.attrNames webServers)));
+
+  # The dashboard runs as the web-console user by default, because that user is
+  # already the one granted the scoped polkit rule below. A host may point it
+  # at another existing user; this module does not create that user.
+  manageUser = if cfg.manage.user != null then cfg.manage.user else cfg.web.user;
+  unitManagers = lib.unique ([ cfg.web.user ] ++ lib.optional cfg.manage.enable manageUser);
 in
 {
   config = mkMerge [
@@ -279,7 +285,7 @@ in
             groups.project-zomboid = { };
           })
           (
-            lib.optionalAttrs cfg.web.enable {
+            lib.optionalAttrs (cfg.web.enable || cfg.manage.enable) {
               users.${cfg.web.user} = {
                 isSystemUser = true;
                 group = cfg.group;
@@ -307,13 +313,14 @@ in
       # not an option — with `wheelNeedsPassword = false` that grants full
       # passwordless root. polkit grants exactly the one action on exactly these
       # units, and `systemctl` consults it automatically.
-      security.polkit.extraConfig = lib.optionalString cfg.web.enable ''
-        // Project Zomboid web console: let the console user manage its own
-        // units and nothing else. Matches the `project-zomboid-` unit prefix,
-        // mirroring what a scoped sudoers rule would have allowed.
+      security.polkit.extraConfig = lib.optionalString (cfg.web.enable || cfg.manage.enable) ''
+        // Project Zomboid web console and dashboard: let the console/dashboard
+        // user manage its own units and nothing else. Matches the
+        // `project-zomboid-` unit prefix, mirroring what a scoped sudoers rule
+        // would have allowed.
         polkit.addRule(function(action, subject) {
           if (action.id == "org.freedesktop.systemd1.manage-units" &&
-              subject.user == "${cfg.web.user}") {
+              (${lib.concatMapStringsSep " || " (user: "subject.user == \"${user}\"") unitManagers})) {
             var unit = action.lookup("unit");
             if (unit && unit.indexOf("project-zomboid-") === 0) {
               return polkit.Result.YES;
