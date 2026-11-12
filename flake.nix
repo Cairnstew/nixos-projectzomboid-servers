@@ -1014,8 +1014,10 @@
 
                   # ── Idle-stop duration and ini parsing ──────────────────────
                   python3 - <<'PY' || fail "idle-stop parsing assertions failed"
+                  import time
                   from pathlib import Path
                   from idle_stop import parse_duration, read_ini
+                  import server as manage_server
 
                   assert parse_duration("90s") == 90
                   assert parse_duration("30m") == 1800
@@ -1034,6 +1036,35 @@
                   values = read_ini(ini)
                   assert values["RCONPort"] == "27017"
                   assert values["RCONPassword"] == "a=b=c"
+
+                  # The dashboard reads the idle timestamp the root timer writes.
+                  state = Path("idle-state")
+                  state.write_text(str(int(time.time()) - 60), encoding="ascii")
+                  info = manage_server.idle_status({
+                      "name": "t",
+                      "idleStop": {"enable": True, "timeout": "30m"},
+                      "idleStateFile": str(state),
+                  })
+                  assert info["enabled"] and info["timeoutSeconds"] == 1800
+                  assert info["emptySince"] and info["stopAt"] == info["emptySince"] + 1800
+                  assert not manage_server.idle_status({
+                      "idleStop": {"enable": False},
+                  })["enabled"]
+                  missing = manage_server.idle_status({
+                      "idleStop": {"enable": True, "timeout": "30m"},
+                      "idleStateFile": "does-not-exist",
+                  })
+                  assert missing["emptySince"] is None and missing["stopAt"] is None
+
+                  # `systemctl list-timers --output=json` reports `next` in
+                  # microseconds since the epoch; no human date to parse.
+                  manage_server.systemctl = lambda *args, **kwargs: (
+                      0,
+                      '[{"unit": "t.timer", "next": 1794550800000000}]',
+                  )
+                  assert manage_server.timer_next_elapse("t.timer") == 1794550800
+                  manage_server.systemctl = lambda *args, **kwargs: (0, "[]")
+                  assert manage_server.timer_next_elapse("t.timer") is None
                   print("idle-stop parsing ok")
                   PY
 

@@ -147,6 +147,13 @@ def main(argv: list[str] | None = None) -> int:
         since = now
         args.state.parent.mkdir(parents=True, exist_ok=True)
         args.state.write_text(f"{now:.0f}\n", encoding="ascii")
+        # The dashboard runs as the web user and reads this file to show the
+        # idle countdown. It contains only a timestamp, so make it readable
+        # rather than forcing the dashboard to run as root.
+        try:
+            args.state.chmod(0o644)
+        except OSError:
+            pass
 
     idle = max(0.0, now - since)
     if idle < timeout:

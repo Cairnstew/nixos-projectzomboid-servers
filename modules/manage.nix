@@ -75,6 +75,10 @@ let
         maxPlayers = srv.settings.maxPlayers;
         public = srv.settings.public or null;
         map = srv.pinnedMap;
+        schedule = srv.schedule;
+        idleStop = srv.idleStop;
+        startTimer = if srv.schedule.start != [ ] then "project-zomboid-${name}-start.timer" else null;
+        idleStateFile = "${cfg.runDir}/${name}.idle-since";
         settings = removeAttrs srv.settings pz.secretIniKeys;
         sandbox = removeAttrs srv.sandbox pz.secretIniKeys;
         mods = srv.mods;

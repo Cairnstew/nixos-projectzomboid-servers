@@ -204,6 +204,16 @@ pre {
   overflow-wrap: anywhere;
 }
 
+.card .value.compact {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.countdown {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .badge {
   display: inline-block;
   padding: 0.12rem 0.5rem;

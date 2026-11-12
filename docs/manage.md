@@ -17,6 +17,7 @@ network dependency) that exposes:
 | Capability | Channel | Writes server state? |
 | --- | --- | --- |
 | Status, uptime, memory, player count | systemd + RCON | no |
+| Scheduled start time and idle-shutdown countdown | systemd timers + the idle state file | no |
 | Player list | RCON `players` | no |
 | Log tail | `<dataDir>/<name>/Zomboid/Logs` | no |
 | Effective config viewer | the Nix-rendered values | no |
@@ -73,6 +74,25 @@ dashboard connects to `127.0.0.1:<rconPort>`. Do not expose the RCON port.
 If RCON is missing, the dashboard still shows status, logs, config and backups;
 it reports the RCON error instead of pretending the player list is empty.
 
+## Schedule and idle countdown
+
+When a server uses `schedule.start` or `idleStop`, the dashboard shows both:
+
+- the configured `OnCalendar` expressions and the **next** start, read from
+  `systemctl list-timers --output=json` (microseconds since the epoch, so no
+  locale- or timezone-dependent date parsing); and
+- the idle-shutdown timeout, plus a live countdown when the server is currently
+  empty.
+
+The idle countdown comes from the same timestamp file the root idle timer writes
+(`<runDir>/<name>.idle-since`). It is world-readable because it contains only an
+epoch second; the dashboard never needs root to display it. If the file is
+absent, the server is not counting down — either a player is online, the server
+is stopped, or RCON is not ready yet.
+
+Countdowns use the server's clock (`now` in `/api/status`) as an offset, so a
+browser whose clock is a few seconds off still shows the correct remaining time.
+
 ## Proxy wiring
 
 The module exposes plain data and does not depend on any particular
@@ -105,7 +125,7 @@ exposes three fixed systemd verbs.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/status` | every server: state, uptime, memory, players |
+| `GET` | `/api/status` | every server: state, uptime, memory, players, schedule and idle countdown |
 | `GET` | `/api/servers` | metadata, title, refresh interval, allowed actions |
 | `GET` | `/api/players?server=` | parsed RCON `players` |
 | `GET` | `/api/logs?server=&lines=` | tail of the newest log |

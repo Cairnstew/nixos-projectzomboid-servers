@@ -15,6 +15,8 @@
     tick: 0,
     configLoadedFor: null,
     bannerTimer: null,
+    countdownTimer: null,
+    nowOffset: 0,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -86,6 +88,39 @@
   function fmtDate(epochSeconds) {
     if (!epochSeconds) return "—";
     return new Date(epochSeconds * 1000).toLocaleString();
+  }
+
+  function fmtWhen(epochSeconds) {
+    if (!epochSeconds) return "—";
+    return new Date(epochSeconds * 1000).toLocaleString([], {
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function fmtClock(epochSeconds) {
+    if (!epochSeconds) return "—";
+    return new Date(epochSeconds * 1000).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function fmtCountdown(seconds) {
+    if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return "—";
+    let s = Math.max(0, Math.round(seconds));
+    if (s <= 0) return "now";
+    const d = Math.floor(s / 86400);
+    s %= 86400;
+    const h = Math.floor(s / 3600);
+    s %= 3600;
+    const m = Math.floor(s / 60);
+    s %= 60;
+    if (d) return `${d}d ${h}h`;
+    if (h) return `${h}h ${m}m`;
+    if (m) return `${m}m ${s}s`;
+    return `${s}s`;
   }
 
   function fmtValue(value) {
@@ -238,6 +273,118 @@
         ]),
       );
     }
+  }
+
+  // ── schedule / countdowns ──────────────────────────────────────────────
+
+  function countdownEl(target, prefix = "") {
+    if (!target) return el("span", { class: "muted", text: "—" });
+    return el("span", {
+      class: "countdown",
+      dataset: { countdown: String(target), prefix },
+    });
+  }
+
+  function tickCountdowns() {
+    const now = Date.now() / 1000 + state.nowOffset;
+    for (const node of document.querySelectorAll("[data-countdown]")) {
+      const target = Number(node.dataset.countdown);
+      if (!Number.isFinite(target)) continue;
+      node.textContent = `${node.dataset.prefix || ""}${fmtCountdown(target - now)}`;
+    }
+  }
+
+  function renderSchedule(status) {
+    const box = $("schedule");
+    clear(box);
+    if (!status) {
+      box.append(el("div", { class: "empty", text: "No schedule data." }));
+      return;
+    }
+
+    const schedule = status.schedule || {};
+    const starts = schedule.start || [];
+    const nextStart = schedule.nextStart;
+    const idle = status.idleStop || {};
+
+    const startValue = el("div", { class: "value compact" });
+    if (starts.length) {
+      startValue.append(el("div", { text: starts.join(" · ") }));
+      if (nextStart) {
+        startValue.append(
+          el("div", { class: "muted small" }, [
+            "next ",
+            el("span", { text: fmtWhen(nextStart) }),
+            " (",
+            countdownEl(nextStart, ""),
+            ")",
+          ]),
+        );
+      } else {
+        startValue.append(
+          el("div", {
+            class: "muted small",
+            text: "timer is active but has no next elapse",
+          }),
+        );
+      }
+    } else {
+      startValue.append(el("span", { class: "muted", text: "No scheduled start" }));
+    }
+
+    const idleValue = el("div", { class: "value compact" });
+    if (!idle.enabled) {
+      idleValue.append(el("span", { class: "muted", text: "Disabled" }));
+    } else {
+      idleValue.append(
+        el("div", { text: `Stop after ${idle.timeout || "?"} with no players` }),
+      );
+      if (!status.active) {
+        idleValue.append(el("div", { class: "muted small", text: "server is stopped" }));
+      } else if (status.players !== null && status.players !== undefined && status.players > 0) {
+        idleValue.append(
+          el("div", {
+            class: "muted small",
+            text: `${status.players} player(s) online — idle timer reset`,
+          }),
+        );
+      } else if (!status.rcon) {
+        idleValue.append(
+          el("div", {
+            class: "muted small",
+            text: "RCON unavailable — idle timer paused",
+          }),
+        );
+      } else if (idle.stopAt) {
+        idleValue.append(
+          el("div", { class: "muted small" }, [
+            "empty since ",
+            el("span", { text: fmtClock(idle.emptySince) }),
+            " — stops in ",
+            countdownEl(idle.stopAt, ""),
+          ]),
+        );
+      } else {
+        idleValue.append(
+          el("div", {
+            class: "muted small",
+            text: "empty; idle timer starts within a minute",
+          }),
+        );
+      }
+    }
+
+    box.append(
+      el("div", { class: "card" }, [
+        el("div", { class: "label", text: "Scheduled start" }),
+        startValue,
+      ]),
+      el("div", { class: "card" }, [
+        el("div", { class: "label", text: "Idle shutdown" }),
+        idleValue,
+      ]),
+    );
+    tickCountdowns();
   }
 
   // ── actions ────────────────────────────────────────────────────────────
@@ -533,8 +680,10 @@
         api(`logs?server=${encodeURIComponent(name)}&lines=400`),
       ]);
       const status = statuses.find((entry) => entry.name === name) || null;
-      state.meta[name] = status;
+      state.meta[name] = { ...(state.meta[name] || {}), ...status };
+      state.nowOffset = status && status.now ? status.now - Date.now() / 1000 : 0;
       renderStatus(status);
+      renderSchedule(status);
       renderActions(status);
       renderPlayers(players);
       renderLogs(logs);
@@ -581,6 +730,8 @@
       await refresh({ force: true });
       await renderBackups();
       schedule();
+      if (state.countdownTimer) clearInterval(state.countdownTimer);
+      state.countdownTimer = setInterval(tickCountdowns, 1000);
 
       $("refresh").addEventListener("click", () => refresh({ force: true }));
       $("backup-create").addEventListener("click", async () => {

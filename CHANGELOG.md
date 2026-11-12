@@ -22,6 +22,12 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **The dashboard shows scheduled starts and idle-shutdown countdowns.** The
+  `Schedule` panel lists each server's `schedule.start` expressions and the next
+  elapse from the start timer, plus the `idleStop` timeout and a live countdown
+  while the server is empty. Countdowns use the server's clock as an offset, so
+  a browser with a skewed clock still shows the correct remaining time.
+
 - **Scheduled starts and idle shutdown per server.** `servers.<name>.schedule.start`
   takes systemd `OnCalendar` expressions and creates a start timer; the server
   can then run `autoStart = false` so a boot does not bring it up outside the

@@ -55,6 +55,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 import backups
+from idle_stop import parse_duration
 from rcon import RconClient, RconError, parse_players
 
 CONFIG_PATH = os.environ.get("PZ_MANAGE_CONFIG", "")
@@ -143,6 +144,74 @@ def uptime_seconds(unit: str) -> int | None:
     except (OSError, ValueError):
         return None
     return max(0, int(time.time() - (boot + entered)))
+
+
+def timer_next_elapse(unit: str) -> int | None:
+    """Epoch seconds of a timer's next elapse, or None.
+
+    ``systemctl show -p NextElapseUSecRealtime`` returns a *formatted local
+    date* in systemd 262 despite the property name, which is both locale- and
+    timezone-dependent. ``systemctl list-timers --output=json`` gives the same
+    value as microseconds since the epoch, so use that and avoid parsing a
+    human date.
+    """
+    if not unit:
+        return None
+    code, out = systemctl("list-timers", "--output=json", "--no-pager", unit, timeout=5)
+    if code != 0 or not out:
+        return None
+    try:
+        entries = json.loads(out)
+    except json.JSONDecodeError:
+        return None
+    for entry in entries:
+        if entry.get("unit") != unit:
+            continue
+        raw = entry.get("next")
+        if not raw:
+            return None
+        try:
+            return int(int(raw) // 1_000_000)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def idle_status(server: dict) -> dict:
+    """Describe the idle-stop countdown for the dashboard.
+
+    The state file is written by the root idle timer. It is deliberately
+    world-readable (only a timestamp), because the dashboard runs as the web
+    user and cannot read a root-only file. A missing or unreadable file simply
+    means "not currently counting down".
+    """
+    idle = server.get("idleStop") or {}
+    result = {
+        "enabled": bool(idle.get("enable")),
+        "timeout": idle.get("timeout"),
+        "timeoutSeconds": None,
+        "emptySince": None,
+        "stopAt": None,
+    }
+    if not result["enabled"]:
+        return result
+    try:
+        timeout = parse_duration(str(idle.get("timeout") or "30m"))
+    except ValueError:
+        timeout = 0
+    result["timeoutSeconds"] = timeout
+
+    state_file = server.get("idleStateFile")
+    if not state_file:
+        return result
+    try:
+        since = int(float(Path(state_file).read_text(encoding="ascii").strip()))
+    except (OSError, ValueError):
+        return result
+    result["emptySince"] = since
+    if timeout:
+        result["stopAt"] = since + timeout
+    return result
 
 
 # ── RCON ────────────────────────────────────────────────────────────────────
@@ -235,6 +304,16 @@ def server_status(server: dict, with_players: bool = True) -> dict:
         "rconPort": server.get("rconPort"),
         "console": server.get("consolePath", ""),
         "maxPlayers": server.get("maxPlayers"),
+        # One server clock for every countdown on the page. The browser uses it
+        # as an offset so a desktop whose clock is a minute off still counts
+        # down correctly.
+        "now": int(time.time()),
+        "schedule": {
+            "start": (server.get("schedule") or {}).get("start", []),
+            "persistent": bool((server.get("schedule") or {}).get("persistent", False)),
+            "nextStart": timer_next_elapse(server.get("startTimer", "")),
+        },
+        "idleStop": idle_status(server),
     }
     if with_players:
         players = server_players(server)
@@ -315,6 +394,8 @@ def server_metadata(server: dict) -> dict:
         "maxPlayers": server.get("maxPlayers"),
         "backupDirectory": server.get("backupDirectory"),
         "backupKeep": server.get("backupKeep"),
+        "schedule": server.get("schedule"),
+        "idleStop": server.get("idleStop"),
     }
 
 
