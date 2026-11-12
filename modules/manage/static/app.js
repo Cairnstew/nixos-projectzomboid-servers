@@ -579,6 +579,7 @@
         : state.servers[0].name;
       renderTabs();
       await refresh({ force: true });
+      await renderBackups();
       schedule();
 
       $("refresh").addEventListener("click", () => refresh({ force: true }));

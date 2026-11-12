@@ -252,6 +252,8 @@ Most-used options:
 | `prune` | bool | `false` | Remove mods no server declares any more — the clean pack switch. Off because it deletes from the shared install. |
 | `failOnMissingMods` | bool | `true` | Refuse to finish the install when a Workshop item can't be downloaded. `false` = log-and-skip so servers boot without it. |
 | `web` | submodule | disabled | ttyd consoles on loopback. |
+| `manage` | submodule | disabled | `pz-manage` dashboard + JSON API. See [docs/manage.md](docs/manage.md). |
+| `backup` | submodule | disabled | Scheduled `tar --zstd` archives + `project-zomboid-restore`. |
 | `managementSystem` | submodule | `{ systemd-socket.enable = true; }` | Exactly one of socket / tmux. |
 
 Per server:

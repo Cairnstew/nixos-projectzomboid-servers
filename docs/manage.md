@@ -138,9 +138,9 @@ install, and Workshop symlinks. If the server is running it asks RCON for a
 Restore is a CLI because it stops the server and replaces world files:
 
 ```bash
-systemctl stop project-zomboid-viewpoint
-project-zomboid-restore viewpoint viewpoint-20261112-043000.tar.zst
-systemctl start project-zomboid-viewpoint
+sudo systemctl stop project-zomboid-viewpoint
+sudo project-zomboid-restore viewpoint viewpoint-20261112-043000.tar.zst
+sudo systemctl start project-zomboid-viewpoint
 ```
 
 The script refuses while the unit is active, takes a safety archive first, and
