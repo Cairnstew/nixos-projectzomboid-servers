@@ -1374,7 +1374,7 @@ in
   # A reference that has silently fallen behind the module is worse than
   # no reference: a consumer reads it, concludes an option does not
   # exist, and works around it. `docs/options.md` is therefore checked
-  # against `modules/options.nix`.
+  # against the declarations in `modules/options/`.
   #
   # Name-level, by extracting `name = mkOption` / `mkEnableOption` from
   # the source with grep. Deliberately not generated from the evaluated
@@ -1394,15 +1394,15 @@ in
           pkgs.coreutils
           pkgs.gnugrep
         ];
-        OPTIONS_NIX = root + "/modules/options.nix";
+        OPTIONS_DIR = root + "/modules/options";
         OPTIONS_DOC = root + "/docs/options.md";
       }
       ''
         fail() { echo "FAIL: $1" >&2; exit 1; }
 
         # Every declaration in the source, deduplicated.
-        declared="$(grep -oE '^[[:space:]]*[A-Za-z][A-Za-z0-9_.-]*[[:space:]]*=[[:space:]]*mk(Option|EnableOption)' \
-          "$OPTIONS_NIX" \
+        declared="$(grep -hoE '^[[:space:]]*[A-Za-z][A-Za-z0-9_.-]*[[:space:]]*=[[:space:]]*mk(Option|EnableOption)' \
+          "$OPTIONS_DIR"/*.nix \
           | sed -E 's/^[[:space:]]*([A-Za-z][A-Za-z0-9_.-]*)[[:space:]]*=.*/\1/' \
           | sort -u)"
 
@@ -1411,7 +1411,7 @@ in
         # pass for the wrong reason, which is the failure mode a
         # completeness check cannot afford.
         [ "$count" -ge 60 ] \
-          || fail "only $count option declarations were found in options.nix -- has the declaration style changed? This check would pass vacuously."
+          || fail "only $count option declarations were found in modules/options -- has the declaration style changed? This check would pass vacuously."
 
         missing=""
         for opt in $declared; do
@@ -1419,7 +1419,7 @@ in
         done
 
         if [ -n "$missing" ]; then
-          fail "options declared in modules/options.nix but absent from docs/options.md:$missing"
+          fail "options declared in modules/options/ but absent from docs/options.md:$missing"
         fi
 
         # The document must actually be the reference, not a stub.
@@ -1543,7 +1543,7 @@ in
             || !(builtins.isFunction nf.homeModules.project-zomboid-servers)
           ) "homeModules does not expose two module functions")
 
-          # `package` defaults to null in modules/options.nix because
+          # `package` defaults to null in modules/options/core.nix because
           # that file cannot reach the flake; default.nix is what
           # fills it in for a non-flake consumer. Without this the
           # module's own assertion fires and the consumer is told to

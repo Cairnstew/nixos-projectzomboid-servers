@@ -534,7 +534,7 @@ rec {
       # Steam account to authenticate the downloads as. null (the default) is
       # anonymous. Needed for items that answer `Access Denied` anonymously —
       # mature-content gating, or an author restriction. The token must be cached
-      # once under $PZ_DATA_DIR; see `steamLogin` in modules/options.nix.
+      # once under $PZ_DATA_DIR; see `steamLogin` in modules/options/core.nix.
       login ? null,
       # Remove Workshop items from the SHARED download that no enabled dedicated
       # server declares any more. The Nix default; PZ_PRUNE overrides it at

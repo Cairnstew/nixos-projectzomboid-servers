@@ -32,8 +32,8 @@ The shape is: `default.nix` must evaluate to an **attrset** for
 
 ```
 The option `services.project-zomboid-servers.web.enable' in
-`…-source/modules/options.nix' is already declared in
-`/home/you/repo/modules/options.nix'.
+`…-source/modules/options/core.nix' is already declared in
+`/home/you/repo/modules/options/core.nix'.
 ```
 
 You are consuming this project **twice** on one host — once as a flake input and

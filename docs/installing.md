@@ -190,8 +190,8 @@ every option twice, and NixOS rejects it:
 
 ```
 The option `services.project-zomboid-servers.web.enable' in
-`…-source/modules/options.nix' is already declared in
-`/home/you/repo/modules/options.nix'.
+`…-source/modules/options/core.nix' is already declared in
+`/home/you/repo/modules/options/core.nix'.
 ```
 
 Pick one per host. The `nonflake-entry` check exercises this route in CI, which

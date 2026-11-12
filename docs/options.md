@@ -2,7 +2,7 @@
 
 Every option under `services.project-zomboid-servers`, with its type and
 default. **This page is completeness-checked**: the `options-documented` check
-fails if `modules/options.nix` declares an option that does not appear here, so
+fails if a file under `modules/options/` declares an option that does not appear here, so
 it cannot silently fall behind the module.
 
 Defaults shown are the *declared* defaults. A few resolve from the top level

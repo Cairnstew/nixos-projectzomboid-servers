@@ -30,7 +30,7 @@ modules/manage/*.py`.
 
 | Path | Contents |
 | --- | --- |
-| `modules/options.nix` | every option, and nothing else |
+| `modules/options/` | every option, split by concern; `types.nix` holds the shared submodule types |
 | `modules/config.nix` | users/groups, tmpfiles, assertions, polkit, derived upstreams |
 | `modules/services.nix` | systemd units: install, servers, consoles, ttyd, timers |
 | `modules/manage.nix` | `pz-manage` dashboard and backup units |

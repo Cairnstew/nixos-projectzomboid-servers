@@ -52,7 +52,7 @@ let
   #
   # `modules/project-zomboid-servers.nix` cannot reference `self`, because a
   # flake input's module scope has no path back to its own flake. So `package`
-  # defaults to null over there (see modules/options.nix, and the assertion in
+  # defaults to null over there (see modules/options/core.nix, and the assertion in
   # modules/config.nix that explains it), and something has to fill it in.
   #
   # It is built with `pkgs.callPackage` on the CONSUMER'S package set — the same

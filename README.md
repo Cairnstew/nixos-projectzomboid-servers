@@ -235,7 +235,7 @@ server.
 
 Namespace: `services.project-zomboid-servers`. **Full reference, with types and
 defaults: [docs/options.md](docs/options.md).** That page is completeness-checked
-against `modules/options.nix` in CI, so it cannot fall behind.
+against the declarations under `modules/options/` in CI, so it cannot fall behind.
 
 Most-used options:
 
@@ -477,7 +477,7 @@ The checks:
 | `modpack-catalogue` | Every pack in `modpacks/` is well-formed plain data. |
 | `module-eval` | Four configurations — plain, web consoles + tmux, **client-host-only** (no install unit/steamcmd/user), and a custom `workshopDir` — produce the right units, ports, Exec paths and environment. |
 | `nonflake-entry` | `default.nix` really is usable by a consumer without flakes: an attrset, supplies `package`, produces working units. |
-| `options-documented` | Every option in `modules/options.nix` appears in `docs/options.md`. |
+| `options-documented` | Every option under `modules/options/` appears in `docs/options.md`. |
 | `render-guards` | A newline in an `.ini` value, a reserved key in `settings` (`MaxPlayers`, `Map`, `UPnP`, …), a Build 41 key that B42 no longer reads (`FoodLoot`, `MinutesPerPage`, …) and a B42 nested-table key written flat (`PopulationStartMultiplier`) all fail evaluation with the replacement named; `SelfManagedMods` is written only for Build 41; `rconPort` without an `RCONPassword` produces a resolver warning; Lua strings escape newlines/quotes/backslashes; dotted keys render a nested table; free-form and B42 keys still work. |
 | `prep-roundtrip` | Runs the real prep script against a seeded world: the merge preserves world identity, runtime overrides win, SandboxVars is written, mods are linked and stale ones unlinked. |
 | `client-host-prepare` | The client-host script writes only `~/Zomboid/Server/` plus the one opt-in preset under `~/Zomboid/Lua/` — never `mods/`, never a Steam/steamcmd path — writes no Build 42 `SelfManagedMods`, and a re-run keeps world identity, foreign keys, the player's own presets and favourites while replacing the managed preset exactly once. |
