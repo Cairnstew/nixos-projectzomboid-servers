@@ -459,6 +459,70 @@ let
       };
     };
 
+  # ── Scheduled start / idle stop ────────────────────────────────────────────
+  # Both are timers around the existing server unit. The start timer activates
+  # the service directly (`Unit=`), so it needs no companion service of its own.
+  # The idle timer runs a small root oneshot because stopping a system unit is
+  # privileged; the script itself only reads the rendered `.ini` and talks to
+  # RCON on loopback.
+  startTimerServers = lib.filterAttrs (_: srv: srv.schedule.start != [ ]) resolved;
+  idleStopServers = lib.filterAttrs (_: srv: srv.idleStop.enable) resolved;
+
+  mkStartTimer =
+    name: srv:
+    lib.nameValuePair "${unitName name}-start" {
+      description = "Start ${srv.description} on schedule";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        Unit = "${unitName name}.service";
+        OnCalendar = srv.schedule.start;
+        Persistent = srv.schedule.persistent;
+      };
+    };
+
+  mkIdleStopService =
+    name: srv:
+    let
+      unit = unitName name;
+      ini = "${cfg.dataDir}/${name}/Zomboid/Server/${srv.serverName}.ini";
+      state = "${cfg.runDir}/${name}.idle-since";
+    in
+    lib.nameValuePair "${unit}-idle" {
+      description = "Stop ${srv.description} after it has been empty for ${srv.idleStop.timeout}";
+      path = [ pkgs.systemd ];
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+        ExecStart = "${pkgs.python3}/bin/python3 ${./manage}/idle_stop.py --unit ${unit} --ini ${ini} --state ${state} --timeout ${srv.idleStop.timeout}";
+        # PZ's own stop path sends `save`, waits 15s, then `quit`; the server
+        # unit allows up to 90s for that. Give the oneshot room to wait for it.
+        TimeoutStartSec = "180s";
+        ProtectSystem = "full";
+        ProtectHome = true;
+        PrivateTmp = true;
+        NoNewPrivileges = true;
+        RestrictAddressFamilies = [
+          "AF_INET"
+          "AF_INET6"
+          "AF_UNIX"
+        ];
+        ReadWritePaths = [ cfg.runDir ];
+      };
+    };
+
+  mkIdleStopTimer =
+    name: _srv:
+    lib.nameValuePair "${unitName name}-idle" {
+      description = "Timer for ${unitName name} idle shutdown";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        Unit = "${unitName name}-idle.service";
+        OnBootSec = "2min";
+        OnUnitActiveSec = "1min";
+        AccuracySec = "15s";
+      };
+    };
+
   # ── Web consoles ───────────────────────────────────────────────────────────
   webServers = lib.filterAttrs (_: srv: cfg.web.enable && srv.webConsole) resolved;
 
@@ -740,6 +804,11 @@ in
         # application here instead produced an inscrutable "attempt to call
         # something which is not a function but a set" from `listToAttrs`.
         (mkIf cfg.web.enable (lib.mapAttrs' (name: _: mkWebService name) webServers))
+
+        # Idle shutdown. One root oneshot per server; the matching timer is in
+        # `systemd.timers` below. Defined here (not as a `.timer`-activated
+        # anonymous unit) so `systemctl cat` shows exactly what will run.
+        (lib.mapAttrs' mkIdleStopService idleStopServers)
       ];
 
       # Console FIFOs are `systemd.sockets` units, NOT `systemd.services`:
@@ -756,16 +825,25 @@ in
         lib.filterAttrs (_: srv: srv.managementSystem.systemd-socket.enable) resolved
       );
 
-      systemd.timers = mkIf (cfg.updateSchedule != null) {
-        "project-zomboid-update" = {
-          description = "Timer for Project Zomboid server updates";
-          wantedBy = [ "timers.target" ];
-          timerConfig = {
-            OnCalendar = cfg.updateSchedule;
-            Persistent = true;
+      systemd.timers = mkMerge [
+        (mkIf (cfg.updateSchedule != null) {
+          "project-zomboid-update" = {
+            description = "Timer for Project Zomboid server updates";
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnCalendar = cfg.updateSchedule;
+              Persistent = true;
+            };
           };
-        };
-      };
+        })
+
+        # Scheduled starts. `Unit=` points at the server service, which the
+        # timer can activate even though no `project-zomboid-<name>-start`
+        # service exists.
+        (lib.mapAttrs' mkStartTimer startTimerServers)
+
+        (lib.mapAttrs' mkIdleStopTimer idleStopServers)
+      ];
 
       # The console fifos live in a tmpfs-backed directory created by tmpfiles,
       # because the .socket unit needs the directory to exist before any service

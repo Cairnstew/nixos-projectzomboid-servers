@@ -1222,7 +1222,103 @@ in
               autoStart = mkOption {
                 type = types.bool;
                 default = true;
-                description = "Start at boot.";
+                description = ''
+                  Start at boot.
+
+                  Independent of <option>schedule.start</option>: a server with
+                  both starts at boot <emphasis>and</emphasis> at each scheduled
+                  time. Set this to <literal>false</literal> when the server
+                  should only be up during the scheduled windows.
+                '';
+              };
+
+              schedule = mkOption {
+                type = types.submodule {
+                  options = {
+                    start = mkOption {
+                      type = types.listOf types.str;
+                      default = [ ];
+                      example = [
+                        "*-*-* 22:00:00"
+                        "Sat,Sun 10:00:00"
+                      ];
+                      description = ''
+                        systemd <literal>OnCalendar</literal> expressions that
+                        start this server. Empty (the default) means no start
+                        timer is generated.
+
+                        Each entry is passed straight to systemd, so the usual
+                        calendar syntax applies: <literal>"22:00"</literal> is
+                        daily, <literal>"*-*-* 22:00:00"</literal> is the same
+                        with an explicit date, and
+                        <literal>"Sat,Sun 10:00:00"</literal> is weekends only.
+                        See <citerefentry><refentrytitle>systemd.time</refentrytitle>
+                        <manvolnum>7</manvolnum></citerefentry>.
+
+                        The timer starts the server service; starting an
+                        already-running server is a no-op. It does not stop the
+                        server — use <option>idleStop</option> or
+                        <literal>systemctl stop</literal> for that.
+                      '';
+                    };
+
+                    persistent = mkOption {
+                      type = types.bool;
+                      default = false;
+                      description = ''
+                        Catch up on a missed start after the machine was off at
+                        the scheduled time. Off by default: a game server
+                        starting late because the host was rebooting is usually
+                        worse than waiting for the next window.
+                      '';
+                    };
+                  };
+                };
+                default = { };
+                description = ''
+                  Scheduled start times. See <option>schedule.start</option>.
+                '';
+              };
+
+              idleStop = mkOption {
+                type = types.submodule {
+                  options = {
+                    enable = mkEnableOption "stopping this server after it has been empty for a while";
+
+                    timeout = mkOption {
+                      type = types.strMatching "[0-9]+[smhd]";
+                      default = "30m";
+                      example = "2h";
+                      description = ''
+                        How long the server may stay empty before it is stopped.
+                        One number and one unit: <literal>90s</literal>,
+                        <literal>30m</literal>, <literal>2h</literal> or
+                        <literal>1d</literal>.
+
+                        The check runs once a minute. It is deliberately
+                        conservative: an unreachable RCON (the server is still
+                        loading 400 Workshop items, or RCON crashed) is
+                        <emphasis>not</emphasis> treated as empty, and the player
+                        count is queried again immediately before stopping so a
+                        player who joins in between is not kicked.
+
+                        <emphasis>Requires RCON.</emphasis> Set
+                        <option>rconPort</option> and
+                        <option>secretFiles.RCONPassword</option>; evaluation
+                        fails otherwise. The timer is a root oneshot because it
+                        stops a system unit, but it only reads the rendered
+                        <literal>.ini</literal> and talks to RCON on loopback.
+                      '';
+                    };
+                  };
+                };
+                default = { };
+                description = ''
+                  Stop the server after it has had no players for
+                  <option>idleStop.timeout</option>. Useful together with
+                  <option>schedule.start</option> for a server that should only
+                  run while people are actually playing.
+                '';
               };
 
               restart = mkOption {

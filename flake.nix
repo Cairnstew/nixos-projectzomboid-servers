@@ -176,6 +176,14 @@
             openFirewall = false;
             autoStart = true;
             restart = "always";
+            schedule = {
+              start = [ ];
+              persistent = false;
+            };
+            idleStop = {
+              enable = false;
+              timeout = "30m";
+            };
             hardware = { };
             extraServiceConfig = { };
             managementSystem = {
@@ -281,6 +289,16 @@
                         udpPort = 16262;
                         openFirewall = true;
                         settings.PVP = false;
+                        # Scheduled uptime + idle shutdown: both timers and the
+                        # root oneshot must exist, and the RCON assertion must be
+                        # satisfied by a real secret.
+                        rconPort = 27017;
+                        secretFiles.RCONPassword = "/run/secrets/pz-rcon";
+                        schedule.start = [ "*-*-* 22:00:00" ];
+                        idleStop = {
+                          enable = true;
+                          timeout = "15m";
+                        };
                       };
                       beta = {
                         modpack = "survival-hard";
@@ -295,6 +313,7 @@
               cfg = evaluated.config.services.project-zomboid-servers;
               services = evaluated.config.systemd.services;
               sockets = evaluated.config.systemd.sockets;
+              timers = evaluated.config.systemd.timers;
               firewallUdp = lib.sort (a: b: a < b) (
                 lib.toList (evaluated.config.networking.firewall.allowedUDPPorts or [ ])
               );
@@ -357,6 +376,37 @@
                   ) "${unit} has no LC_ALL=C.UTF-8 — a non-ASCII mod folder would fail to load")
                 ]
               ) (lib.attrNames cfg.servers);
+
+              # Scheduled start and idle stop are new branches: assert the timers
+              # exist, target the right units, and carry the configured values.
+              scheduleFailures = [
+                (lib.optionalString (timers ? project-zomboid-alpha-start == false) "no start timer for alpha")
+                (lib.optionalString (
+                  timers ? project-zomboid-alpha-start
+                  && (timers.project-zomboid-alpha-start.timerConfig.Unit or "") != "project-zomboid-alpha.service"
+                ) "alpha start timer does not target the server unit")
+                (lib.optionalString (
+                  timers ? project-zomboid-alpha-start
+                  &&
+                    lib.toList (timers.project-zomboid-alpha-start.timerConfig.OnCalendar or [ ]) != [
+                      "*-*-* 22:00:00"
+                    ]
+                ) "alpha start timer did not keep the configured OnCalendar")
+                (lib.optionalString (
+                  services ? project-zomboid-alpha-idle == false
+                ) "no idle-stop service for alpha")
+                (lib.optionalString (timers ? project-zomboid-alpha-idle == false) "no idle-stop timer for alpha")
+                (lib.optionalString (
+                  services ? project-zomboid-alpha-idle
+                  && !(storePath (services.project-zomboid-alpha-idle.serviceConfig.ExecStart or ""))
+                ) "alpha idle-stop ExecStart is not a store path")
+                (lib.optionalString (
+                  services ? project-zomboid-alpha-idle
+                  && !(lib.hasInfix "--timeout 15m" (
+                    services.project-zomboid-alpha-idle.serviceConfig.ExecStart or ""
+                  ))
+                ) "alpha idle-stop did not receive the configured timeout")
+              ];
 
               # Force `config.assertions`. NixOS evaluates them as part of building
               # the system toplevel, so a check that only reads systemd.services
@@ -621,6 +671,7 @@
                 perServer
                 ++ staticFailures
                 ++ assertionFailures
+                ++ scheduleFailures
                 ++ webFailures
                 ++ clientFailures
                 ++ workshopFailures
@@ -959,6 +1010,31 @@
                   assert not parsed["ambiguous"]
                   assert parse_players("Players connected (1):\n-x\n-Alice\n")["ambiguous"]
                   print("RCON framing ok")
+                  PY
+
+                  # ── Idle-stop duration and ini parsing ──────────────────────
+                  python3 - <<'PY' || fail "idle-stop parsing assertions failed"
+                  from pathlib import Path
+                  from idle_stop import parse_duration, read_ini
+
+                  assert parse_duration("90s") == 90
+                  assert parse_duration("30m") == 1800
+                  assert parse_duration("2h") == 7200
+                  assert parse_duration("1d") == 86400
+                  for bad in ("", "30", "m30", "1h30m", "-5m"):
+                      try:
+                          parse_duration(bad)
+                      except ValueError:
+                          pass
+                      else:
+                          raise AssertionError(f"parse_duration accepted {bad!r}")
+
+                  ini = Path("idle-test.ini")
+                  ini.write_text("RCONPort=27017\nRCONPassword=a=b=c\n# comment\n", encoding="utf-8")
+                  values = read_ini(ini)
+                  assert values["RCONPort"] == "27017"
+                  assert values["RCONPassword"] == "a=b=c"
+                  print("idle-stop parsing ok")
                   PY
 
                   # ── Backup / prune / restore roundtrip ─────────────────────
@@ -2579,6 +2655,7 @@
                     "leaksSandbox"
                     "leaksPackIni"
                     "leaksPackSandbox"
+                    "idleNoRcon"
                     "clean"
                   ];
                   leaksIni = failedMessages {
@@ -2592,6 +2669,9 @@
                   leaksPackSandbox = failedMessages {
                     modpacks.bad.defaultSandbox.RCONPassword = "hunter2";
                     servers.foo.modpack = "bad";
+                  };
+                  idleNoRcon = failedMessages {
+                    servers.foo.idleStop.enable = true;
                   };
                   clean = failedMessages {
                     servers.foo.secretFiles.RCONPassword = "/run/secrets/rcon";
@@ -2618,6 +2698,8 @@
                   expect_guard "a secret in sandbox"         "$leaksSandboxPath"
                   expect_guard "a secret in a pack defaultSettings" "$leaksPackIniPath"
                   expect_guard "a secret in a pack defaultSandbox"  "$leaksPackSandboxPath"
+                  grep -q 'idleStop needs RCON' "$idleNoRconPath" \
+                    || fail "idleStop without RCON did not trip the guard"
                   expect_clean "a config using secretFiles"  "$cleanPath"
 
                   echo "secret guard ok: trips on every route, silent when secretFiles is used"

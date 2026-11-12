@@ -758,6 +758,8 @@ let
         softReset
         spawn
         restart
+        schedule
+        idleStop
         udpPort
         upnp
         webConsole

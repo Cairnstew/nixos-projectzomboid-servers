@@ -318,7 +318,9 @@ a matching `.socket` for its console.
 | `betaBranch` | str \| null | `null` | e.g. `"legacy41"`. Per-server, but applied by the **shared** install, so set it on every server or none. |
 | `jvmOpts` | str | `-Xmx4G -Xms2G` | Placed **before the `--`** the launcher inserts, which is what routes flags to the JVM rather than to the game. The only way to set the heap. |
 | `javaAgent` | submodule \| null | `null` | `{ jar, args }` — a JVM agent (e.g. ZombieBuddy) prepended to `jvmOpts`. A headless server **must** set a non-prompting policy. |
-| `autoStart` | bool | `true` | |
+| `autoStart` | bool | `true` | Start at boot. Independent of `schedule.start`; set `false` for schedule-only uptime. |
+| `schedule` | submodule | `{}` | Scheduled start times. See [schedule](#schedule). |
+| `idleStop` | submodule | disabled | Stop after a period with no players. See [idleStop](#idlestop). |
 | `restart` | str | `"always"` | See [below](#why-restart-is-always). |
 | `managementSystem` | submodule | inherits top level | Override per server to mix backends. |
 | `hardware` | submodule | `{}` | See [hardware](#hardware). |
@@ -326,6 +328,59 @@ a matching `.socket` for its console.
 | `webConsole` | bool | `true` | Needs `web.enable`. |
 | `port` | port \| null | `null` | Web console port; `null` assigns from `web.portBase` in sorted server order. |
 | `clientHost` | submodule | disabled | Render files for the game's in-game **Host** button from this same pack. See [clientHost](#clienthost). |
+
+### `schedule`
+
+A systemd timer that starts the server at each `OnCalendar` expression. It does
+**not** stop the server; use `idleStop` or `systemctl stop`.
+
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `schedule.start` | listOf str | `[]` | systemd `OnCalendar` expressions, e.g. `[ "*-*-* 22:00:00" ]`. Empty = no timer. |
+| `schedule.persistent` | bool | `false` | Start late if the host was off at the scheduled time. Off by default: a game server starting during boot is usually worse than waiting. |
+
+`autoStart` and `schedule.start` are independent. For a server that should only
+be up in the evening, set both `autoStart = false` and a start schedule:
+
+```nix
+servers.main = {
+  autoStart = false;
+  schedule.start = [ "*-*-* 22:00:00" ];
+};
+```
+
+### `idleStop`
+
+A once-a-minute timer that stops the server after it has been empty for
+`idleStop.timeout`. **Requires RCON** (`rconPort` + `secretFiles.RCONPassword`);
+evaluation fails otherwise. The check is conservative: an unreachable RCON is
+not treated as empty, and the player count is re-queried immediately before the
+stop so a just-joined player is not kicked.
+
+| Option | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `idleStop.enable` | bool | `false` | Run the idle-shutdown timer. |
+| `idleStop.timeout` | str | `"30m"` | One number and one unit: `90s`, `30m`, `2h`, `1d`. |
+
+```nix
+servers.main = {
+  rconPort = 27017;
+  secretFiles.RCONPassword = config.age.secrets.pz-rcon.path;
+  idleStop = {
+    enable = true;
+    timeout = "30m";
+  };
+};
+```
+
+`PauseEmpty = true` is a separate Project Zomboid setting: it freezes the world
+clock while nobody is online. It is not a substitute for `idleStop` — the JVM
+still runs — but the two compose well. Set it through `settings` (the
+`viewpoint` and `vanilla-plus` packs already do):
+
+```nix
+settings.PauseEmpty = true;
+```
 
 ### Reserved keys in `settings`
 

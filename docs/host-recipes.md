@@ -13,6 +13,7 @@ Task-oriented configurations. Each one is a complete, copy-pasteable fragment.
 - [Secrets](#secrets)
 - [Hardening](#hardening)
 - [Updating on a schedule](#updating-on-a-schedule)
+- [Scheduled uptime and idle shutdown](#scheduled-uptime-and-idle-shutdown)
 
 ---
 
@@ -553,3 +554,38 @@ pick up the new binaries.
 The update runs as its own timer-triggered unit rather than the boot-time one,
 because the boot install is `RemainAfterExit` and a second `ExecStart` against it
 would be a no-op.
+---
+
+## Scheduled uptime and idle shutdown
+
+For a server that should only run while people are likely to play, pair a start
+timer with an idle stop. Both are ordinary systemd timers around the existing
+server unit.
+
+```nix
+services.project-zomboid-servers.servers.main = {
+  autoStart = false;                       # do not start on boot
+  schedule.start = [ "*-*-* 22:00:00" ];   # every night at 22:00
+  rconPort = 27017;
+  secretFiles.RCONPassword = config.age.secrets.pz-rcon.path;
+  idleStop = {
+    enable = true;
+    timeout = "30m";                       # stop after 30 empty minutes
+  };
+};
+```
+
+`idleStop` needs RCON because that is the only honest player count. The timer
+does **not** treat an unreachable RCON as empty, so a server that is still
+loading a large Workshop pack is left alone. It re-checks immediately before
+stopping, so a player who joins in the same minute is not kicked.
+
+To freeze the world clock while the JVM is up but nobody is online, set the
+game's own `PauseEmpty`:
+
+```nix
+servers.main.settings.PauseEmpty = true;
+```
+
+`PauseEmpty` stops time and world simulation; `idleStop` stops the JVM. They are
+complementary, and both are worth setting for a friends-only server.

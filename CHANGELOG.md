@@ -22,6 +22,18 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Scheduled starts and idle shutdown per server.** `servers.<name>.schedule.start`
+  takes systemd `OnCalendar` expressions and creates a start timer; the server
+  can then run `autoStart = false` so a boot does not bring it up outside the
+  window. `servers.<name>.idleStop` adds a once-a-minute timer that stops the
+  server after `timeout` (default `30m`) with no players. It reads the player
+  list over RCON, so `rconPort` and `secretFiles.RCONPassword` are required and
+  an unreachable RCON is never treated as empty. The count is re-queried
+  immediately before stopping, so a just-joined player is not kicked. Use it
+  together with the game's own `PauseEmpty = true` to freeze the world clock
+  while the JVM is up and stop the JVM after the idle period. See
+  `docs/options.md#schedule` and `docs/host-recipes.md`.
+
 - **`pz-manage`: a dashboard, JSON API, RCON actions and scheduled backups.**
   `manage.enable` runs a stdlib-only Python service on loopback with a small web
   UI: status, uptime, memory, players (RCON), log tail, a read-only view of the

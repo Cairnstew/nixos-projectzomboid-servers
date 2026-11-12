@@ -82,6 +82,18 @@ let
       "${srv.name}: map is null (auto-detect) but mapOrder.enable is false and baseMap is empty, so Map= would never be set"
   ) (lib.attrValues resolved);
 
+  # `idleStop` decides "empty" by asking RCON for the player list. Without RCON
+  # there is no honest way to tell an empty server from one still loading, and
+  # guessing would stop a server that is merely slow to boot. Fail at
+  # evaluation rather than ship a timer that silently does nothing.
+  badIdleStops = lib.concatMap (
+    srv:
+    lib.optional (srv.idleStop.enable && (srv.rconPort == 0 || !(srv.secretFiles ? RCONPassword)))
+      "${srv.name}: idleStop.enable needs rconPort and secretFiles.RCONPassword (got rconPort=${toString srv.rconPort}, RCONPassword=${
+        if srv.secretFiles ? RCONPassword then "set" else "missing"
+      })"
+  ) (lib.attrValues resolved);
+
   # ── Dedicated Workshop directory ───────────────────────────────────────────
   # The install script derives the steamcmd library root by stripping this
   # suffix, so a path that does not have it would either download elsewhere or
@@ -223,6 +235,19 @@ in
             Either give the server an explicit `map`, or leave `map` null and keep
             `mapOrder.enable = true` with a non-empty `baseMap` so `Map=` can be
             derived from the installed mods.
+          '';
+        }
+
+        {
+          assertion = badIdleStops == [ ];
+          message = ''
+            services.project-zomboid-servers: idleStop needs RCON.
+            ${lib.concatStringsSep "\n" (map (b: "  - ${b}") badIdleStops)}
+
+            The idle check reads the player list over RCON. Set a non-zero
+            `rconPort` and `secretFiles.RCONPassword = /run/agenix/...` on the
+            server, or disable `idleStop`. Without RCON the module cannot tell an
+            empty server from one that is still booting, so it refuses to guess.
           '';
         }
 
