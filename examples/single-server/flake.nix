@@ -72,9 +72,7 @@
               # quoted (`PZ_JVM_OPTS="-Xmx6G -Xms3G"`). Assert that the flags
               # reach the Environment at all rather than pinning the quoting.
               if
-                builtins.any (
-                  e: builtins.match "PZ_JVM_OPTS=.*-Xmx6G -Xms3G.*" e != null
-                ) (sc.Environment or [ ])
+                builtins.any (e: builtins.match "PZ_JVM_OPTS=.*-Xmx6G -Xms3G.*" e != null) (sc.Environment or [ ])
               then
                 null
               else
