@@ -2785,6 +2785,7 @@
                     "leaksPackSandbox"
                     "idleNoRcon"
                     "webNoPassword"
+                    "tcpClash"
                     "clean"
                   ];
                   leaksIni = failedMessages {
@@ -2806,6 +2807,20 @@
                     web.enable = true;
                     web.username = "pz";
                     servers.foo = { };
+                  };
+                  tcpClash = failedMessages {
+                    servers.a = {
+                      defaultPort = 16261;
+                      udpPort = 16262;
+                      rconPort = 27017;
+                      secretFiles.RCONPassword = "/run/secrets/rcon-a";
+                    };
+                    servers.b = {
+                      defaultPort = 16271;
+                      udpPort = 16272;
+                      rconPort = 27017;
+                      secretFiles.RCONPassword = "/run/secrets/rcon-b";
+                    };
                   };
                   clean = failedMessages {
                     servers.foo.secretFiles.RCONPassword = "/run/secrets/rcon";
@@ -2836,6 +2851,8 @@
                     || fail "idleStop without RCON did not trip the guard"
                   grep -q 'web.username is set but' "$webNoPasswordPath" \
                     || fail "web.username without web.passwordFile did not trip the auth guard"
+                  grep -q 'two TCP services claim the same port' "$tcpClashPath" \
+                    || fail "two servers on the same rconPort did not trip the TCP collision guard"
                   expect_clean "a config using secretFiles"  "$cleanPath"
 
                   echo "secret guard ok: trips on every route, silent when secretFiles is used"

@@ -84,7 +84,7 @@ checkbox is a commit-sized change with its own verification step.
 - [x] Delete the dead `pkgs/project-zomboid-server/derivation.nix`.
 - [ ] Reduce `README.md` option-table duplication.
 - [ ] Add a VM smoke test with a stub `package` to exercise systemd hardening.
-- [ ] Add `AGENTS.md`/`CONTRIBUTING.md` with check/format/commit conventions.
+- [x] Add `AGENTS.md` with check/format/commit conventions.
 - [ ] Add the remaining systemd hardening directives with per-unit opt-outs.
 
 ## Verification after each step
