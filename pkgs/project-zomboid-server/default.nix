@@ -90,9 +90,25 @@ let
         # (2) Split the flag list into an array rather than relying on unquoted
         #     word splitting: correct for empty PZ_JVM_OPTS, and shellcheck-clean
         #     without a suppression.
-        jvm_opts=()
+        #
+        #     `-Duser.home` is NOT optional. PZ's Java resolves the `Zomboid`
+        #     directory from `user.home`, which the JVM takes from the passwd
+        #     entry, NOT from `$HOME` — so without this flag every server on a
+        #     host shares `<dataDir>/Zomboid` (the service user's home) and
+        #     ignores the per-server `<dataDir>/<name>/Zomboid` that the prep
+        #     script writes. That produced a fresh default world with RCON off
+        #     on the first Viewpoint start (2026-11-12). It goes first so a
+        #     caller can still override it with an explicit `-Duser.home` in
+        #     PZ_JVM_OPTS; the last occurrence wins.
+        if [ -z "''${HOME-}" ]; then
+          echo "project-zomboid-server: HOME is not set; it determines the Zomboid data directory" >&2
+          exit 1
+        fi
+        jvm_opts=("-Duser.home=$HOME")
         if [ -n "''${PZ_JVM_OPTS-}" ]; then
-          read -r -a jvm_opts <<< "''${PZ_JVM_OPTS-}"
+          extra_opts=()
+          read -r -a extra_opts <<< "''${PZ_JVM_OPTS-}"
+          jvm_opts+=("''${extra_opts[@]}")
         fi
 
         # (4) The Build 42 admin login. There is no ini key for this — the

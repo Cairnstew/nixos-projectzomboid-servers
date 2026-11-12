@@ -393,6 +393,17 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **The dedicated server now reads its per-server `Zomboid` home, not the
+  service user's passwd home.** PZ's Java resolves `Zomboid` from `user.home`,
+  which the JVM takes from the passwd entry, not from `$HOME`. The launcher set
+  `HOME=<dataDir>/<name>` but never `-Duser.home`, so every server on a host
+  shared `<dataDir>/Zomboid` and ignored the `<dataDir>/<name>/Zomboid` the prep
+  script writes. On the first Viewpoint start that produced a fresh default
+  world (`PublicName=My PZ Server`, `MaxPlayers=32`) with RCON off, while the
+  real world and its `RCONPassword` sat unread in `viewpoint/Zomboid`. The
+  launcher now pins `-Duser.home="$HOME"` ahead of `PZ_JVM_OPTS`, and the
+  `launcher` check asserts it.
+
 - **Large Workshop packs no longer cascade "No Connection" or time out on a
   first install.** The install script sent one steamcmd invocation carrying
   every missing `+workshop_download_item` argument. A 438-item pack on a flaky

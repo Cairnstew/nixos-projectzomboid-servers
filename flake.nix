@@ -827,7 +827,30 @@
           };
 
           checks = {
-            launcher = pkgs.callPackage ./pkgs/project-zomboid-server { };
+            launcher =
+              let
+                pkg = pkgs.callPackage ./pkgs/project-zomboid-server { };
+              in
+              pkgs.runCommand "pz-launcher-check"
+                {
+                  nativeBuildInputs = [ pkgs.gnugrep ];
+                  LAUNCHER = pkg;
+                }
+                ''
+                  fail() { echo "FAIL: $1" >&2; exit 1; }
+
+                  # PZ's Java resolves `Zomboid` from `user.home`, which the JVM
+                  # takes from the passwd entry, NOT from $HOME. Without this
+                  # flag every server on a host shares <dataDir>/Zomboid (the
+                  # service user's home) and ignores the per-server
+                  # <dataDir>/<name>/Zomboid that the prep script writes. That
+                  # produced a fresh default world with RCON off on the first
+                  # Viewpoint start (2026-11-12).
+                  grep -qF -- '-Duser.home=$HOME' "$LAUNCHER/bin/project-zomboid-server" \
+                    || fail "the launcher does not pin -Duser.home to HOME"
+                  echo "launcher ok: -Duser.home is pinned to HOME"
+                  touch "$out"
+                '';
 
             modpack-catalogue =
               if catalogueProblems != [ ] then
