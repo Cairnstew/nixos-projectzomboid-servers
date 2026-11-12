@@ -489,9 +489,27 @@ def run_action(server: dict, verb: str, arg: str | None) -> dict:
 # ── HTTP ────────────────────────────────────────────────────────────────────
 
 
+def same_origin_only(headers) -> bool:
+    """False when a browser says this request came from another site.
+
+    The dashboard is protected by a custom header on ``/api/*``, but the legacy
+    ``POST /<server>/(start|stop|restart)`` route predates it. Proxy basic auth
+    does NOT stop CSRF: the browser attaches those credentials to a cross-site
+    form submission too. ``Sec-Fetch-Site`` is sent by modern browsers and cannot
+    be set by page JavaScript, so it closes that route without requiring every
+    legacy client to change. An absent header (curl, an old browser) is allowed;
+    a present header must be same-origin or a direct navigation.
+    """
+    site = headers.get("Sec-Fetch-Site")
+    return not site or site in ("same-origin", "none")
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "pz-manage/1"
+    # BaseHTTPRequestHandler appends "Python/3.x" to the Server header. Keep the
+    # version out of an unauthenticated response; it is no use to the operator.
+    sys_version = ""
 
     # ── responses ───────────────────────────────────────────────────────────
 
@@ -554,6 +572,13 @@ class Handler(BaseHTTPRequestHandler):
         # own JavaScript sets it.
         if self.headers.get("X-PZ-Manage") != "1":
             raise PermissionError("missing X-PZ-Manage: 1 header")
+
+    def _require_same_origin(self) -> None:
+        # Covers the legacy route, which cannot use the custom header. Modern
+        # browsers send Sec-Fetch-Site; a client that does not is allowed
+        # through (see `same_origin_only`).
+        if not same_origin_only(self.headers):
+            raise PermissionError("cross-site request refused")
 
     def _static(self, name: str) -> None:
         candidate = (STATIC_DIR / name).resolve()
@@ -651,6 +676,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path = self._path()
         try:
+            self._require_same_origin()
             # The legacy `POST /<server>/(start|stop|restart)` route is kept
             # for the existing proxy dashboard card, which is same-origin and
             # already behind the proxy's authentication. The JSON API requires
@@ -687,6 +713,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         try:
+            self._require_same_origin()
             self._require_csrf_header()
             if self._path() != "/api/backups":
                 return self._error(404, "not found")

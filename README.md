@@ -270,6 +270,7 @@ Per server:
 | `spawn.points` / `spawn.regions` | list | `[]` | Rendered to `_spawnpoints.lua` / `_spawnregions.lua`. |
 | `defaultPort` / `udpPort` | port | `16261` / `16262` | PZ binds **two** UDP ports; both must be unique. |
 | `rconPort` | port | `0` | `0` = RCON off. |
+| `openRconFirewall` | bool | `false` | Open `rconPort` to the network. Off: the dashboard reads RCON over loopback. |
 | `settings` / `sandbox` | attrs | `{}` | Any PZ key. **Never a secret** here. |
 | `secretFiles` | attrsOf path | `{}` | `Key = path`. The only way to set a secret. |
 | `passwordFile` | path \| null | `null` | Sugar for `secretFiles.Password`. Wins if both set. |

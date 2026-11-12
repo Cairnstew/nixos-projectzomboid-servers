@@ -192,8 +192,9 @@ proxy.upstreams = lib.mkMerge (map (u: {
 - Ports are assigned from `web.portBase` (7682) in sorted server order, so they
   stay stable as long as you do not rename servers. Pin one with
   `servers.<name>.port` if you must.
-- `web.user` gets scoped, password-less sudo for `systemctl {start,stop,restart,
-  status}` **on the PZ units only**.
+- `web.user` gets a scoped polkit rule for `manage-units` on the PZ units only
+  (not sudoers — a scoped sudo rule is unreachable under
+  `security.sudo.execWheelOnly`).
 
 ---
 

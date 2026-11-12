@@ -6,6 +6,34 @@ All notable changes to this project. Format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Setting `rconPort` no longer opens the port in the firewall.** RCON is
+  plaintext TCP, and the dashboard and idle-stop check read it over loopback.
+  Opening it required only a non-zero port before, which contradicted the
+  documentation and published RCON on every interface whenever a host enabled
+  the dashboard. A new per-server `openRconFirewall` (default `false`) is the
+  only way to open it now. TCP port collisions between `rconPort`, `manage.port`
+  and ttyd consoles are also rejected at evaluation time.
+
+- **Scheduled updates run the installer as the service user again.** The
+  root timer used to execute the SteamCMD installer directly, leaving
+  root-owned files in the data/install directories and a root-owned cached
+  Steam login. It now restarts `project-zomboid-install.service`, which keeps
+  `User = cfg.user`, then restarts the running servers.
+
+- **The legacy dashboard POST route is CSRF-guarded.** Mutating requests now
+  reject `Sec-Fetch-Site: cross-site`/`same-site` in addition to the
+  `X-PZ-Manage` header on `/api/*`. Proxy basic auth does not prevent CSRF, so
+  the legacy `/<server>/(start|stop|restart)` route needed its own check.
+
+- **The ttyd console unit is sandboxed and no longer carries sudo.** The unit
+  gained `NoNewPrivileges`, `ProtectSystem=strict`, `CapabilityBoundingSet=""`
+  and the kernel/clock/hostname protections. The unused `pkgs.sudo` was removed
+  from its PATH. ttyd still receives its basic-auth password via `--credential`,
+  which is visible in the process list; the module now warns about that and the
+  option docs point at proxy authentication instead.
+
 ### Removed
 
 - **Two Viewpoint add-ons that crash on Build 42.22: Surface Fix and Physics &

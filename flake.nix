@@ -115,6 +115,8 @@
                   # `or { }` rather than `inherit`, because a caller testing only
                   # `servers` does not pass a `modpacks` key at all.
                   modpacks = extra.modpacks or { };
+                  web = extra.web or { };
+                  manage = extra.manage or { };
                 };
               };
             in
@@ -174,6 +176,7 @@
             jvmOpts = "-Xmx4G -Xms2G";
             javaAgent = null;
             openFirewall = false;
+            openRconFirewall = false;
             autoStart = true;
             restart = "always";
             schedule = {
@@ -282,6 +285,7 @@
                     dataDir = "/var/lib/project-zomboid";
                     modpacks = self.modpacks;
                     web.enable = false;
+                    updateSchedule = "daily";
                     servers = {
                       alpha = {
                         modpack = "vanilla-plus";
@@ -316,6 +320,9 @@
               timers = evaluated.config.systemd.timers;
               firewallUdp = lib.sort (a: b: a < b) (
                 lib.toList (evaluated.config.networking.firewall.allowedUDPPorts or [ ])
+              );
+              firewallTcp = lib.sort (a: b: a < b) (
+                lib.toList (evaluated.config.networking.firewall.allowedTCPPorts or [ ])
               );
 
               envOf = unit: (services.${unit}.serviceConfig.Environment or [ ]);
@@ -445,6 +452,20 @@
                 (lib.optionalString (
                   services ? project-zomboid-install == false
                 ) "no project-zomboid-install unit, yet the servers Require it")
+                # The boot install and the scheduled updater share one unit.
+                # The updater is root only for systemctl; the downloader must
+                # stay as cfg.user or it leaves root-owned files behind.
+                (lib.optionalString (
+                  services ? project-zomboid-install
+                  && (services.project-zomboid-install.serviceConfig.User or "") != cfg.user
+                ) "the install unit does not run as cfg.user (${cfg.user})")
+                (lib.optionalString (
+                  services ? project-zomboid-update == false
+                ) "no project-zomboid-update unit despite updateSchedule")
+                (lib.optionalString (
+                  services ? project-zomboid-update
+                  && (services.project-zomboid-update.serviceConfig.User or "") != "root"
+                ) "the scheduled updater is not root (it needs systemctl try-restart)")
                 (lib.optionalString (
                   danglingDeps != [ ]
                 ) "units require undefined dependencies: ${lib.concatStringsSep ", " danglingDeps}")
@@ -456,6 +477,12 @@
                     ]
                   )
                   "firewall opened unexpected UDP ports: ${lib.concatStringsSep ", " firewallUdp} (only alpha opted in)"
+                )
+                # RCON is plaintext TCP and is loopback-only for the dashboard
+                # and idle-stop. It must never be opened by merely setting
+                # `rconPort`; only `openRconFirewall` may opt in.
+                (lib.optionalString (firewallTcp != [ ])
+                  "firewall opened TCP ports by default: ${lib.concatStringsSep ", " firewallTcp} (neither openRconFirewall nor web.openFirewall was set)"
                 )
                 (lib.optionalString (
                   !(cfg.modpacks ? vanilla-plus) || !(cfg.modpacks ? survival-hard)
@@ -573,6 +600,18 @@
                 (lib.optionalString (
                   webEval.config.networking.firewall.allowedTCPPorts != [ ]
                 ) "web consoles opened TCP ports without web.openFirewall")
+                # The ttyd unit is a control plane: it must not inherit sudo on
+                # PATH, and it must keep the sandbox directives that stop a ttyd
+                # or shim bug from reaching the rest of the host.
+                (lib.optionalString (lib.any (p: (p.pname or "") == "sudo") (
+                  webSvcs.project-zomboid-socket-server-web.path or [ ]
+                )) "the ttyd unit still has sudo on PATH")
+                (lib.optionalString (
+                  (webSvcs.project-zomboid-socket-server-web.serviceConfig.NoNewPrivileges or false) != true
+                ) "the ttyd unit lost NoNewPrivileges")
+                (lib.optionalString (
+                  (webSvcs.project-zomboid-socket-server-web.serviceConfig.ProtectSystem or "") != "strict"
+                ) "the ttyd unit does not use ProtectSystem=strict")
               ];
 
               # ── Third scenario: a pack driving the in-game Host button ───────
@@ -1030,6 +1069,15 @@
                           pass
                       else:
                           raise AssertionError(f"parse_duration accepted {bad!r}")
+
+                  # CSRF: the legacy POST route has no custom header, so it is
+                  # guarded by Sec-Fetch-Site. Absent header = legacy client,
+                  # same-origin/none = browser navigation, anything else = reject.
+                  assert manage_server.same_origin_only({})
+                  assert manage_server.same_origin_only({"Sec-Fetch-Site": "same-origin"})
+                  assert manage_server.same_origin_only({"Sec-Fetch-Site": "none"})
+                  assert not manage_server.same_origin_only({"Sec-Fetch-Site": "cross-site"})
+                  assert not manage_server.same_origin_only({"Sec-Fetch-Site": "same-site"})
 
                   ini = Path("idle-test.ini")
                   ini.write_text("RCONPort=27017\nRCONPassword=a=b=c\n# comment\n", encoding="utf-8")
@@ -2687,6 +2735,7 @@
                     "leaksPackIni"
                     "leaksPackSandbox"
                     "idleNoRcon"
+                    "webNoPassword"
                     "clean"
                   ];
                   leaksIni = failedMessages {
@@ -2703,6 +2752,11 @@
                   };
                   idleNoRcon = failedMessages {
                     servers.foo.idleStop.enable = true;
+                  };
+                  webNoPassword = failedMessages {
+                    web.enable = true;
+                    web.username = "pz";
+                    servers.foo = { };
                   };
                   clean = failedMessages {
                     servers.foo.secretFiles.RCONPassword = "/run/secrets/rcon";
@@ -2731,6 +2785,8 @@
                   expect_guard "a secret in a pack defaultSandbox"  "$leaksPackSandboxPath"
                   grep -q 'idleStop needs RCON' "$idleNoRconPath" \
                     || fail "idleStop without RCON did not trip the guard"
+                  grep -q 'web.username is set but' "$webNoPasswordPath" \
+                    || fail "web.username without web.passwordFile did not trip the auth guard"
                   expect_clean "a config using secretFiles"  "$cleanPath"
 
                   echo "secret guard ok: trips on every route, silent when secretFiles is used"

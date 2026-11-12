@@ -50,6 +50,45 @@ let
       "port ${port} is claimed by ${lib.concatMapStringsSep ", " (c: "${c.server} (${c.what})") cs}"
     ) dupes;
 
+  # TCP services this host exposes: RCON, the dashboard and the ttyd consoles.
+  # Kept separate from `claimedPorts` because a UDP and a TCP service may share a
+  # number without a clash — but two TCP listeners may not.
+  #
+  # `webServers`/`webPort` are defined below; `let` bindings are recursive, so
+  # this deliberately reaches forward rather than duplicating the assignment.
+  tcpClaims =
+    lib.concatMap (
+      srv:
+      lib.optional (srv.rconPort != 0) {
+        port = srv.rconPort;
+        server = srv.serverName;
+        what = "rconPort";
+      }
+    ) (lib.attrValues resolved)
+    ++ lib.optional cfg.manage.enable {
+      port = cfg.manage.port;
+      server = "(dashboard)";
+      what = "manage.port";
+    }
+    ++ lib.concatMap (
+      name:
+      lib.optional (webServers ? ${name}) {
+        port = webPort name;
+        server = name;
+        what = "web console";
+      }
+    ) (builtins.attrNames webServers);
+
+  tcpPortClashes =
+    let
+      byPort = lib.groupBy (c: toString c.port) tcpClaims;
+      dupes = lib.filterAttrs (_: cs: lib.length cs > 1) byPort;
+    in
+    lib.mapAttrsToList (
+      port: cs:
+      "TCP port ${port} is claimed by ${lib.concatMapStringsSep ", " (c: "${c.server} (${c.what})") cs}"
+    ) dupes;
+
   # ── Secret leakage ─────────────────────────────────────────────────────────
   # The Nix-rendered base `.ini` and SandboxVars are `pkgs.writeText` store
   # paths: mode 444, world-readable, greppable by any local user. So a secret
@@ -185,6 +224,19 @@ in
         }
 
         {
+          assertion = tcpPortClashes == [ ];
+          message = ''
+            services.project-zomboid-servers: two TCP services claim the same port.
+            ${lib.concatStringsSep "\n" (map (c: "  - ${c}") tcpPortClashes)}
+
+            RCON, the pz-manage dashboard and every ttyd console are TCP
+            listeners on this host. Keep `rconPort`, `manage.port` and each
+            server's web-console `port` distinct, including the ports assigned
+            automatically from `web.portBase`.
+          '';
+        }
+
+        {
           # Exactly one console backend. Two means two competing claims on the
           # same stdin; none means a server whose console cannot be reached or
           # stopped cleanly.
@@ -284,7 +336,44 @@ in
             Set both, or neither.
           '';
         }
+
+        {
+          # The reverse direction of the check above. `needsAuth` in
+          # services.nix requires BOTH options, so a username without a password
+          # silently starts an unauthenticated ttyd rather than failing.
+          assertion = cfg.web.username == null || cfg.web.passwordFile != null;
+          message = ''
+            services.project-zomboid-servers: web.username is set but
+            web.passwordFile is null, so the ttyd consoles would start WITHOUT
+            authentication. Set both, or neither.
+          '';
+        }
       ];
+
+      # Unauthenticated control planes are a local-privilege issue, not only a
+      # network one: loopback is reachable by every local user, and the ttyd
+      # shim's .start/.stop/.restart go through the module's polkit rule.
+      warnings =
+        lib.optional (cfg.web.enable && cfg.web.username == null) ''
+          services.project-zomboid-servers.web.enable is on but web.username /
+          web.passwordFile are unset: the ttyd consoles are unauthenticated.
+          Any local user who can reach ${cfg.web.bind} can send console commands,
+          including .start/.stop/.restart through the polkit rule. Set both
+          options, or expose the consoles only through an authenticating proxy
+          or a tailnet.
+        ''
+        ++ lib.optional (cfg.web.enable && cfg.web.username != null) ''
+          services.project-zomboid-servers: the ttyd basic-auth password is passed
+          to ttyd with --credential, so it is visible in the process list
+          (`ps`, /proc/<pid>/cmdline). Prefer proxy authentication and leave
+          web.username/web.passwordFile unset, or accept that local disclosure.
+        ''
+        ++ lib.optional (cfg.manage.enable && cfg.manage.openFirewall) ''
+          services.project-zomboid-servers.manage.openFirewall is on, but the
+          dashboard has no user database of its own: it trusts the reverse proxy
+          or private network in front of it. Do not open manage.port directly
+          without an authenticating proxy or a network ACL.
+        '';
 
       # ── Service user / group ──────────────────────────────────────────────
       # Created conditionally on the name so `user`/`group` stay renameable.

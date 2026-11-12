@@ -798,6 +798,20 @@ in
                 '';
               };
 
+              openRconFirewall = mkOption {
+                type = types.bool;
+                default = false;
+                description = ''
+                  Open <option>rconPort</option> in the firewall.
+
+                  Off by default. RCON is plaintext TCP, and the dashboard and
+                  idle-stop check read it over loopback, so the module has no
+                  reason to expose it. Set this only when an external RCON client
+                  must reach the port; prefer a private network or a firewall
+                  rule restricted to that client's address.
+                '';
+              };
+
               openFirewall = mkEnableOption "open this server's two UDP ports in the firewall";
 
               public = mkOption {
@@ -1692,16 +1706,28 @@ in
         type = types.str;
         default = "project-zomboid-web";
         description = ''
-          User the consoles run as. Added to the server group and granted scoped,
-          password-less sudo for `systemctl {start,stop,restart,status}` on the PZ
-          units only.
+          User the consoles run as. Added to the server group and granted a
+          scoped polkit rule for <literal>org.freedesktop.systemd1.manage-units</literal>
+          on the <literal>project-zomboid-*</literal> units only. This is polkit,
+          not sudoers: a scoped sudo rule is unreachable on hosts that set
+          <literal>security.sudo.execWheelOnly</literal>, while polkit grants
+          exactly that one action on exactly those units.
         '';
       };
 
       username = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "HTTP basic-auth username. Requires <option>passwordFile</option>.";
+        description = ''
+          HTTP basic-auth username. Requires <option>passwordFile</option>.
+
+          The credential is passed to ttyd with <literal>--credential</literal>,
+          so the password is visible in the process list
+          (<filename>/proc/&lt;pid&gt;/cmdline</filename>) even though it never
+          reaches the store or the unit file. Prefer authentication at the
+          reverse proxy when that disclosure matters, and leave both options
+          unset there.
+        '';
       };
 
       passwordFile = mkOption {
@@ -1713,7 +1739,14 @@ in
       openFirewall = mkOption {
         type = types.bool;
         default = false;
-        description = "Open the console ports. Off by default — consoles are meant to sit behind a proxy.";
+        description = ''
+          Open the console ports.
+
+          Off by default: the consoles are meant to sit behind an authenticating
+          proxy or a private network. If <option>username</option> and
+          <option>passwordFile</option> are unset, the consoles have no
+          authentication of their own.
+        '';
       };
     };
 
@@ -1818,7 +1851,14 @@ in
       openFirewall = mkOption {
         type = types.bool;
         default = false;
-        description = "Open <option>port</option>. Off by default — use a proxy or a private network.";
+        description = ''
+          Open <option>port</option>.
+
+          Off by default. The dashboard has no user database of its own: it
+          trusts the reverse proxy or private network in front of it, so opening
+          this port directly exposes an unauthenticated control API. Use a proxy,
+          a tailnet, or an ACL instead.
+        '';
       };
     };
 

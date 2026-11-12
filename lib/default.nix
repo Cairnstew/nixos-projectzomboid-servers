@@ -750,6 +750,7 @@ let
         mapOrder
         open
         openFirewall
+        openRconFirewall
         passwordFile
         port
         rconPort

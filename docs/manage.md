@@ -69,7 +69,11 @@ servers.viewpoint = {
 ```
 
 RCON is plaintext TCP. `openFirewall` only opens the two UDP game ports, and the
-dashboard connects to `127.0.0.1:<rconPort>`. Do not expose the RCON port.
+dashboard connects to `127.0.0.1:<rconPort>`. The module does **not** open the
+RCON port: a plaintext listener reachable from the network is a much larger
+exposure than the dashboard needs. If an external RCON client really must reach
+it, set `openRconFirewall = true` and restrict the firewall rule to that
+client's address — never open it to the whole internet.
 
 If RCON is missing, the dashboard still shows status, logs, config and backups;
 it reports the RCON error instead of pretending the player list is empty.
@@ -124,10 +128,12 @@ database and no RBAC.
 ## API
 
 All JSON. Mutating `/api/*` requests require `X-PZ-Manage: 1` (a CSRF guard a
-cross-origin form cannot set without a preflight). The legacy
-`/<server>/(start|stop|restart)` route used by the existing dashboard card is
-exempt: it is same-origin, already behind the proxy's authentication, and only
-exposes three fixed systemd verbs.
+cross-origin form cannot set without a preflight). Every mutating request —
+including the legacy `/<server>/(start|stop|restart)` route used by the existing
+dashboard card — is also rejected when the browser reports
+`Sec-Fetch-Site: cross-site` or `same-site`. The legacy route still has no
+custom-header requirement, so an old client that sends no `Sec-Fetch-Site`
+continues to work; modern browsers cannot forge the header from page script.
 
 | Method | Path | Purpose |
 | --- | --- | --- |

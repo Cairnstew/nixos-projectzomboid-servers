@@ -65,10 +65,10 @@ default: consoles are meant to sit behind a proxy, on loopback.
 | `web.enable` | bool | `false` | Master switch for web consoles. |
 | `web.portBase` | port | `7682` | First auto-assigned console port. Starts at 7682 because 7681 is conventionally another ttyd's. |
 | `web.bind` | str | `127.0.0.1` | Interface. Loopback by default; expose via a proxy or tailnet IP. |
-| `web.user` | str | `project-zomboid-web` | Added to the server group, with scoped password-less sudo for `systemctl {start,stop,restart,status}` on PZ units only. |
-| `web.username` | str \| null | `null` | HTTP basic auth. Requires `passwordFile`. |
+| `web.user` | str | `project-zomboid-web` | Added to the server group, with a scoped polkit rule for `manage-units` on the `project-zomboid-*` units only (not sudoers). |
+| `web.username` | str \| null | `null` | HTTP basic auth. Requires `passwordFile`. The password is passed to ttyd with `--credential`, so it is visible in the process list; prefer proxy auth where that matters. |
 | `web.passwordFile` | path \| null | `null` | e.g. an agenix secret. |
-| `web.openFirewall` | bool | `false` | Opens the console ports. Off: put a proxy in front instead. |
+| `web.openFirewall` | bool | `false` | Opens the console ports. Off: put an authenticating proxy in front instead. Without `username`/`passwordFile` the consoles have no authentication of their own. |
 
 ### `manage`
 
@@ -93,7 +93,7 @@ property of the proxy or the private network, not of this module.
 | `manage.consoleBase` | str | `/pz` | Console URL prefix, only for the link the dashboard renders. |
 | `manage.refreshSeconds` | int | `5` | Status/players/log refresh interval. |
 | `manage.allowActions` | listOf enum | all verbs | `save`, `broadcast`, `kick`, `ban`, `unban`, `whitelist-add`, `whitelist-remove`, `reload-options`, `start`, `stop`, `restart`. Each maps to one fixed RCON command or systemctl verb — there is no raw RCON terminal. |
-| `manage.openFirewall` | bool | `false` | Opens `manage.port`. Off: use a proxy or a private network. |
+| `manage.openFirewall` | bool | `false` | Opens `manage.port`. The dashboard has no authentication of its own; keep it on loopback or behind a proxy/tailnet. |
 
 ### `backup`
 
@@ -298,6 +298,7 @@ a matching `.socket` for its console.
 | `defaultPort` | port | `16261` | `DefaultPort`, UDP. Must be unique across enabled servers. |
 | `udpPort` | port | `16262` | `UDPPort`, UDP. PZ binds **two** UDP ports per instance; both must be unique. |
 | `rconPort` | port | `0` | `0` = RCON off. A port alone is not enough: PZ starts RCON only when `RCONPassword` (via `secretFiles`) is non-empty too, and warns at eval time otherwise. |
+| `openRconFirewall` | bool | `false` | Opens `rconPort`. Off by default: RCON is plaintext TCP, and the dashboard/idle-stop read it over loopback. Set only for an external RCON client, preferably behind a restricted rule. |
 | `openFirewall` | bool | `false` | Opens this server's two UDP ports. |
 | `public` | bool \| null | `null` | Server browser. `null` = true. |
 | `publicName` | str \| null | `null` | Browser name. `null` = the attribute name. |

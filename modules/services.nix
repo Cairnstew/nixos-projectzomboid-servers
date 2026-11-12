@@ -595,7 +595,6 @@ let
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       path = [
-        pkgs.sudo
         pkgs.systemd
         pkgs.coreutils
       ];
@@ -612,7 +611,9 @@ let
                 if needsAuth then
                   ''
                     # Read here, never interpolated into the unit, so the secret is
-                    # not visible in `systemctl cat`.
+                    # not visible in `systemctl cat`. It IS visible in the process
+                    # list, because ttyd has no credential-file option; see the
+                    # warning in modules/config.nix and the web.username option.
                     password="$(cat "${cfg.web.passwordFile}")"
                   ''
                 else
@@ -633,6 +634,31 @@ let
         Group = cfg.group;
         Restart = "on-failure";
         RestartSec = "2s";
+
+        # ttyd is a terminal server, not a shell: it needs no devices beyond
+        # its own pty and no filesystem beyond the store and the FIFO. The
+        # defaults below are deliberately conservative; PrivateDevices is left
+        # out because it can remove /dev/ptmx, and the service must keep the
+        # ability to open a pty.
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        RestrictAddressFamilies = [
+          "AF_INET"
+          "AF_INET6"
+          "AF_UNIX"
+        ];
+        UMask = "0027";
+        RestrictNamespaces = true;
+        LockPersonality = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        RestrictSUIDSGID = true;
+        CapabilityBoundingSet = "";
       };
     };
 
@@ -640,7 +666,12 @@ let
     name = "project-zomboid-update";
     runtimeInputs = [ pkgs.systemd ];
     text = ''
-      ${installScript}/bin/project-zomboid-install
+      # Restart the INSTALL UNIT rather than running the store script directly.
+      # The updater is root (it needs `systemctl try-restart`), while the
+      # downloader must run as the service user: running steamcmd as root
+      # leaves root-owned files in dataDir/serverDir and a root-owned cached
+      # Steam login, which the next server start cannot use.
+      ${pkgs.systemd}/bin/systemctl restart ${installUnit}.service
 
       ${
         if cfg.restartAfterUpdate then
@@ -739,12 +770,14 @@ in
     (mkIf (cfg.enable && cfg.package != null) {
       # One place for every unit, so nothing can shadow or duplicate.
       systemd.services = mkMerge [
-        # The install unit the servers require. Defined HERE, in the same file, so
-        # `Requires=` can never dangle.
-        (mkIf cfg.updateOnStart {
+        # The install unit is also required by the scheduled updater (which
+        # runs as root only to `systemctl restart` it), so it must exist
+        # whenever either entry point can call it. `wantedBy` stays tied to
+        # `updateOnStart`, so `updateSchedule` alone does not install at boot.
+        (mkIf (cfg.updateOnStart || cfg.updateSchedule != null) {
           "${installUnit}" = {
             description = "Project Zomboid install/update (steamcmd app 380870 + Workshop mods)";
-            wantedBy = [ "multi-user.target" ];
+            wantedBy = optionals cfg.updateOnStart [ "multi-user.target" ];
             serviceConfig = {
               Type = "oneshot";
               # RemainAfterExit so N servers requiring this unit trigger ONE
@@ -768,6 +801,24 @@ in
               # script now downloads in batches of 20 with three passes, so this
               # is a generous safety net rather than the expected duration.
               TimeoutStartSec = "2h";
+
+              # The downloader is network-facing and only owns these trees.
+              # Keep the same UMask as the server units so a file it creates is
+              # readable by the service group, never world-readable.
+              UMask = "0027";
+              PrivateTmp = true;
+              ProtectSystem = "strict";
+              ReadWritePaths = [
+                cfg.dataDir
+                cfg.serverDir
+                cfg.workshopDir
+              ];
+              ProtectHome = true;
+              RestrictAddressFamilies = [
+                "AF_INET"
+                "AF_INET6"
+                "AF_UNIX"
+              ];
             };
           };
         })
@@ -783,14 +834,17 @@ in
             wants = [ "network-online.target" ];
             serviceConfig = {
               Type = "oneshot";
+              # Root only for `systemctl restart` / `try-restart`; the install
+              # itself runs in project-zomboid-install.service as cfg.user.
               User = "root";
-              Environment = [
-                "PZ_DATA_DIR=${cfg.dataDir}"
-                "PZ_SERVER_DIR=${cfg.serverDir}"
-                "PZ_WORKSHOP_DIR=${cfg.workshopDir}"
-              ];
               ExecStart = lib.getExe mkUpdateTimer;
               TimeoutStartSec = "2h";
+
+              NoNewPrivileges = true;
+              PrivateTmp = true;
+              ProtectSystem = "strict";
+              ProtectHome = true;
+              RestrictAddressFamilies = [ "AF_UNIX" ];
             };
           };
         })
@@ -855,7 +909,9 @@ in
       # only valid as a whole option definition, so using it as an operand of `++`
       # fails with "expected a list but found a set".
       networking.firewall.allowedTCPPorts =
-        concatMap (srv: optional (srv.rconPort != 0) srv.rconPort) (lib.attrValues resolved)
+        concatMap (srv: optional (srv.openRconFirewall && srv.rconPort != 0) srv.rconPort) (
+          lib.attrValues resolved
+        )
         ++ lib.optionals cfg.web.openFirewall (map (name: webPort name) (builtins.attrNames webServers));
     })
   ];
