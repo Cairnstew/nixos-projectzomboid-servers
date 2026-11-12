@@ -109,21 +109,47 @@ let
         --config ${manageConfigFile} restore "$@"
     '';
   };
+
+  # Create the backup tree before either unit starts. `systemd.tmpfiles` is not
+  # reliable here: `/mnt/data` is owned by a user while `/mnt/data/backup` is
+  # root-owned, and tmpfiles refuses that ownership transition ("unsafe path
+  # transition"), failing the whole resetup service with exit 65. A tiny root
+  # oneshot with one fixed `install -d` is both simpler and honest about the
+  # one privileged operation the backup path needs.
+  backupDirScript = pkgs.writeShellApplication {
+    name = "project-zomboid-backup-dir";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      install -d -o ${cfg.user} -g ${cfg.group} -m 0770 ${lib.escapeShellArg backupRoot}
+    '';
+  };
 in
 {
   config = lib.mkIf cfg.enable {
-    # The backup tree may live on another disk; create it with the right owner
-    # before either unit writes into it. Group-writable because the dashboard
-    # runs as the web user and the timer as the server user, and both create
-    # archives.
-    systemd.tmpfiles.rules = lib.mkIf anyEnabled [
-      "d '${backupRoot}' 0770 ${cfg.user} ${cfg.group} - -"
-    ];
+    systemd.services.project-zomboid-backup-dir = lib.mkIf anyEnabled {
+      description = "Create the Project Zomboid backup directory";
+      wantedBy = [ "multi-user.target" ];
+      before = [
+        "project-zomboid-manage.service"
+        "project-zomboid-backup.service"
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = lib.getExe backupDirScript;
+      };
+    };
 
     systemd.services.project-zomboid-manage = lib.mkIf manageEnabled {
       description = "Project Zomboid management dashboard";
-      after = [ "network.target" ];
-      wants = [ "network.target" ];
+      after = [
+        "network.target"
+        "project-zomboid-backup-dir.service"
+      ];
+      wants = [
+        "network.target"
+        "project-zomboid-backup-dir.service"
+      ];
       wantedBy = [ "multi-user.target" ];
 
       path = runtimePath;
@@ -166,7 +192,11 @@ in
     # ── Scheduled backups ───────────────────────────────────────────────────
     systemd.services.project-zomboid-backup = lib.mkIf backupEnabled {
       description = "Back up Project Zomboid worlds";
-      after = [ "network.target" ];
+      after = [
+        "network.target"
+        "project-zomboid-backup-dir.service"
+      ];
+      wants = [ "project-zomboid-backup-dir.service" ];
 
       path = runtimePath ++ [ pkgs.python3 ];
 
