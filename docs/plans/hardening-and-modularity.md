@@ -77,7 +77,8 @@ checkbox is a commit-sized change with its own verification step.
   with the option default.
 - [x] Move `unitName`/prefix into `lib/` and use it from the polkit rule,
   `manage.nix` and the Python-facing JSON.
-- [ ] Extract `flake.nix` checks into `checks/*.nix`; keep `flake.nix` thin.
+- [x] Extract `flake.nix` checks into `checks/default.nix`; `flake.nix` is now
+  461 lines. Further per-domain splitting is optional if the file grows.
 - [x] Fix the polkit-vs-sudo documentation drift in `options.nix`,
   `docs/options.md` and `docs/host-recipes.md`.
 - [ ] Split `modules/options.nix` and `modules/services.nix` by concern.

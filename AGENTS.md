@@ -41,6 +41,7 @@ modules/manage/*.py`.
 | `pkgs/` | launcher, standalone runner, client mod fetcher |
 | `scripts/` | Python helpers (merge, maps, prune, Workshop, client mods) |
 | `docs/options.md` | the complete option reference, checked by CI |
+| `checks/default.nix` | every `nix flake check` derivation; takes a context attrset |
 
 ## Conventions
 
@@ -61,9 +62,9 @@ modules/manage/*.py`.
   of the code.
 - **Every option appears in `docs/options.md`.** CI checks names; update the
   prose when behaviour or defaults change.
-- **Add a check.** A new branch (a unit, a flag, a renderer path) needs a
-  `checks.*` entry in `flake.nix` or it can rot. Negative assertions belong in
-  the `failedMessages` helper.
+- **Add a check.** A new branch (a unit, a flag, a renderer path) needs an entry
+  in `checks/default.nix` or it can rot. Negative assertions belong in the
+  `failedMessages` helper there.
 - **Formatting:** `nixfmt-rfc-style`; `deadnix` must be clean; `statix` is
   advisory.
 
