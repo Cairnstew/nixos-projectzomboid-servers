@@ -84,6 +84,12 @@ When a server uses `schedule.start` or `idleStop`, the dashboard shows both:
 - the idle-shutdown timeout, plus a live countdown when the server is currently
   empty.
 
+The next-start time is rendered in the **server's** IANA timezone
+(`config.time.timeZone`), not the browser's, because a schedule written for
+22:00 on the server should not read as 04:00 on a laptop in another zone. The
+raw `OnCalendar` expression is shown beside it, so the intended local time is
+always visible.
+
 The idle countdown comes from the same timestamp file the root idle timer writes
 (`<runDir>/<name>.idle-since`). It is world-readable because it contains only an
 epoch second; the dashboard never needs root to display it. If the file is

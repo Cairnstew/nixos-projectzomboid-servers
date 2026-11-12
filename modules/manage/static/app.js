@@ -90,18 +90,20 @@
     return new Date(epochSeconds * 1000).toLocaleString();
   }
 
-  function fmtWhen(epochSeconds) {
+  function fmtWhen(epochSeconds, timeZone) {
     if (!epochSeconds) return "—";
     return new Date(epochSeconds * 1000).toLocaleString([], {
+      timeZone: timeZone || undefined,
       weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
     });
   }
 
-  function fmtClock(epochSeconds) {
+  function fmtClock(epochSeconds, timeZone) {
     if (!epochSeconds) return "—";
     return new Date(epochSeconds * 1000).toLocaleTimeString([], {
+      timeZone: timeZone || undefined,
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -314,10 +316,11 @@
         startValue.append(
           el("div", { class: "muted small" }, [
             "next ",
-            el("span", { text: fmtWhen(nextStart) }),
+            el("span", { text: fmtWhen(nextStart, status.timeZone) }),
             " (",
             countdownEl(nextStart, ""),
             ")",
+            status.timeZone ? ` · ${status.timeZone}` : null,
           ]),
         );
       } else {
@@ -359,7 +362,7 @@
         idleValue.append(
           el("div", { class: "muted small" }, [
             "empty since ",
-            el("span", { text: fmtClock(idle.emptySince) }),
+            el("span", { text: fmtClock(idle.emptySince, status.timeZone) }),
             " — stops in ",
             countdownEl(idle.stopAt, ""),
           ]),

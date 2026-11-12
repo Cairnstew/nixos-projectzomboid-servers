@@ -304,6 +304,9 @@ def server_status(server: dict, with_players: bool = True) -> dict:
         "rconPort": server.get("rconPort"),
         "console": server.get("consolePath", ""),
         "maxPlayers": server.get("maxPlayers"),
+        # The server's IANA zone, so "next start" is rendered in the timezone
+        # the schedule runs in rather than the browser's.
+        "timeZone": CONFIG.get("timeZone"),
         # One server clock for every countdown on the page. The browser uses it
         # as an offset so a desktop whose clock is a minute off still counts
         # down correctly.

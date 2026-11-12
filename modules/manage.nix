@@ -49,6 +49,10 @@ let
     port = cfg.manage.port;
     refreshSeconds = cfg.manage.refreshSeconds;
     allowActions = cfg.manage.allowActions;
+    # The server's IANA zone, so the dashboard can render "next start" in the
+    # timezone the schedule actually runs in rather than the viewer's. The
+    # browser is often on a different machine (and a different zone).
+    timeZone = config.time.timeZone;
     servers = map (
       name:
       let
