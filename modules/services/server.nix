@@ -392,7 +392,7 @@ let
     name: srv:
     let
       unit = unitName name;
-      state = "${cfg.runDir}/${name}.idle-since";
+      state = "${cfg.runDir}/idle/${name}.idle-since";
       # The password arrives as a systemd credential, expanded by systemd as
       # `%d/<name>`. Nothing here passes a path into the data directory: that
       # directory is `0770` and the `.ini` inside it is `0600`, so a root unit
@@ -492,7 +492,18 @@ in
     # The console fifos live in a tmpfs-backed directory created by tmpfiles,
     # because the .socket unit needs the directory to exist before any service
     # runs.
-    systemd.tmpfiles.rules = [ "d '${cfg.runDir}' 0755 ${cfg.user} ${cfg.group} - -" ];
+    #
+    # The idle marker needs a directory of its OWN, owned by root. The oneshot
+    # runs as root with `CapabilityBoundingSet=""`, which drops CAP_DAC_OVERRIDE,
+    # so inside a directory owned by the service user it is an ordinary "other"
+    # and can neither create nor unlink a file — the marker write failed with
+    # EACCES on the first start after the `.ini` read was fixed (2026-11-12).
+    # The directory stays 0755 so the dashboard, which runs as the web user, can
+    # still read the timestamp.
+    systemd.tmpfiles.rules = [
+      "d '${cfg.runDir}' 0755 ${cfg.user} ${cfg.group} - -"
+      "d '${cfg.runDir}/idle' 0755 root root - -"
+    ];
 
     networking.firewall.allowedTCPPorts = concatMap (
       srv: optional (srv.openRconFirewall && srv.rconPort != 0) srv.rconPort

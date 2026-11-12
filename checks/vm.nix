@@ -157,6 +157,21 @@ pkgs.testers.runNixOSTest {
     idle_log = machine.succeed("journalctl -b -u project-zomboid-demo-idle.service")
     assert "RCON unavailable" in idle_log, idle_log
 
+    # ── The idle marker must be writable by capability-less root ──────────
+    # The marker used to live in the run dir, which tmpfiles owns as the service
+    # user: `User=root` with `CapabilityBoundingSet=""` is an ordinary "other"
+    # there, so the first successful player-count (i.e. the first check that got
+    # past the ini read) died on `open()` with EACCES. It now has its own
+    # root-owned directory, and this probe runs a transient unit with exactly
+    # the oneshot's hardening rather than trusting the tmpfiles rule alone.
+    machine.succeed("test -d /run/project-zomboid-servers/idle")
+    machine.succeed(
+        "systemd-run --quiet --wait --pipe -p User=root -p CapabilityBoundingSet= "
+        "-- /run/current-system/sw/bin/touch /run/project-zomboid-servers/idle/probe"
+    )
+    machine.succeed("test -f /run/project-zomboid-servers/idle/probe")
+    machine.succeed("rm /run/project-zomboid-servers/idle/probe")
+
     # ── A stop during "mod load" must not orphan the JVM ──────────────────
     # The stub never reads its console FIFO, so ExecStop's `save`/`quit` reach
     # nobody — the same wall a real server hits until it has finished loading

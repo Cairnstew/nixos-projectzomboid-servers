@@ -82,7 +82,7 @@ let
         schedule = srv.schedule;
         idleStop = srv.idleStop;
         startTimer = if srv.schedule.start != [ ] then "${pz.unitName name}-start.timer" else null;
-        idleStateFile = "${cfg.runDir}/${name}.idle-since";
+        idleStateFile = "${cfg.runDir}/idle/${name}.idle-since";
         settings = removeAttrs srv.settings pz.secretIniKeys;
         sandbox = removeAttrs srv.sandbox pz.secretIniKeys;
         mods = srv.mods;

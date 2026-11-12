@@ -223,6 +223,22 @@ let
             )
           ))
         ) "alpha idle-stop does not load the RCONPassword secret as a credential")
+        # The marker is written by capability-less root, so it may not live in
+        # the run dir that tmpfiles owns as the service user: there root is an
+        # ordinary "other" and `open()` fails with EACCES. It needs its own
+        # root-owned directory (and that directory must be traversable by the
+        # dashboard, hence 0755 rather than 0700).
+        (lib.optionalString (
+          services ? project-zomboid-alpha-idle
+          && !(lib.hasInfix "--state ${cfg.runDir}/idle/alpha.idle-since" (
+            services.project-zomboid-alpha-idle.serviceConfig.ExecStart or ""
+          ))
+        ) "alpha idle-stop writes its marker outside the root-owned idle directory")
+        (lib.optionalString (
+          !(builtins.any (r: lib.hasInfix "'${cfg.runDir}/idle' 0755 root root" r) (
+            lib.toList (evaluated.config.systemd.tmpfiles.rules or [ ])
+          ))
+        ) "the idle marker directory is not created root-owned 0755")
       ];
 
       # Force `config.assertions`. NixOS evaluates them as part of building

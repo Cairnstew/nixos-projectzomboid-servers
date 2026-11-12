@@ -19,6 +19,16 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **The idle marker is written where the oneshot can actually write it.**
+  Fixing the `.ini` read exposed the next step of the same bug: the marker was
+  created in `${runDir}`, which tmpfiles owns as the *service* user, while the
+  oneshot runs as root with `CapabilityBoundingSet=""` — so without
+  `CAP_DAC_OVERRIDE` root is an ordinary "other" there and `open()` failed with
+  `EACCES` on the first player count that got that far. The unit exited non-zero
+  (loudly, which is how the first real start surfaced it). Markers now live in a
+  root-owned `${runDir}/idle`, kept `0755` so the dashboard can still read the
+  timestamp.
+
 - **`idleStop` actually stops an idle server now.** The idle oneshot ran as
   `root` with `CapabilityBoundingSet=""`, which drops `CAP_DAC_OVERRIDE` — so it
   was an ordinary "other" for the `0770` data directory and the `0600` rendered
