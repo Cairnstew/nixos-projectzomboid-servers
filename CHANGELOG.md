@@ -13,7 +13,9 @@ All notable changes to this project. Format follows
   `backup`) with the shared submodule types in `types.nix`; `modules/services/`
   holds the units with the shared server/port resolution in `context.nix`.
   `modules/options.nix` and `modules/services.nix` are thin import lists, so
-  the module entry point and every public option are unchanged.
+  the module entry point and every public option are unchanged. The README no
+  longer repeats the option tables; it points at `docs/options.md`, which is the
+  completeness-checked reference.
 
 ### Fixed
 

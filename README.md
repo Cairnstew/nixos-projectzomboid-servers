@@ -236,51 +236,26 @@ server.
 Namespace: `services.project-zomboid-servers`. **Full reference, with types and
 defaults: [docs/options.md](docs/options.md).** That page is completeness-checked
 against the declarations under `modules/options/` in CI, so it cannot fall behind.
+Most configurations only need the handful of options below.
 
-Most-used options:
+At the top level, `enable`, `dataDir`, `modpacks` and `servers` are the minimum.
+Then, as needed:
 
-| Option | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `enable` | bool | `false` | Master switch. |
-| `dataDir` | path | `/var/lib/project-zomboid` | Per-server homes live here. |
-| `serverDir` | path | `<dataDir>/server` | Shared SteamCMD install. One per host. |
-| `workshopDir` | path | `<serverDir>/steamapps/workshop/content/108600` | **Dedicated** Workshop content; must be absolute and have that suffix. |
-| `package` | package \| null | `null` | Filled in by the flake. Asserted non-null. |
-| `modpacks` | attrsOf submodule | `{}` | Map the catalogue in. |
-| `servers` | attrsOf submodule | `{}` | One service + console socket per entry. |
-| `steamLogin` | str \| null | `null` | Steam account for Workshop items anonymous cannot fetch (e.g. Brita's Armor Pack). Token cached under `dataDir`. |
-| `prune` | bool | `false` | Remove mods no server declares any more — the clean pack switch. Off because it deletes from the shared install. |
-| `failOnMissingMods` | bool | `true` | Refuse to finish the install when a Workshop item can't be downloaded. `false` = log-and-skip so servers boot without it. |
-| `web` | submodule | disabled | ttyd consoles on loopback. |
-| `manage` | submodule | disabled | `pz-manage` dashboard + JSON API. See [docs/manage.md](docs/manage.md). |
-| `backup` | submodule | disabled | Scheduled `tar --zstd` archives + `project-zomboid-restore`. |
-| `managementSystem` | submodule | `{ systemd-socket.enable = true; }` | Exactly one of socket / tmux. |
+- **`steamLogin`** — a Steam account for Workshop items anonymous cannot fetch.
+- **`prune` / `failOnMissingMods`** — clean the shared install, or tolerate a
+  failed download so servers still boot.
+- **`web` / `manage` / `backup`** — the optional ttyd consoles, dashboard and
+  scheduled archives.
+- **`managementSystem`** — the socket backend (default) or tmux.
 
-Per server:
+Per server, the options fall into four groups:
 
-| Option | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `name` / `description` | str | attr name | `name` drives the `.ini`, lua files and save folder. |
-| `modpack` | str \| null | `null` | Inline `workshopMods`/`mods` are **appended** to the pack's. |
-| `workshopMods` / `mods` | list | `[]` | Workshop ids vs local mod folder names — not interchangeable. |
-| `localMods` | attrsOf path | `{}` | Private mods: `folder-name = directory`, symlinked into `Zomboid/mods` and added to `Mods=`. |
-| `map` | str \| null | `null` | `null` = derive from installed mods. Semicolon separated. |
-| `baseMap` | str | `Muldraugh, KY` | The vanilla map; always ordered **last**. |
-| `mapOrder` | submodule | `{}` | `enable`, `priority`, `strict`, `dedupe`. |
-| `spawn.points` / `spawn.regions` | list | `[]` | Rendered to `_spawnpoints.lua` / `_spawnregions.lua`. |
-| `defaultPort` / `udpPort` | port | `16261` / `16262` | PZ binds **two** UDP ports; both must be unique. |
-| `rconPort` | port | `0` | `0` = RCON off. |
-| `openRconFirewall` | bool | `false` | Open `rconPort` to the network. Off: the dashboard reads RCON over loopback. |
-| `settings` / `sandbox` | attrs | `{}` | Any PZ key. **Never a secret** here. |
-| `secretFiles` | attrsOf path | `{}` | `Key = path`. The only way to set a secret. |
-| `passwordFile` | path \| null | `null` | Sugar for `secretFiles.Password`. Wins if both set. |
-| `adminAccount` | submodule \| null | `null` | Creates the Build 42 admin login. |
-| `whitelist` / `admins` | listOf str | `[]` | **Build 41 only.** |
-| `extraArgs` | listOf str | `[]` | Appended to the command line. No credentials. |
-| `upnp` | bool | `false` | PZ defaults this **true**. |
-| `selfManagedMods` | bool | `true` | **Build 41 only** — stop PZ rewriting `Mods=`. Not a Build 42 key, so nothing is rendered. |
-| `jvmOpts` | str | `-Xmx4G -Xms2G` | Injected **ahead of** the vendor launcher. |
-| `hardware` | submodule | `{}` | cgroup caps; set `memoryMax` above your heap. |
+- **What to load** — `modpack`, or `workshopMods` / `mods` / `localMods` inline.
+- **Where it listens** — `defaultPort` and `udpPort` (both required and unique),
+  plus `rconPort` (`0` = off) and `openRconFirewall`.
+- **How it plays** — `settings`, `sandbox`, `spawn`, and `map` / `mapOrder`.
+- **How it runs** — `jvmOpts`, `hardware`, `extraArgs`, and the secret options
+  `secretFiles` / `passwordFile` / `adminAccount`.
 
 ### Two defaults that differ from PZ
 

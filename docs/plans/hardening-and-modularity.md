@@ -85,7 +85,9 @@ checkbox is a commit-sized change with its own verification step.
   (`modules/options/` and `modules/services/`, with the shared types/context in
   `types.nix` and `context.nix`; both top-level files are thin import lists).
 - [x] Delete the dead `pkgs/project-zomboid-server/derivation.nix`.
-- [ ] Reduce `README.md` option-table duplication.
+- [x] Reduce `README.md` option-table duplication: the README now states the
+  groups to look at and links to the authoritative `docs/options.md`, instead of
+  repeating every type and default.
 - [x] Add a VM smoke test with a stub `package` to exercise systemd hardening
   (`checks/vm.nix`; boots a real system, starts the game unit against the stub,
   and asserts the hardening plus the prep-script write path).
