@@ -592,7 +592,21 @@ let
         builtins.isAttrs m
         && (m ? id)
         && builtins.isString m.id
-        && (!(m ? title) || builtins.isString m.title);
+        && builtins.match "[0-9]+" m.id != null
+        && (!(m ? title) || builtins.isString m.title || m.title == null);
+      workshopIds =
+        if builtins.isList pack.workshopMods then
+          map (m: if builtins.isAttrs m && m ? id then m.id else "") pack.workshopMods
+        else
+          [ ];
+      duplicateWorkshopIds = lib.unique (
+        builtins.filter (id: builtins.length (builtins.filter (x: x == id) workshopIds) > 1) workshopIds
+      );
+      modIds = if builtins.isList pack.mods then pack.mods else [ ];
+      duplicateModIds = lib.unique (
+        builtins.filter (id: builtins.length (builtins.filter (x: x == id) modIds) > 1) modIds
+      );
+      namespaces = pack.sandboxNamespaces or [ ];
     in
     if missing != [ ] then
       "is missing required key(s): ${lib.concatStringsSep ", " missing}"
@@ -600,6 +614,21 @@ let
       "workshopMods must be a list"
     else if !(builtins.all isMod pack.workshopMods) then
       "workshopMods must be a list of { id = \"<digits>\"; title = ...; }"
+    else if !(builtins.isList pack.mods) || !(builtins.all builtins.isString pack.mods) then
+      "mods must be a list of mod.info id= strings"
+    else if duplicateWorkshopIds != [ ] then
+      "lists the same Workshop id twice: ${lib.concatStringsSep ", " duplicateWorkshopIds}"
+    else if duplicateModIds != [ ] then
+      "lists the same Mod ID twice: ${lib.concatStringsSep ", " duplicateModIds}"
+    else if pack.workshopMods != [ ] && pack.mods == [ ] then
+      ''
+        lists ${toString (builtins.length pack.workshopMods)} Workshop item(s) but no
+        Mod IDs. `WorkshopItems=` only downloads; `Mods=` is what loads, so
+        this pack would install its mods and boot with none loaded. Add each
+        item's `mod.info` id= to `mods` (one Workshop item can expose several).
+      ''
+    else if !(builtins.isList namespaces) || !(builtins.all builtins.isString namespaces) then
+      "sandboxNamespaces must be a list of mod namespace strings"
     else if !(allScalar pack.defaultSettings) || !(allScalar pack.defaultSandbox) then
       "defaultSettings and defaultSandbox must map to bool/int/float/str"
     else
@@ -654,6 +683,285 @@ in
     else
       pkgs.runCommand "pz-modpack-catalogue-check" { } ''
         echo "modpack catalogue ok: ${lib.concatStringsSep ", " modpackNames}"
+        touch "$out"
+      '';
+
+  # ── pz-pack-doctor: declaration vs installed Workshop content ───────
+  # The catalogue check above sees only the declaration. A Workshop item's
+  # internal Mod IDs and its require=/incompatible= fields live in its
+  # `mod.info`, i.e. they exist only after steamcmd has downloaded it. These
+  # fixtures are the failure modes that shipped or nearly did:
+  #   - an item declared but not installed
+  #   - an item installed with no mod.info
+  #   - a Mod ID declared that nothing provides (the old vanilla-plus bug)
+  #   - a required mod that is installed but not loaded
+  #   - an incompatible pair both enabled
+  #   - a Mods= order that contradicts loadModAfter/require
+  pack-doctor =
+    let
+      fixture = pkgs.runCommand "pz-pack-doctor-fixture" { } ''
+        mkdir -p $out/111/common/media/lua/client
+        cat > $out/111/common/mod.info <<'EOF'
+        name=Alpha
+        id=Alpha
+        require=Beta
+        EOF
+        touch $out/111/common/media/lua/client/alpha.lua
+
+        mkdir -p $out/222/42/media/lua/server $out/222/common
+        cat > $out/222/42/mod.info <<'EOF'
+        name=Beta
+        id=Beta
+        EOF
+        # The same mod also declares a `common/mod.info`; that is ONE mod in the
+        # B42 layout, not a duplicate id.
+        cat > $out/222/common/mod.info <<'EOF'
+        name=Beta
+        id=Beta
+        EOF
+        touch $out/222/42/media/lua/server/beta.lua
+
+        mkdir -p $out/333/42
+        cat > $out/333/42/mod.info <<'EOF'
+        name=Gamma
+        id=Gamma
+        incompatible=Beta
+        EOF
+
+        mkdir -p $out/555/42
+        cat > $out/555/42/mod.info <<'EOF'
+        name=Delta
+        id=Delta
+        loadModAfter=Beta
+        EOF
+
+        # A different mod folder that re-uses an existing id: a real collision.
+        mkdir -p $out/777/42
+        cat > $out/777/42/mod.info <<'EOF'
+        name=Alpha Again
+        id=Alpha
+        EOF
+
+        # A directory that is installed but is not a mod at all.
+        mkdir -p $out/444/readme
+        touch $out/444/readme/README.txt
+      '';
+      catalogue = pkgs.writeText "pz-pack-doctor-packs.json" (
+        builtins.toJSON {
+          good = {
+            description = "clean";
+            workshopMods = [
+              {
+                id = "111";
+                title = "Alpha";
+              }
+              {
+                id = "222";
+                title = "Beta";
+              }
+            ];
+            mods = [
+              "Beta"
+              "Alpha"
+            ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          missing-modid = {
+            description = "declares a Mod ID nothing provides";
+            workshopMods = [
+              {
+                id = "111";
+                title = "Alpha";
+              }
+              {
+                id = "222";
+                title = "Beta";
+              }
+            ];
+            mods = [
+              "Alpha"
+              "Nope"
+            ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          empty-mods = {
+            description = "items without Mod IDs";
+            workshopMods = [
+              {
+                id = "111";
+                title = "Alpha";
+              }
+            ];
+            mods = [ ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          dead-item = {
+            description = "an item that is not installed";
+            workshopMods = [
+              {
+                id = "111";
+                title = "Alpha";
+              }
+              {
+                id = "999";
+                title = "Missing";
+              }
+            ];
+            mods = [ "Alpha" ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          no-modinfo = {
+            description = "an installed item with no mod.info";
+            workshopMods = [
+              {
+                id = "444";
+                title = "Not a mod";
+              }
+            ];
+            mods = [ "Whatever" ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          incompatible = {
+            description = "an incompatible pair both enabled";
+            workshopMods = [
+              {
+                id = "222";
+                title = "Beta";
+              }
+              {
+                id = "333";
+                title = "Gamma";
+              }
+            ];
+            mods = [
+              "Beta"
+              "Gamma"
+            ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          warn = {
+            description = "a requirement outside the pack";
+            workshopMods = [
+              {
+                id = "111";
+                title = "Alpha";
+              }
+            ];
+            mods = [ "Alpha" ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          order = {
+            description = "Mods= contradicts loadModAfter";
+            workshopMods = [
+              {
+                id = "222";
+                title = "Beta";
+              }
+              {
+                id = "555";
+                title = "Delta";
+              }
+            ];
+            mods = [
+              "Delta"
+              "Beta"
+            ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          duplicate = {
+            description = "two mod folders provide the same Mod ID";
+            workshopMods = [
+              {
+                id = "111";
+                title = "Alpha";
+              }
+              {
+                id = "777";
+                title = "Alpha Again";
+              }
+            ];
+            mods = [ "Alpha" ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+        }
+      );
+    in
+    pkgs.runCommand "pz-pack-doctor-check"
+      {
+        nativeBuildInputs = [
+          pkgs.python3
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        DOCTOR = ../scripts/pz_pack_doctor.py;
+        PYTHONPATH = "${../scripts}";
+        CATALOGUE = catalogue;
+        WORKSHOP = fixture;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+        doctor() {
+          python3 "$DOCTOR" --catalogue "$CATALOGUE" --workshop-root "$WORKSHOP" "$@"
+        }
+
+        # A clean pack passes, and the Lua classification is real: Alpha ships
+        # client lua, Beta server lua.
+        doctor --pack good --json > good.json || fail "the clean pack failed"
+        python3 - <<'PY'
+        import json, sys
+        d = json.load(open("good.json"))
+        assert d["ok"], d
+        assert d["errors"] == [], d
+        assert d["warnings"] == [], d["warnings"]
+        assert d["lua_classes"]["client-only"] == 1, d["lua_classes"]
+        assert d["lua_classes"]["server-only"] == 1, d["lua_classes"]
+        PY
+
+        # The vanilla-plus class: Workshop items but no Mod IDs.
+        doctor --pack empty-mods > /dev/null 2> err && fail "an item with no Mod IDs passed"
+        grep -q "no Mod IDs" err || fail "the empty-mods failure did not name the cause"
+
+        # A declared Mod ID nothing provides.
+        doctor --pack missing-modid > /dev/null 2> err && fail "an unprovided Mod ID passed"
+        grep -q "Nope" err || fail "the failure did not name the missing Mod ID"
+
+        # A declared item that is not installed, and one with no mod.info.
+        doctor --pack dead-item > /dev/null 2> err && fail "a missing item passed"
+        grep -q "999" err || fail "the failure did not name the missing item"
+        doctor --pack no-modinfo > /dev/null 2> err && fail "an item with no mod.info passed"
+        grep -q "no mod.info" err || fail "the failure did not name the missing mod.info"
+
+        # Incompatible mods both enabled is an error, not a warning.
+        doctor --pack incompatible > /dev/null 2> err && fail "an incompatible pair passed"
+        grep -q "incompatible" err || fail "the failure did not name the incompatibility"
+
+        # A requirement outside the pack is a warning by default and a failure
+        # under --strict, so a pack can be ratcheted up once it is clean.
+        doctor --pack warn > /dev/null 2> err || fail "a warning-only pack failed without --strict"
+        grep -q "require" err || fail "the warning did not name the requirement"
+        doctor --pack warn --strict > /dev/null 2> err && fail "a warning passed under --strict"
+
+        # A Mods= order that contradicts loadModAfter is reported rather than
+        # silently relying on PZ's own normalisation.
+        doctor --pack order > /dev/null 2> err || fail "an order warning failed the run"
+        grep -q "loadModAfter" err || fail "the order warning was not reported"
+
+        # Two DIFFERENT mod folders providing the same id is a real collision,
+        # unlike `common/mod.info` + `42/mod.info` in one folder (which the
+        # clean pack above exercises and must not report).
+        doctor --pack duplicate > /dev/null 2> err && fail "a duplicate Mod ID passed"
+        grep -q "provided by two installed mods" err || fail "the duplicate id was not reported"
+
+        echo "pack doctor ok: clean pack passes (including B42 common/version layout); empty mods, unprovided ids, missing items, missing mod.info, incompatible pairs and duplicate ids fail; warnings and load-order drift are reported"
         touch "$out"
       '';
 
@@ -1186,7 +1494,7 @@ in
         spec = importlib.util.spec_from_file_location("pz_client_mods", client)
         pcm = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(pcm)
-        assert pcm.safe_item_id("2625441155")
+        assert pcm.safe_item_id("2847184718")
         assert not pcm.safe_item_id("../../etc")
         assert pcm.safe_mod_id("BritasArmorPack")
         assert not pcm.safe_mod_id("../../.config/autostart")
@@ -1665,6 +1973,11 @@ in
   prep-roundtrip =
     let
       srv = "roundtrip";
+      # Derive the item id from the pack instead of hard-coding one: the
+      # catalogue is data and may legitimately change, and a check that pins a
+      # stale id fails for the wrong reason (it did when vanilla-plus moved to
+      # a verified Build 42 set).
+      firstWorkshopId = (builtins.head self.modpacks.vanilla-plus.workshopMods).id;
       server = pz-lib.resolveServer self.modpacks srv (
         (serverDefaults srv)
         // {
@@ -1720,8 +2033,8 @@ in
 
         # Fake the shared install so the symlink branch has something to
         # link to.
-        mkdir -p "$server_root/steamapps/workshop/content/108600/2625441155/mods"
-        touch "$server_root/steamapps/workshop/content/108600/2625441155/mods/.keep"
+        mkdir -p "$server_root/steamapps/workshop/content/108600/${firstWorkshopId}/mods"
+        touch "$server_root/steamapps/workshop/content/108600/${firstWorkshopId}/mods/.keep"
 
         # A stale symlink for a mod that is NO LONGER downloaded. The
         # prep script must unlink it rather than leave a dangling entry
@@ -1761,7 +2074,7 @@ in
         grep -qx 'Map=Rosewood, OR' "$ini" || fail "a Map value containing a comma and a space was mangled"
         grep -qx 'UDPPort=16262' "$ini" || fail "the Nix-rendered base config did not land (no UDPPort)"
         grep -qx 'PVP=true' "$ini" || fail "a server-level setting did not land, or a bool rendered as True"
-        grep -q '^WorkshopItems=.*2625441155' "$ini" || fail "the modpack's Workshop items are not in WorkshopItems"
+        grep -q "^WorkshopItems=.*${firstWorkshopId}" "$ini" || fail "the modpack's Workshop items are not in WorkshopItems"
 
         # ── SandboxVars ──────────────────────────────────────────────
         [ -f "$sandbox" ] || fail "no _SandboxVars.lua written"
@@ -1772,7 +2085,7 @@ in
         grep -qE '^ +Zombies = [0-9]+,?$' "$sandbox" || fail "the modpack's sandbox vars did not land"
 
         # ── Workshop symlinks ───────────────────────────────────────
-        link="$data/$srv/Zomboid/Workshop/content/108600/2625441155"
+        link="$data/$srv/Zomboid/Workshop/content/108600/${firstWorkshopId}"
         [ -L "$link" ] || fail "no symlink for a downloaded Workshop item"
         [ -e "$link" ] || fail "the Workshop symlink dangles"
         # prune is on: a symlink for an undownloaded UNDECLARED mod
@@ -1820,6 +2133,7 @@ in
           workshopItems = [ ];
         };
       sandbox = settings: pz-lib.renderSandbox { inherit settings; };
+      sandboxNs = namespaces: settings: pz-lib.renderSandbox { inherit settings namespaces; };
       # The resolver is where a USER-supplied reserved key is caught.
       # (The renderer catches pack defaults and direct callers for the
       # keys it does not own; `UPnP` is rendered by the module itself
@@ -1856,6 +2170,26 @@ in
           };
         }
       );
+      modNamespaceFile = pkgs.writeText "guard-mod-namespace.lua" (
+        pz-lib.renderSandbox {
+          settings = {
+            "Bandits.Enabled" = true;
+            "Bandits.SpawnRate" = 0.25;
+          };
+          namespaces = [ "Bandits" ];
+        }
+      );
+      # The same thing through the RESOLVER and the prep helper, which is the
+      # path a real server takes. It proves the option actually reaches
+      # `renderSandbox` rather than only working for a direct caller.
+      modNamespaceServer = resolvedWith {
+        sandboxNamespaces = [ "Bandits" ];
+        sandbox."Bandits.Enabled" = true;
+      };
+      modNamespacePrep = pz-prepare.mkSandboxFile {
+        server = modNamespaceServer;
+        name = "guard-mod-namespace-prep-SandboxVars.lua";
+      };
     in
     pkgs.runCommand "pz-render-guards-check"
       {
@@ -1865,6 +2199,8 @@ in
         ];
         LUA_FILE = luaFile;
         NESTED_FILE = nestedFile;
+        MOD_NAMESPACE_FILE = modNamespaceFile;
+        MOD_NAMESPACE_PREP = modNamespacePrep;
       }
       ''
         fail() { echo "FAIL: $1" >&2; exit 1; }
@@ -2006,6 +2342,57 @@ in
           || fail "a dotted sandbox key did not render as a nested table"
         grep -qE 'PopulationStartMultiplier = 1\.5' "$NESTED_FILE" \
           || fail "the nested value did not land in ZombieConfig"
+
+        # A MOD's sandbox namespace is only accepted when declared, and it must
+        # still be a Lua identifier rather than a vanilla table name. Declaring
+        # it is what makes `sandbox."Bandits.Enabled"` representable at all;
+        # leaving it out is the typo guard (PZ would ignore the option).
+        ${expectFail "an undeclared mod sandbox namespace was accepted" (sandbox {
+          "Bandits.Enabled" = true;
+        })}
+        ${expectFail "a mod namespace reused the vanilla ZombieLore table" (
+          pz-lib.renderSandbox {
+            settings = {
+              "ZombieLore.SomethingNew" = true;
+            };
+            namespaces = [ "ZombieLore" ];
+          }
+        )}
+        ${expectFail "a namespace that is not a Lua identifier was accepted" (
+          pz-lib.renderSandbox {
+            settings = {
+              "Bad Name.Enabled" = true;
+            };
+            namespaces = [ "Bad Name" ];
+          }
+        )}
+        ${expectFail "a flat key equal to a declared namespace was accepted" (
+          sandboxNs [ "Bandits" ] {
+            Bandits = true;
+          }
+        )}
+        ${expectPass "a declared mod namespace was rejected" (
+          sandboxNs [ "Bandits" ] {
+            "Bandits.Enabled" = true;
+          }
+        )}
+        grep -qF '    Bandits = {' "$MOD_NAMESPACE_FILE" \
+          || fail "a declared mod namespace did not render as a nested table"
+        grep -qE 'Enabled = true' "$MOD_NAMESPACE_FILE" \
+          || fail "the mod option did not land in its namespace"
+        grep -qE 'SpawnRate = 0\.25' "$MOD_NAMESPACE_FILE" \
+          || fail "a second mod option did not land in its namespace"
+
+        # The resolver and prep helper must carry the namespace through; a
+        # renderer-only fix that the module never calls would pass above and
+        # still leave a real server unable to set the option.
+        ${expectTrue "the resolver dropped sandboxNamespaces" (
+          modNamespaceServer.sandboxNamespaces == [ "Bandits" ]
+        )}
+        grep -qF '    Bandits = {' "$MOD_NAMESPACE_PREP" \
+          || fail "the prep helper did not render the mod namespace"
+        grep -qE 'Enabled = true' "$MOD_NAMESPACE_PREP" \
+          || fail "the prep helper dropped the mod option"
 
         # The version header must be present: without it PZ treats the
         # file as version 0 and migrates values (e.g. DayLength 8 -> 14).
@@ -2217,7 +2604,10 @@ in
         name = "${srv}.ini";
       };
       sandboxFile = pkgs.writeText "${srv}_SandboxVars.lua" (
-        pz-lib.renderSandbox { settings = server.sandbox; }
+        pz-lib.renderSandbox {
+          settings = server.sandbox;
+          namespaces = server.sandboxNamespaces;
+        }
       );
     in
     pkgs.runCommand "pz-secrets-not-in-store-check"

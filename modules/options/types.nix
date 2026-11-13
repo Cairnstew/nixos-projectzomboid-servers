@@ -91,7 +91,7 @@ rec {
     options = {
       id = mkOption {
         type = types.str;
-        example = "2625441155";
+        example = "2847184718";
         description = ''
           Steam Workshop item id (numeric string). Downloaded into
           <literal>steamapps/workshop/content/108600/&lt;id&gt;</literal> of the
@@ -175,7 +175,7 @@ rec {
         type = types.listOf types.str;
         default = [ ];
         example = [
-          "2705410157"
+          "2840889213"
         ];
         description = ''
           Mod ids that win duplicate-map collisions and order first, in the order

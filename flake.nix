@@ -350,6 +350,31 @@
                 }
               );
             };
+
+            # Post-download verification of a pack. The catalogue check sees the
+            # declaration only; a Workshop item's internal Mod IDs and its
+            # require=/incompatible= fields exist only in its mod.info, i.e.
+            # after steamcmd has run. This is the tool that catches
+            # "downloaded six items, loaded none" and a dependency that the pack
+            # forgot. It reads; it never writes or executes mod content.
+            pz-pack-doctor = {
+              type = "app";
+              program = lib.getExe (
+                pkgs.writeShellApplication {
+                  name = "pz-pack-doctor";
+                  runtimeInputs = [ pkgs.python3 ];
+                  text = ''
+                    export PZ_MODPACKS_JSON=${pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks)}
+                    # `pz_pack_doctor.py` imports the mod-root/id helpers from
+                    # `pz_client_mods.py` so there is one implementation. Both
+                    # scripts live in ${./scripts}; PYTHONPATH is how the
+                    # import resolves from a store path.
+                    export PYTHONPATH=${./scripts}''${PYTHONPATH:+:$PYTHONPATH}
+                    exec python3 ${./scripts/pz_pack_doctor.py} "$@"
+                  '';
+                }
+              );
+            };
           }
           # One app per catalogue pack: `nix run .#pz-vanilla-plus -- <name>`.
           #

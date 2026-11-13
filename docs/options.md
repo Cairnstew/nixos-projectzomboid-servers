@@ -267,11 +267,12 @@ independently of your configuration.
 | --- | --- | --- | --- |
 | `description` | str | `""` | Human-readable summary. |
 | `workshopMods` | listOf submodule | `[]` | Steam Workshop items. Order is preserved and becomes `WorkshopItems=`. |
-| `workshopMods.*.id` | str | — | Numeric id **as a string**, e.g. `"2625441155"`. |
+| `workshopMods.*.id` | str | — | Numeric id **as a string**, e.g. `"2847184718"`. |
 | `workshopMods.*.title` | str \| null | `null` | Cosmetic; for humans reading the pack. |
-| `mods` | listOf str | `[]` | Local mod **folder** names — the `id=` values from each mod's `mod.info`, *not* Workshop ids. |
+| `mods` | listOf str | `[]` | Local mod **folder** names — the `id=` values from each mod's `mod.info`, *not* Workshop ids. A pack with `workshopMods` must list at least one, or `Mods=` is empty and nothing loads. |
 | `defaultSettings` | attrs | `{}` | `.ini` keys any server using this pack inherits. A server's own `settings` wins. |
 | `defaultSandbox` | attrs | `{}` | Same, for SandboxVars. |
+| `sandboxNamespaces` | listOf str | `[]` | Mod-defined SandboxVars groups a pack's mods ship (e.g. `Bandits`). Added to the server's own list. |
 
 Two separators matter here, and mixing them up is a reliable source of silent
 misconfiguration:
@@ -310,6 +311,7 @@ a matching `.socket` for its console.
 | `maxPlayers` | int (1–254) | `32` | Excludes admins. PZ warns above 32; the 42.21 build caps it at 254. |
 | `settings` | attrs | `{}` | Free-form `.ini` keys. **Never a secret**; module-owned keys are rejected — see [reserved keys](#reserved-keys-in-settings). |
 | `sandbox` | attrs | `{}` | SandboxVars. Nested B42 tables use dotted keys — see [nested keys](#nested-sandboxvars-keys). **Never a secret.** |
+| `sandboxNamespaces` | listOf str | `[]` | Mod-defined SandboxVars groups, so `sandbox."Bandits.Enabled"` can be set. See [mod sandbox options](#mod-sandbox-options). |
 | `open` | bool \| null | `null` | `null` = true. `false` requires a populated `whitelist`. |
 | `whitelist` | listOf str | `[]` | **Build 41 only.** |
 | `admins` | listOf str | `[]` | **Build 41 only.** Grants in-game rights; never creates the login. |
@@ -481,6 +483,45 @@ The renderer always writes the version header (`VERSION = 6` for 42.21). It is
 **not** optional: a file without it is read as version 0, and PZ then runs its
 old-build value migrations — `DayLength = 8` (5 hours) becomes the B41-era index
 14 (11 hours). Set `sandbox.VERSION` only if you are targeting an older build.
+
+### Mod sandbox options
+
+A mod can register its own sandbox options by shipping
+`media/sandbox-options.txt`:
+
+```text
+option Bandits.Enabled
+{
+    type = boolean,
+    default = true,
+}
+```
+
+PZ reads the value as `SandboxVars.Bandits.Enabled`, so the group must exist as
+a nested Lua table. The module only knows the vanilla B42 groups, so a mod's
+namespace has to be declared before its options can be written — otherwise the
+typo guard rejects it (which is what stops an undeclared table from becoming a
+silent no-op):
+
+```nix
+sandboxNamespaces = [ "Bandits" ];
+
+sandbox = {
+  "Bandits.Enabled" = true;
+  "Bandits.SpawnRate" = 0.25;
+};
+```
+
+A pack may declare the same list in `modpacks.<name>.sandboxNamespaces`; the
+server's list is added to it. Namespaces must be Lua identifiers and may not
+reuse a vanilla table. The option names *inside* a namespace belong to the mod,
+so they are not checked against a list — the mod's own
+`sandbox-options.txt` is the authority.
+
+Note the limit: many sandbox options are baked into a save at world creation.
+Setting them declaratively works because the module rewrites the file on every
+start, but an existing world may not pick up every change. Mods that keep
+settings in their own cfg/ModData have no sandbox channel at all.
 
 ### `softReset`
 

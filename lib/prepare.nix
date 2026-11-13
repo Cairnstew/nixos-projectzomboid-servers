@@ -94,7 +94,12 @@ rec {
       server,
       name ? "${server.serverName}_SandboxVars.lua",
     }:
-    pkgs.writeText name (pz.renderSandbox { settings = server.sandbox; });
+    pkgs.writeText name (
+      pz.renderSandbox {
+        settings = server.sandbox;
+        namespaces = server.sandboxNamespaces or [ ];
+      }
+    );
 
   # ── Per-server start-prep ──────────────────────────────────────────────────
   # `server` is a `pz.resolveServer` result.

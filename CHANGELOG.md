@@ -6,6 +6,24 @@ All notable changes to this project. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Mod sandbox options are now declarative.** `servers.<name>.sandboxNamespaces`
+  (and the same key in a pack) declares a mod's SandboxVars group, so
+  `sandbox."Bandits.Enabled"` renders the nested table a mod's
+  `media/sandbox-options.txt` expects. Undeclared namespaces still fail
+  evaluation, which is what keeps a typo from becoming PZ's silent no-op.
+
+- **`pz-pack-doctor` verifies a pack against what steamcmd installed.** It maps
+  each Workshop item to its `mod.info` id(s) and reports a missing item, an item
+  with no `mod.info`, a `Mods=` entry nothing provides, an item with nothing
+  loaded, an `incompatible=` pair, and a `Mods=` order that contradicts
+  `loadModAfter`/`require`. Warnings are advisory unless `--strict`.
+
+- **The catalogue check catches the "download but load nothing" class.** A pack
+  with `workshopMods` and an empty `mods` now fails `nix flake check`; duplicate
+  Workshop ids and duplicate Mod IDs are rejected too.
+
 ### Changed
 
 - **Options and unit builders are split by concern.** `modules/options/` holds
@@ -18,6 +36,14 @@ All notable changes to this project. Format follows
   completeness-checked reference.
 
 ### Fixed
+
+- **`vanilla-plus` actually loads its mods.** The pack listed six Workshop items
+  and zero Mod IDs, so the install downloaded six items and `Mods=` was empty:
+  the server booted vanilla. Some of those ids were also not PZ mods at all (one
+  resolves to a Steam screenshot), and the rest were unverified Build 41-era
+  content. The pack is now a small, verified Build 42 QoL set with each item's
+  `mod.info` id paired to its Workshop id — the pairing is copied from
+  `viewpoint.nix`, where the same items already run on 42.22.
 
 - **The idle marker is written where the oneshot can actually write it.**
   Fixing the `.ini` read exposed the next step of the same bug: the marker was

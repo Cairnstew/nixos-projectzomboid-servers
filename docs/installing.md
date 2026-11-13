@@ -232,7 +232,7 @@ $ nix run .#pz-vanilla-plus -- --data-dir ./d --no-install --print-config myserv
 == ./d/myserver/Zomboid/Server/myserver.ini ==
 DefaultPort=16261
 Map=Muldraugh, KY
-WorkshopItems=2625441155;2625840413;2679583791;2634209060;2705410157;2705410286
+WorkshopItems=2847184718;3789660055;3494474677;3775659041;3786647452;3781533687
 DoLuaChecksum=false
 PVP=true
 …

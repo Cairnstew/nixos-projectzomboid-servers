@@ -364,6 +364,40 @@ in
                 '';
               };
 
+              sandboxNamespaces = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                example = [
+                  "Bandits"
+                  "TrueActions"
+                ];
+                description = ''
+                  Mod-defined SandboxVars groups, so their options can be set
+                  through <option>sandbox</option>.
+
+                  A mod ships <filename>media/sandbox-options.txt</filename>
+                  declaring <literal>option Bandits.Enabled</literal>; PZ then
+                  reads <literal>SandboxVars.Bandits.Enabled</literal>. Declare
+                  the first part here and write the option with a dotted key:
+
+                  <programlisting>
+                    sandboxNamespaces = [ "Bandits" ];
+                    sandbox."Bandits.Enabled" = true;
+                  </programlisting>
+
+                  Each namespace is rendered as a nested Lua table, so it must be
+                  a Lua identifier and must not reuse a vanilla B42 table
+                  (<literal>ZombieLore</literal>, <literal>ZombieConfig</literal>,
+                  <literal>MultiplierConfig</literal>, <literal>Map</literal>,
+                  <literal>Basement</literal>). Undeclared namespaces are still
+                  rejected, which is what keeps a typo from becoming a silent
+                  no-op; the option names inside a namespace are the mod's, so they
+                  are not checked against a list.
+
+                  A pack may declare the same list; the server's is added to it.
+                '';
+              };
+
               # ── Access ──────────────────────────────────────────────────────
               open = mkOption {
                 type = types.nullOr types.bool;

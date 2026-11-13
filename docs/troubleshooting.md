@@ -230,7 +230,7 @@ nix run .#pz-dedicated-server -- --list-maps
 
    ```nix
    mapOrder = {
-     priority = [ "2705410157" ];   # this mod wins, and orders first
+     priority = [ "2840889213" ];   # this mod wins, and orders first
      strict = true;                 # refuse to start on any future clash
    };
    ```

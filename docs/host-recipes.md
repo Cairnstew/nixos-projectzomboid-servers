@@ -237,8 +237,8 @@ your own repo, or anywhere else, and share it independently of the module.
     # Steam Workshop items. Order is preserved and becomes WorkshopItems=.
     # The id is a STRING, not a number.
     workshopMods = [
-      { id = "2625441155"; title = "Chat"; }
-      { id = "2705410157"; title = "Some Map Pack"; }
+      { id = "2847184718"; title = "Proximity Inventory"; }
+      { id = "2710167561"; title = "Map Legend UI"; }
     ];
 
     # Local mod folder names — the id= values from each mod's mod.info.

@@ -45,7 +45,7 @@ without `.nix`.
 
   # Steam Workshop items. Order is preserved and becomes WorkshopItems=.
   workshopMods = [
-    { id = "2625441155"; title = "Brita's Armor Pack"; }
+    { id = "2847184718"; title = "Proximity Inventory"; }
   ];
 
   # Local mod FOLDER names — the id= values from each mod's mod.info,
@@ -185,6 +185,20 @@ pz-modpack-status                          # summarize all
 pz-modpack-status {"modpack":"vanilla-plus"}   # detail one pack
 ```
 
+After steamcmd has downloaded the pack, verify the declaration against what is
+actually installed — internal Mod IDs and `require=`/`incompatible=` only exist
+in each `mod.info`, so `nix flake check` cannot see them:
+
+```bash
+nix run .#pz-pack-doctor -- --pack viewpoint --workshop-root <dir>
+nix run .#pz-pack-doctor -- --pack viewpoint --workshop-root <dir> --strict
+```
+
+It catches a Workshop item that is declared but missing, a `Mods=` entry nothing
+provides, an item downloaded with nothing from it loaded, an incompatible pair,
+and a `Mods=` order that contradicts `loadModAfter`/`require`. Warnings are
+advisory unless `--strict`.
+
 ## Without a NixOS host
 
 ```bash
@@ -197,6 +211,7 @@ nix run .#pz-workshop -- resolve collection <id>   # internal Mod IDs + paste-re
 nix run .#pz-workshop -- resolve pack <name>       # same, for an existing pack
 nix run .#pz-workshop -- emit vanilla-plus         # paste-ready Workshop URLs
 nix run .#pz-client-mods -- vanilla-plus           # install a pack's mods for a client
+nix run .#pz-pack-doctor -- --pack vanilla-plus --workshop-root <dir>   # verify after download
 ```
 
 Full option reference: `docs/options.md`. Host recipes: `docs/host-recipes.md`.

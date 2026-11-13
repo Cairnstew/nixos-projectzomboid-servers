@@ -1,52 +1,38 @@
 # modpacks/vanilla-plus.nix
 #
-# A curated Vanilla+ bundle: well-known QoL, worldbuilding and map mods, at close
-# to vanilla difficulty.
+# A curated Vanilla+ bundle: a small, verified Build 42 QoL set at close to
+# vanilla difficulty. Deliberately no maps, vehicles or content overhauls — it is
+# the pack to reach for when the world should still feel vanilla.
 #
-# Workshop item IDs come from the individual Workshop page URLs
-# (https://steamcommunity.com/sharedfiles/filedetails/?id=<id>). The server
-# downloads each into steamapps/workshop/content/108600/<id> and clients fetch
-# them automatically on join.
+# `workshopMods` are Workshop ids; `mods` are each mod's own `mod.info` `id=`,
+# which is what `Mods=` takes. The two are different namespaces and mixing them
+# up is the single most common reason a PZ server boots with no mods — which is
+# exactly what this file used to do: it listed six Workshop items and no Mod IDs,
+# so the install downloaded them and the server loaded nothing.
 #
-# IMPORTANT — `workshopMods` are Workshop ids; `mods` are NOT. The `Mods=` key in
-# a PZ server config takes each mod's `id=` from its own mod.info, whereas
-# `WorkshopItems=` takes the Workshop item id. Mixing them up is the single most
-# common reason a PZ server boots with no mods.
-#
-# modworkshop.net mods are not Workshop items at all: add them to `mods` and drop
-# their folders into the install's Zomboid/mods.
+# Every pair below is copied from `viewpoint.nix`, where the same item and its
+# Mod ID are already in use on Build 42. Keep `mods` in sync with
+# `workshopMods`; `pz-pack-doctor` exists to catch drift after a download.
 {
-  description = "Curated Vanilla+: QoL, worldbuilding and map mods at near-vanilla difficulty.";
+  description = "Curated Vanilla+: a small Build 42 QoL set at near-vanilla difficulty.";
 
   workshopMods = [
-    {
-      id = "2625441155";
-      title = "Brita's Armor Pack";
-    }
-    {
-      id = "2625840413";
-      title = "Brita's Weapon Pack";
-    }
-    {
-      id = "2679583791";
-      title = "Project Zomboid eXpanded Helicopter Events";
-    }
-    {
-      id = "2634209060";
-      title = "Filibuster Rhymes' Used Cars!";
-    }
-    {
-      id = "2705410157";
-      title = "iTrackify";
-    }
-    {
-      id = "2705410286";
-      title = "Ched605's Fully Upgradable Tooltips";
-    }
+    { id = "2847184718"; title = "Proximity Inventory B42.20+"; } # ProximityInventory
+    { id = "3789660055"; title = "Container Capacity Indicator [B42]"; } # ContainerCapacityIndicator
+    { id = "3494474677"; title = "[B42] More Item Information"; } # MoreItemInformation
+    { id = "3775659041"; title = "Minimal Display Bars - Build 42.21 (Standalone)"; } # MinimalDisplayBarsB4220
+    { id = "3786647452"; title = "Read While Walking - Updated (B41 + B42)"; } # SimpleReadWhileWalkingUpdated
+    { id = "3781533687"; title = "True Sleep - Better Multiplayer Sleep"; } # TrueSleep
   ];
 
-  # No non-Workshop mods in this pack.
-  mods = [ ];
+  mods = [
+    "ProximityInventory"
+    "ContainerCapacityIndicator"
+    "MoreItemInformation"
+    "MinimalDisplayBarsB4220"
+    "SimpleReadWhileWalkingUpdated"
+    "TrueSleep"
+  ];
 
   # .ini keys any server on this pack inherits; a server's own `settings` win.
   defaultSettings = {

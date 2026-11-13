@@ -394,7 +394,7 @@ Everything else here already assumes the split: the module only ever references
 ## Development
 
 ```bash
-nix flake check            # 17 checks
+nix flake check            # 21 checks
 nix develop                # nixfmt, shellcheck, deadnix, statix, python3
 
 nix run .#pz-modpack -- list
@@ -404,6 +404,9 @@ nix run .#pz-modpack -- show vanilla-plus
 nix run .#pz-workshop -- emit vanilla-plus               # paste-ready URL list
 nix run .#pz-workshop -- resolve pack vanilla-plus       # internal Mod IDs + Mods=/WorkshopItems=
 nix run .#pz-workshop -- expand 3812346398 > draft.nix   # collection -> draft pack (mods prefilled)
+
+# Verify a pack against what steamcmd actually installed
+nix run .#pz-pack-doctor -- --pack viewpoint --workshop-root <dir>
 
 # Deprecated: put a pack's mods into ~/Zomboid/mods as local mods
 # (the supported client path is the game's Host flow — see docs/mod-delivery.md)

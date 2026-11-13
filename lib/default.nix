@@ -326,15 +326,69 @@ let
   # ── `<servername>_SandboxVars.lua` ──────────────────────────────────────────
   # Fully declarative: PZ regenerates this file itself, so we own it outright
   # (unlike the `.ini`, which carries world-identity keys we must preserve).
+  # `namespaces` are mod-defined SandboxVars groups: a mod ships
+  # `media/sandbox-options.txt` declaring `option Bandits.Enabled`, and PZ reads
+  # it as `SandboxVars.Bandits.Enabled`. Those tables are not in
+  # `nestedSandboxTables` (which lists only the vanilla B42 groups), so without
+  # this allow-list a mod option is unrepresentable. The short names are unknown
+  # to us, so only the Lua-identifier shape is checked; every table that is NOT
+  # declared here still gets the strict vanilla check.
   renderSandbox =
-    { settings }:
+    {
+      settings,
+      namespaces ? [ ],
+    }:
     let
+      modTables = lib.unique namespaces;
+
+      # A table or option key is written as a BARE Lua identifier
+      # (`Bandits = { Enabled = true; }`), so anything that is not one — or that
+      # is a Lua keyword — would silently produce a file PZ cannot parse.
+      luaKeywords = [
+        "and"
+        "break"
+        "do"
+        "else"
+        "elseif"
+        "end"
+        "false"
+        "for"
+        "function"
+        "goto"
+        "if"
+        "in"
+        "local"
+        "nil"
+        "not"
+        "or"
+        "repeat"
+        "return"
+        "then"
+        "true"
+        "until"
+        "while"
+      ];
+      luaIdentifier = s: builtins.match "^[A-Za-z_][A-Za-z0-9_]*$" s != null;
+      namespaceProblems = filter (
+        n:
+        !(builtins.isString n)
+        || builtins.hasAttr n nestedSandboxTables
+        || !luaIdentifier n
+        || lib.elem n luaKeywords
+      ) modTables;
+
       staleGiven = filter (k: builtins.hasAttr k staleSandboxKeys) (builtins.attrNames settings);
 
       # A flat key that only exists inside a table is a silent no-op.
       nestedFlatGiven = filter (
         k: !(lib.hasInfix "." k) && !(lib.elem k ambiguousFlatSandboxKeys) && nestedSandboxTablesOf k != [ ]
       ) (builtins.attrNames settings);
+
+      # `Bandits = true` cannot express `Bandits.Enabled`; it renders a flat
+      # top-level key that PZ does not read as the mod's option table.
+      flatNamespaceGiven = filter (k: !(lib.hasInfix "." k) && lib.elem k modTables) (
+        builtins.attrNames settings
+      );
 
       parts = k: lib.splitString "." k;
       dotted = lib.filterAttrs (k: _: lib.hasInfix "." k) settings;
@@ -352,10 +406,15 @@ let
         let
           p = parts k;
           table = builtins.head p;
+          short = builtins.elemAt p 1;
+          knownTable = builtins.hasAttr table nestedSandboxTables || lib.elem table modTables;
+          shortOk =
+            if builtins.hasAttr table nestedSandboxTables then
+              lib.elem short nestedSandboxTables.${table}
+            else
+              luaIdentifier short && !(lib.elem short luaKeywords);
         in
-        builtins.length p != 2
-        || !(builtins.hasAttr table nestedSandboxTables)
-        || !(lib.elem (builtins.elemAt p 1) nestedSandboxTables.${table})
+        builtins.length p != 2 || !knownTable || !shortOk
       ) (builtins.attrNames dotted);
 
       grouped = lib.groupBy (k: builtins.head (parts k)) (builtins.attrNames dotted);
@@ -376,7 +435,19 @@ let
       ++ lib.mapAttrsToList renderTable grouped;
       body = concatStringsSep ",\n" entries;
     in
-    if staleGiven != [ ] then
+    if namespaceProblems != [ ] then
+      throw ''
+        project-zomboid-servers: invalid sandbox namespace(s):
+
+        ${concatStringsSep "\n" (map (n: "  - ${builtins.toJSON n}") namespaceProblems)}
+
+        A mod sandbox namespace is the first part of an option declared in the
+        mod's `media/sandbox-options.txt` (`option Bandits.Enabled` →
+        `sandbox."Bandits.Enabled"`). It must be a Lua identifier, must not be a
+        Lua keyword, and must not reuse a vanilla B42 table
+        (${concatStringsSep ", " (builtins.attrNames nestedSandboxTables)}).
+      ''
+    else if staleGiven != [ ] then
       staleKeyError "SandboxVars" staleSandboxKeys staleGiven
     else if nestedFlatGiven != [ ] then
       throw ''
@@ -393,6 +464,18 @@ let
           ) nestedFlatGiven
         )}
       ''
+    else if flatNamespaceGiven != [ ] then
+      throw ''
+        project-zomboid-servers: these keys are mod sandbox namespaces, not
+        options, so a flat value cannot express them:
+
+        ${concatStringsSep "\n" (
+          map (k: "  - sandbox.${k}  →  sandbox.\"${k}.<Option>\"") flatNamespaceGiven
+        )}
+
+        A namespace is rendered as a nested Lua table. Set each option the mod
+        declares in its `media/sandbox-options.txt`, using `Namespace.Option`.
+      ''
     else if dottedProblem != [ ] then
       throw ''
         project-zomboid-servers: invalid nested SandboxVars key(s):
@@ -400,7 +483,11 @@ let
         ${concatStringsSep "\n" (map (k: "  - ${k}") dottedProblem)}
 
         Use `Table.Key`, where Table is one of:
-        ${concatStringsSep ", " (builtins.attrNames nestedSandboxTables)}.
+        ${concatStringsSep ", " (builtins.attrNames nestedSandboxTables)}${
+          lib.optionalString (
+            modTables != [ ]
+          ) ", or a declared mod namespace: ${concatStringsSep ", " modTables}"
+        }.
       ''
     else if !(builtins.isInt version) then
       throw ''
@@ -613,6 +700,7 @@ let
     mods = [ ];
     defaultSettings = { };
     defaultSandbox = { };
+    sandboxNamespaces = [ ];
   };
 
   resolveServer =
@@ -689,6 +777,12 @@ let
 
       sandbox = lib.recursiveUpdate pack.defaultSandbox srv.sandbox;
 
+      # Mod sandbox namespaces are a superset: a pack that ships mod options
+      # declares them once, and a server may add another mod on top. Order is
+      # irrelevant (the renderer groups by table), so deduplicate for a stable
+      # error message.
+      sandboxNamespaces = lib.unique ((pack.sandboxNamespaces or [ ]) ++ (srv.sandboxNamespaces or [ ]));
+
       # PZ starts RCON only when the port is non-zero AND the password is
       # non-empty — `GameServer`:
       #   if (port != 0 && password != null && !password.isEmpty()) RCONServer.init(...)
@@ -722,6 +816,7 @@ let
         settings
         description
         sandbox
+        sandboxNamespaces
         pinnedMap
         warnings
         ;
