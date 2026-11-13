@@ -742,6 +742,20 @@ in
         id=Alpha
         EOF
 
+        # A B42 mod that also keeps a Build 41 `mod.info` at its root. Only the
+        # 42/ file is loaded, so its B41 `require=OldDep` must NOT be reported.
+        mkdir -p $out/888/mods/Mixed/42
+        cat > $out/888/mods/Mixed/mod.info <<'EOF'
+        name=Mixed (B41)
+        id=Mixed
+        require=OldDep
+        EOF
+        cat > $out/888/mods/Mixed/42/mod.info <<'EOF'
+        name=Mixed (B42)
+        id=Mixed
+        require=Beta
+        EOF
+
         # A directory that is installed but is not a mod at all.
         mkdir -p $out/444/readme
         touch $out/444/readme/README.txt
@@ -892,6 +906,25 @@ in
             defaultSettings = { };
             defaultSandbox = { };
           };
+          b41-root = {
+            description = "a B41 root mod.info beside a 42/ one";
+            workshopMods = [
+              {
+                id = "222";
+                title = "Beta";
+              }
+              {
+                id = "888";
+                title = "Mixed";
+              }
+            ];
+            mods = [
+              "Beta"
+              "Mixed"
+            ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
         }
       );
     in
@@ -949,6 +982,10 @@ in
         doctor --pack warn > /dev/null 2> err || fail "a warning-only pack failed without --strict"
         grep -q "require" err || fail "the warning did not name the requirement"
         doctor --pack warn --strict > /dev/null 2> err && fail "a warning passed under --strict"
+        # A known upstream defect can be suppressed without hiding it from the
+        # human output ("ignored: ..."), so --strict stays usable.
+        doctor --pack warn --strict --ignore "require='Beta'" > /dev/null 2>&1 \
+          || fail "--ignore did not suppress a known warning under --strict"
 
         # A Mods= order that contradicts loadModAfter is reported rather than
         # silently relying on PZ's own normalisation.
@@ -961,7 +998,19 @@ in
         doctor --pack duplicate > /dev/null 2> err && fail "a duplicate Mod ID passed"
         grep -q "provided by two installed mods" err || fail "the duplicate id was not reported"
 
-        echo "pack doctor ok: clean pack passes (including B42 common/version layout); empty mods, unprovided ids, missing items, missing mod.info, incompatible pairs and duplicate ids fail; warnings and load-order drift are reported"
+        # A mod with a B41 root mod.info and a 42/ one: only the version file
+        # supplies require=/incompatible=. The B41 file's `require=OldDep` must
+        # not leak into the report (nor make --strict fail).
+        doctor --pack b41-root --json > b41.json || fail "a B42 mod with a B41 root failed"
+        doctor --pack b41-root --strict > /dev/null 2> err || fail "a B42 mod with a B41 root failed --strict"
+        python3 - <<'PY'
+        import json
+        d = json.load(open("b41.json"))
+        assert d["errors"] == [], d["errors"]
+        assert d["warnings"] == [], d["warnings"]
+        PY
+
+        echo "pack doctor ok: clean pack passes (including B42 common/version layout and 42/-only metadata); empty mods, unprovided ids, missing items, missing mod.info, incompatible pairs and duplicate ids fail; warnings and load-order drift are reported"
         touch "$out"
       '';
 

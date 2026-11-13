@@ -27,7 +27,10 @@
     # VFE patches all require VFExpansion1 specifically.
     { id = "3761284354"; title = "[B42] Vanilla Firearms Expansion - STALKER pack [CLASSIC]"; } # VFExpansion2
     { id = "3762355926"; title = "[B42] Vanilla Firearms Expansion - Post '93 [CLASSIC]"; } # VFExpansion3
-    { id = "2799742455"; title = "Improvised Silencers by Maxwell218"; }
+    # The B41 "Improvised Silencers by Maxwell218" (2799742455) is deliberately
+    # absent: the Build 42.20 compatibility item below ships the SAME Mod ID
+    # (`ImprovisedSilencers`), and installing both makes PZ load one at random.
+    # The VFE patch moved to its own B42 item (3798841312) for the same reason.
     { id = "3813760573"; title = "HorseMod + Viewpoint Controls Patch"; }
     { id = "3815999052"; title = "OldPoint - Rotating Overhead Camera [B42 / Viewpoint]"; }
     # Arsenal is the successor to Recoil & ADS: it absorbs the old
@@ -51,7 +54,8 @@
     { id = "3783989538"; title = "Project Parkour"; }
     { id = "3520758551"; title = "More Car Features + Spawn Zones Expansion"; }
     { id = "3777587577"; title = "LG Tape XP Indicator"; }
-    { id = "3779164273"; title = "Improvised Silencers - Build 42.20 Compatibility"; }
+    { id = "3779164273"; title = "Improvised Silencers - Build 42.20 Compatibility"; } # ImprovisedSilencers
+    { id = "3798841312"; title = "Improvised Silencers - VFE Expansions Patch"; } # ImprovisedSilencersVFEPatch
     { id = "3426448380"; title = "Immersive Suicide [B42/B41]"; }
     { id = "3607686447"; title = "Immersive Blackouts [B42MP]"; }
     { id = "2447729538"; title = "Fluffy Hair [B41/B42]"; }
@@ -682,7 +686,11 @@
     # And Shower and Immersive Water Shutoff are explicitly tested against
     # Water Pipes by the core mod author.
     { id = "3739595559"; title = "[B42] Water Pipes & Plumbing [VIEWPOINT COMPATIBLE]"; } # waterpipes + waterpipesviewpoint
-    { id = "3781520357"; title = "WaterPipes No Collision"; }
+    # Upstream quirk: NoCollision's mod.info declares `require=Waterpipes`
+    # (capital P) while the library's id is `waterpipes`. PZ ids are
+    # case-sensitive on Linux, so `pz-pack-doctor` reports this. Kept because
+    # the mod has no replacement; verify it actually loads if plumbing matters.
+    { id = "3781520357"; title = "WaterPipes No Collision"; } # WaterPipesNoCollision
     { id = "3592172476"; title = "[B42:SP/MP] Take A Bath And Shower"; } # ships DepthMap fix
     { id = "3599665197"; title = "Immersive Water Shutoff [B42MP]"; }
     { id = "3793515249"; title = "Metal Trough Plumbing"; }
@@ -841,6 +849,10 @@
   mods = [
     "ZombieBuddy"
     "Viewpoint"
+    # Libraries used by the vehicle/parts mods below; `amclub` and `SpecLoot`
+    # declare require=/loadModAfter= on them, so they must come first.
+    "YAPZLib"
+    "tsarslib"
     "PZVoxelStudioViewpoint"
     "ViewpointBloodFX"
     "ViewpointBloodFXAddon"
@@ -882,15 +894,16 @@
     "stanks_suicide"
     "ImmersiveBlackouts"
     "FH"
+    # Item 3682936016 ships two mutually incompatible variants. This pack has
+    # no TETRIS (the `tofcm` framework), so the standalone B42 build is the one
+    # to enable; EQUIPMENT_UI is the override that exists to satisfy TETRIS's
+    # dependency and declares `incompatible=EQUIPMENT_UI_B42`.
     "EQUIPMENT_UI_B42"
-    "EQUIPMENT_UI"
     "dustinguished_bolt_cutters"
     "BetterSortCC"
     "alicesWeaponSling"
     "alicesWeaponSlingRadialMenu"
-    "YAPZLib"
     "MinimalSidebar"
-    "tsarslib"
     "DetailedDescriptionsForOccupationsAndTraits"
 
     # ── Inventory & loot management ────────────────────────────────────────
@@ -1152,6 +1165,8 @@
     "VehicleSalvageOverhaulB42"
     "ConsistentVehicleRepairs"
     "mdrc_b42"              # requires VehicleRepairOverhaul (loaded above)
+    # VROSalvageConditionLock declares loadModBefore=Ivmakk_RestoreEngineQuality.
+    "VROSalvageConditionLock"
     "Ivmakk_RestoreEngineQuality"
     "FunctionalCarLift"
     "AreaTasks"
@@ -1198,7 +1213,6 @@
     "KentuckyWorkstationSalvage"
     "DismantleAllElectronics"
     "TFC_RemoveDebrisMod"
-    "VROSalvageConditionLock" # requires VehicleSalvageOverhaulB42 (loaded above)
 
     # ── Lockpicking / entry / locks ────────────────────────────────────────
     # Standalone (no require=/loadModAfter=); its own server unit handles all
@@ -1354,7 +1368,7 @@
     # leaves fixtures alone when another plumbing mod already supplies them.
     "waterpipes"
     "waterpipesviewpoint"
-    "WaterPipesNoCollision"
+    "WaterPipesNoCollision" # upstream requires `Waterpipes` (wrong case); see workshopMods
     "ATakeABathAndShowerDepthMap"
     "TakeABathAndShowerNew"
     "ImmersiveWaterShutoff"

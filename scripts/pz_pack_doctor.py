@@ -85,9 +85,20 @@ class ModInfo:
         }
 
 
+def _clean(value):
+    r"""One mod id from mod.info.
+
+    Build 42 writes a leading backslash on dependency ids
+    (`require=\ZombieBuddy`) — the same convention some server panels use for
+    `Mods=`. It is not part of the id, and leaving it in makes every real
+    dependency look external.
+    """
+    return value.strip().strip('"').lstrip("\\")
+
+
 def _split(value):
     """A comma-separated mod.info list, tolerant of whitespace and empties."""
-    return [part.strip().strip('"') for part in value.split(",") if part.strip()]
+    return [_clean(part) for part in value.split(",") if part.strip()]
 
 
 def parse_mod_info(root, item):
@@ -109,7 +120,7 @@ def parse_mod_info(root, item):
         key = match.group(1).lower()
         fields.setdefault(key, []).append(match.group(2).strip().strip('"'))
 
-    mod_id = (fields.get("id") or [""])[0].strip()
+    mod_id = _clean((fields.get("id") or [""])[0])
     if not mod_id:
         return None
 
@@ -170,6 +181,57 @@ def mod_folder(root):
     return root
 
 
+def mod_roots(item_dir):
+    """Every mod folder in one Workshop item, including B42 version folders.
+
+    `pz_client_mods.mod_roots` stops at the first `mod.info`, which is right for
+    installing a mod folder but wrong here: a B42 mod may keep a Build 41
+    `mod.info` at its root *and* a `42/mod.info` beside it, and the version
+    folder is the one PZ loads. Descend only into `common/` and numeric version
+    folders after a root, never into `media/`.
+    """
+    found = []
+    for current, dirs, files in os.walk(item_dir):
+        if "mod.info" in files:
+            found.append(current)
+            dirs[:] = [
+                name for name in dirs if name == "common" or re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", name)
+            ]
+    return found
+
+
+def version_key(root):
+    """The numeric version a B42 version folder names, or None.
+
+    `42` is 42.0; `42.20` is (42, 20). `common` is not a version (it is the
+    shared asset tree), and a Build 41 mod root is not one either.
+    """
+    base = os.path.basename(root)
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)*)", base)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def metadata_root(roots):
+    """The one mod.info PZ loads for a Build 42 target.
+
+    A mod may ship a Build 41 `mod.info` at its root AND a `42/mod.info`. PZ
+    loads the version folder, so its require=/incompatible= are the ones that
+    matter; merging the B41 root's list invents dependencies (LV Airport's B41
+    file requires three tile packs its B42 file dropped). Prefer the highest
+    42.x folder, then `common/`, then the root.
+    """
+    versioned = [(version_key(root), root) for root in roots if version_key(root) is not None]
+    if versioned:
+        # A 42.x folder wins over any other version; among those, the highest.
+        return max(versioned, key=lambda pair: (pair[0][0] == 42, pair[0]))[1]
+    for root in roots:
+        if os.path.basename(root) == "common":
+            return root
+    return roots[0]
+
+
 def scan(workshop_root, declared_item_ids, report):
     """Return {mod_id: ModInfo} for the items this pack declares.
 
@@ -184,29 +246,33 @@ def scan(workshop_root, declared_item_ids, report):
         if not os.path.isdir(item_dir):
             report.error(f"Workshop item {item_id} is declared but is not installed under {workshop_root}")
             continue
-        roots = pcm.mod_roots(item_dir)
+        roots = mod_roots(item_dir)
         if not roots:
             report.error(f"Workshop item {item_id} is installed but contains no mod.info")
             continue
-        found = []
+
+        # Group `common/mod.info` + `42/mod.info` (+ `42.20/…`) into one mod.
+        by_folder = {}
         for root in roots:
-            info = parse_mod_info(root, item_id)
+            by_folder.setdefault(mod_folder(root), []).append(root)
+
+        found = []
+        for group in by_folder.values():
+            info = None
+            for root in [metadata_root(group)] + group:
+                info = parse_mod_info(root, item_id)
+                if info is not None:
+                    break
             if info is None:
-                report.error(f"{item_id}: {os.path.relpath(root, workshop_root)} has a mod.info without a usable id=")
+                report.error(f"{item_id}: {os.path.relpath(group[0], workshop_root)} has a mod.info without a usable id=")
                 continue
-            info.lua = lua_sides(root)
+            # Classification is the union: PZ loads common/ and the version
+            # folder together for assets and Lua.
+            for root in group:
+                info.lua |= lua_sides(root)
+
             existing = mods.get(info.mod_id)
             if existing is not None:
-                # `common/mod.info` + `42/mod.info` in the same mod folder are
-                # one mod, not a collision. Merge what each declares.
-                if mod_folder(existing.path) == mod_folder(info.path):
-                    existing.lua |= info.lua
-                    for attr in ("require", "incompatible", "load_after", "load_before"):
-                        values = getattr(existing, attr)
-                        for value in getattr(info, attr):
-                            if value not in values:
-                                values.append(value)
-                    continue
                 report.error(
                     f"Mod ID {info.mod_id!r} is provided by two installed mods: "
                     f"{existing.path} and {info.path}. PZ cannot load both."
@@ -218,7 +284,7 @@ def scan(workshop_root, declared_item_ids, report):
     return mods, item_mods
 
 
-def check(pack_name, pack, workshop_root, strict=False):
+def check(pack_name, pack, workshop_root, strict=False, ignore=()):
     report = Report()
 
     declared_items = []
@@ -262,6 +328,7 @@ def check(pack_name, pack, workshop_root, strict=False):
             )
 
     # Dependencies of the mods the pack actually loads.
+    lower_declared = {mod_id.lower(): mod_id for mod_id in declared_mods}
     for mod_id in declared_mods:
         info = installed.get(mod_id)
         if info is None:
@@ -278,6 +345,11 @@ def check(pack_name, pack, workshop_root, strict=False):
                 )
             elif target.lower() in {"base", "vanilla"}:
                 continue
+            elif target.lower() in lower_declared:
+                report.warn(
+                    f"{mod_id!r} requires {target!r} but the pack provides "
+                    f"{lower_declared[target.lower()]!r}; PZ ids are case-sensitive on Linux"
+                )
             else:
                 report.warn(
                     f"{mod_id!r} declares require={target!r}, which this pack does not provide "
@@ -330,7 +402,11 @@ def check(pack_name, pack, workshop_root, strict=False):
         else:
             counts["no-lua"] += 1
 
-    ok = not report.errors and (not strict or not report.warnings)
+    # A known upstream defect should not force a permanent red CI. `--ignore` is
+    # a literal substring match, printed so the suppression stays visible.
+    warnings = [w for w in report.warnings if not any(token in w for token in ignore)]
+    suppressed = [w for w in report.warnings if any(token in w for token in ignore)]
+    ok = not report.errors and (not strict or not warnings)
     return {
         "pack": pack_name,
         "workshop_root": os.path.abspath(workshop_root),
@@ -339,7 +415,8 @@ def check(pack_name, pack, workshop_root, strict=False):
         "declared_mod_ids": len(declared_mods),
         "installed_mod_ids": sum(1 for m in declared_mods if m in installed),
         "errors": report.errors,
-        "warnings": report.warnings,
+        "warnings": warnings,
+        "suppressed": suppressed,
         "lua_classes": counts,
         "ok": ok,
     }
@@ -359,6 +436,8 @@ def print_human(result):
         f"{classes['server-only']} server-only, {classes['shared-only']} shared-only, "
         f"{classes['no-lua']} no lua"
     )
+    for message in result["suppressed"]:
+        print(f"  ignored: {message}")
     for message in result["warnings"]:
         print(f"  warning: {message}", file=sys.stderr)
     for message in result["errors"]:
@@ -396,6 +475,14 @@ def main(argv=None):
         action="store_true",
         help="Treat warnings as failures (use in CI once a pack is clean)",
     )
+    parser.add_argument(
+        "--ignore",
+        action="append",
+        default=[],
+        metavar="TEXT",
+        help="Drop warnings containing TEXT (repeatable). Print them as 'ignored' so a "
+        "known upstream defect does not force a permanent red --strict run.",
+    )
     parser.add_argument("--json", action="store_true", help="Machine-readable output")
     args = parser.parse_args(argv)
 
@@ -420,7 +507,13 @@ def main(argv=None):
         print(f"pz-pack-doctor: no such pack {args.pack!r}; known packs: {known}", file=sys.stderr)
         return 2
 
-    result = check(args.pack, catalogue[args.pack], args.workshop_root, strict=args.strict)
+    result = check(
+        args.pack,
+        catalogue[args.pack],
+        args.workshop_root,
+        strict=args.strict,
+        ignore=args.ignore,
+    )
     if args.json:
         print(json.dumps(result, indent=2))
     else:

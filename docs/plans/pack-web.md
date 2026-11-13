@@ -137,7 +137,7 @@ for `Mod ID:`, and `scripts/pz_client_mods.py:141-160` walks mod roots and reads
 **This is not hypothetical.** Evaluating the catalogue gives:
 
 ```console
-viewpoint      workshop=438  mods=480
+viewpoint      workshop=438  mods=479
 vanilla-plus   workshop=6    mods=0
 ```
 
@@ -147,6 +147,14 @@ server loads none. The catalogue check (`checks/default.nix:576-606`) validates
 shape only, and the client-host check that asserts `Mods=` is non-empty uses
 `viewpoint` (`checks/default.nix:1279-1321`). It has been that way since the
 initial commit. A validator — not a runtime mod — is what would have caught it.
+
+The first real run (against a 448-item Steam library) did exactly that:
+`viewpoint` had five declaration defects. It enabled two mods that both provide
+`ImprovisedSilencers` (the Build 41 original and its B42.20 replacement), both
+mutually incompatible Equipment UI variants, and three load-order inversions
+(`amclub`/`tsarslib`, `SpecLoot`/`YAPZLib`, `VROSalvageConditionLock`/`Ivmakk`).
+All are fixed. The one remaining warning is upstream: `WaterPipesNoCollision`
+declares `require=Waterpipes` while the library's id is `waterpipes`.
 
 ### 3.4 Client/server availability — not solvable by a mod
 

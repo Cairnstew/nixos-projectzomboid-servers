@@ -17,8 +17,11 @@ All notable changes to this project. Format follows
 - **`pz-pack-doctor` verifies a pack against what steamcmd installed.** It maps
   each Workshop item to its `mod.info` id(s) and reports a missing item, an item
   with no `mod.info`, a `Mods=` entry nothing provides, an item with nothing
-  loaded, an `incompatible=` pair, and a `Mods=` order that contradicts
-  `loadModAfter`/`require`. Warnings are advisory unless `--strict`.
+  loaded, an `incompatible=` pair, a duplicate id, and a `Mods=` order that
+  contradicts `loadModAfter`/`require`. It reads the `42/` metadata whenever a
+  mod also keeps a Build 41 `mod.info` at its root, and normalises the leading
+  `\` Build 42 writes on dependency ids. Warnings are advisory unless
+  `--strict`.
 
 - **The catalogue check catches the "download but load nothing" class.** A pack
   with `workshopMods` and an empty `mods` now fails `nix flake check`; duplicate
@@ -36,6 +39,16 @@ All notable changes to this project. Format follows
   completeness-checked reference.
 
 ### Fixed
+
+- **`viewpoint` no longer declares conflicting mods.** The
+  Build 41 Improvised Silencers and its B42.20 replacement both provide
+  `ImprovisedSilencers`; the pack now uses the B42 item plus the separate B42
+  VFE patch. It also enabled both mutually incompatible Equipment UI variants
+  (the standalone and the TETRIS override) and now enables only the standalone.
+  Three dependency-order inversions were corrected: `tsarslib` and `YAPZLib`
+  load before the vehicle mods that require them, and `VROSalvageConditionLock`
+  before `Ivmakk_RestoreEngineQuality`. Found by `pz-pack-doctor` against a real
+  Steam library.
 
 - **`vanilla-plus` actually loads its mods.** The pack listed six Workshop items
   and zero Mod IDs, so the install downloaded six items and `Mods=` was empty:

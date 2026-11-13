@@ -196,8 +196,10 @@ nix run .#pz-pack-doctor -- --pack viewpoint --workshop-root <dir> --strict
 
 It catches a Workshop item that is declared but missing, a `Mods=` entry nothing
 provides, an item downloaded with nothing from it loaded, an incompatible pair,
-and a `Mods=` order that contradicts `loadModAfter`/`require`. Warnings are
-advisory unless `--strict`.
+a duplicate Mod ID, and a `Mods=` order that contradicts
+`loadModAfter`/`require`. Warnings are advisory unless `--strict`; suppress a
+known upstream defect with `--ignore <substring>` (it is still printed as
+`ignored:`).
 
 ## Without a NixOS host
 
