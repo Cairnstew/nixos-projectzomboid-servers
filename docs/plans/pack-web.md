@@ -8,8 +8,13 @@
 > Phase 0 landed as: `sandboxNamespaces` (`lib/default.nix`,
 > `modules/options/servers.nix`), the `vanilla-plus` repair (six verified Build 42
 > pairs), the catalogue guard (`checks/default.nix`), and `pz-pack-doctor`
-> (`scripts/pz_pack_doctor.py` + the flake app + `pack-doctor` check). Phase 1
-> (the opt-in overlay) remains a proposal.
+> (`scripts/pz_pack_doctor.py` + the flake app + `pack-doctor` check).
+>
+> The **connector** half of Phase 1 landed as `pz-pack-web`
+> (`scripts/pz_pack_web.py`, `pack-web` check, `docs/pack-web.md`): a generated,
+> publishable Workshop item that loads last, carries the manifest and audits the
+> active list. It contains only our code and data. File-patch overlays remain a
+> proposal, because they need the target author's permission.
 
 ## 1. The question
 
@@ -188,6 +193,10 @@ asymmetry — not enforcement.
 
 ### Phase 1 — opt-in overlay (only when a concrete pain needs it)
 
+- [x] **Connector generator (`pz-pack-web`).** Ready-to-upload Workshop tree with
+      `loadModAfter` of every pack Mod ID, a generated manifest, and a
+      server-start audit. No hard `require=`, no file overrides, no
+      redistribution. Publishing steps in `docs/pack-web.md`.
 - [ ] `packOverlay` as **pack data** (`patches` = relative path -> text/source,
       `loadAfter`, `require`, `modInfoExtra`). Packs stay pkgs-free
       (`modpacks/default.nix:35` imports them with no arguments).
@@ -203,9 +212,10 @@ asymmetry — not enforcement.
 
 ### Phase 2 — publish, only if a public server needs the overlay
 
-Publishing our own Workshop item is a deliberate decision (Steam account, upload
-flow, an item we then own), not a side effect. Until then, an overlay is a
-private-server tool.
+The connector's publishing path is prepared (`docs/pack-web.md`): generate,
+replace the preview, upload from the in-game Workshop menu, then add the new id
+to the pack. File-patch overlays still need a deliberate decision to publish,
+because they contain another author's code.
 
 ## 5. Rejected alternatives
 

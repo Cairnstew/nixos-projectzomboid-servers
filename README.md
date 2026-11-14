@@ -26,6 +26,7 @@ the closest equivalent for Minecraft server fleets.
 | **[docs/installing.md](docs/installing.md)** | Requirements, the three ways to consume this, pinning, upgrading. **Start here.** |
 | **[docs/options.md](docs/options.md)** | Every option, with type and default. Completeness-checked in CI. |
 | **[docs/mod-delivery.md](docs/mod-delivery.md)** | The three mod delivery modes, version drift, and `SelfManagedMods`. |
+| **[docs/pack-web.md](docs/pack-web.md)** | Generate and manually publish a pack's connector mod to the Workshop. |
 | **[docs/host-recipes.md](docs/host-recipes.md)** | Fleets, web consoles, your own modpack, secrets, hardening. |
 | **[docs/manage.md](docs/manage.md)** | The `pz-manage` dashboard, RCON actions, and scheduled backups. |
 | **[docs/troubleshooting.md](docs/troubleshooting.md)** | Symptom → cause → fix, including every bug this project has actually shipped. |
@@ -394,7 +395,7 @@ Everything else here already assumes the split: the module only ever references
 ## Development
 
 ```bash
-nix flake check            # 21 checks
+nix flake check            # 22 checks
 nix develop                # nixfmt, shellcheck, deadnix, statix, python3
 
 nix run .#pz-modpack -- list
@@ -407,6 +408,9 @@ nix run .#pz-workshop -- expand 3812346398 > draft.nix   # collection -> draft p
 
 # Verify a pack against what steamcmd actually installed
 nix run .#pz-pack-doctor -- --pack viewpoint --workshop-root <dir>
+
+# Generate the connector mod's ready-to-upload Workshop tree
+nix run .#pz-pack-web -- --pack viewpoint
 
 # Deprecated: put a pack's mods into ~/Zomboid/mods as local mods
 # (the supported client path is the game's Host flow — see docs/mod-delivery.md)

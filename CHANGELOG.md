@@ -23,6 +23,13 @@ All notable changes to this project. Format follows
   `\` Build 42 writes on dependency ids. Warnings are advisory unless
   `--strict`.
 
+- **`pz-pack-web` generates a publishable connector mod.** For a pack it writes a
+  ready-to-upload Workshop tree (`workshop.txt`, `preview.png`,
+  `Contents/mods/<id>/42/…`) whose mod loads after every pack Mod ID, carries a
+  generated manifest, and logs missing/extra mods at server start. It adds no
+  content and overrides no other author's files, so it is safe to publish. See
+  `docs/pack-web.md`.
+
 - **The catalogue check catches the "download but load nothing" class.** A pack
   with `workshopMods` and an empty `mods` now fails `nix flake check`; duplicate
   Workshop ids and duplicate Mod IDs are rejected too.

@@ -375,6 +375,25 @@
                 }
               );
             };
+
+            # Generate the connector mod's ready-to-upload Workshop tree:
+            # workshop.txt + preview.png + Contents/mods/<id>/42/... It is our
+            # own code and data only (load order + manifest + audit), so it is
+            # publishable without touching another author's files.
+            pz-pack-web = {
+              type = "app";
+              program = lib.getExe (
+                pkgs.writeShellApplication {
+                  name = "pz-pack-web";
+                  runtimeInputs = [ pkgs.python3 ];
+                  text = ''
+                    export PZ_MODPACKS_JSON=${pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks)}
+                    export PYTHONPATH=${./scripts}''${PYTHONPATH:+:$PYTHONPATH}
+                    exec python3 ${./scripts/pz_pack_web.py} "$@"
+                  '';
+                }
+              );
+            };
           }
           # One app per catalogue pack: `nix run .#pz-vanilla-plus -- <name>`.
           #

@@ -1014,6 +1014,141 @@ in
         touch "$out"
       '';
 
+  # ── pz-pack-web: the ready-to-upload connector tree ─────────────────
+  # The artefact is what a human uploads to the Workshop, so the check is
+  # structural: workshop.txt fields, the B42 mod layout, no hard `require=`, a
+  # manifest that matches the pack, a syntactically valid Lua tree, a 512x512
+  # PNG, and the overwrite/empty-pack guards.
+  pack-web =
+    let
+      catalogue = pkgs.writeText "pz-pack-web-packs.json" (
+        builtins.toJSON {
+          test = {
+            description = "A test pack.";
+            workshopMods = [
+              {
+                id = "111";
+                title = "Alpha";
+              }
+              {
+                id = "222";
+                title = "Beta";
+              }
+            ];
+            mods = [
+              "Alpha"
+              "Beta"
+            ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          empty = {
+            description = "No mods.";
+            workshopMods = [ ];
+            mods = [ ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+        }
+      );
+    in
+    pkgs.runCommand "pz-pack-web-check"
+      {
+        nativeBuildInputs = [
+          pkgs.python3
+          pkgs.lua5_1
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        SCRIPT = ../scripts/pz_pack_web.py;
+        PYTHONPATH = "${../scripts}";
+        CATALOGUE = catalogue;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+
+        stage="$TMPDIR/item"
+        python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack test --out-dir "$stage" --force --json > summary.json \
+          || fail "pz-pack-web failed for a valid pack"
+        grep -q '"mod_id": "PZPackWebTest"' summary.json || fail "the generated mod id is wrong"
+        grep -q '"mods": 2' summary.json || fail "the linked mod count is wrong"
+
+        item="$stage"
+        info="$item/Contents/mods/PZPackWebTest/42/mod.info"
+        manifest="$item/Contents/mods/PZPackWebTest/42/media/lua/shared/PZPackWeb/manifest.lua"
+        audit="$item/Contents/mods/PZPackWebTest/42/media/lua/server/PZPackWeb/audit.lua"
+        [ -f "$info" ] || fail "no 42/mod.info (B42 layout)"
+        [ -f "$manifest" ] || fail "no shared manifest"
+        [ -f "$audit" ] || fail "no server audit"
+        [ -f "$item/preview.png" ] || fail "no preview.png"
+
+        grep -qx 'version=1' "$item/workshop.txt" || fail "workshop.txt has no version=1"
+        grep -qx 'title=PZ Pack Web - test' "$item/workshop.txt" || fail "workshop.txt title is wrong"
+        grep -qx 'visibility=private' "$item/workshop.txt" || fail "the default visibility is not private"
+        ! grep -q '^id=' "$item/workshop.txt" || fail "a new item got an id="
+
+        grep -qx 'id=PZPackWebTest' "$info" || fail "mod.info id is wrong"
+        grep -qx 'loadModAfter=Alpha,Beta' "$info" || fail "loadModAfter is not the pack order"
+        ! grep -q '^require=' "$info" || fail "the connector must not hard-require the pack"
+
+        grep -q 'PZPackWeb.id = "PZPackWebTest"' "$manifest" || fail "manifest has no self id"
+        [ "$(grep -c '= true' "$manifest")" = 2 ] || fail "manifest does not list both pack mods"
+        grep -q 'Events.OnGameStart.Add(audit)' "$audit" || fail "audit is not registered"
+
+        # A real Lua parser, not an eyeball.
+        lua -e "assert(loadfile('$manifest')); assert(loadfile('$audit'));" \
+          || fail "the generated Lua does not parse"
+
+        # The audit must name a missing mod and not crash on a Java-list stub.
+        ( cd "$item/Contents/mods/PZPackWebTest/42/media/lua" && lua -e '
+          Events = { OnGameStart = { Add = function(f) f() end } }
+          isServer = function() return true end
+          getActivatedMods = function()
+            local t = { "Alpha" }
+            return { size = function() return #t end, get = function(_, i) return t[i + 1] end }
+          end
+          dofile("shared/PZPackWeb/manifest.lua")
+          dofile("server/PZPackWeb/audit.lua")
+        ' ) > audit.log 2>&1 || fail "the audit raised a Lua error"
+        grep -q '1 pack mod(s) missing: Beta' audit.log || fail "the audit did not name the missing mod"
+
+        # 512x512 PNG, as the uploader requires.
+        python3 - "$item/preview.png" <<'PY'
+        import struct, sys
+        data = open(sys.argv[1], "rb").read(24)
+        assert data[:8] == b"\x89PNG\r\n\x1a\n", "preview is not a PNG"
+        assert struct.unpack(">II", data[16:24]) == (512, 512), "preview is not 512x512"
+        PY
+
+        # Updating an existing item takes an id=.
+        python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack test --out-dir "$TMPDIR/update" \
+          --workshop-id 4242 --force > /dev/null || fail "updating an existing item failed"
+        grep -qx 'id=4242' "$TMPDIR/update/workshop.txt" || fail "the workshop id was not written"
+
+        # Refuse to clobber an edited staging folder without --force.
+        if python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack test --out-dir "$stage" > /dev/null 2> err; then
+          fail "an existing staging folder was overwritten without --force"
+        fi
+        grep -q -- '--force' err || fail "the overwrite refusal did not mention --force"
+
+        # A pack with no Mod IDs cannot produce a connector.
+        if python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack empty --out-dir "$TMPDIR/empty" --force > /dev/null 2> err; then
+          fail "an empty pack produced a connector"
+        fi
+        grep -q 'no mods' err || fail "the empty-pack failure was not explained"
+
+        # A non-PNG preview is rejected before anything is published.
+        echo not a png > not-a.png
+        if python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack test --out-dir "$TMPDIR/bad" \
+          --preview not-a.png --force > /dev/null 2> err; then
+          fail "a non-PNG preview was accepted"
+        fi
+        grep -q 'not a PNG' err || fail "the preview failure was not explained"
+
+        echo "pack web ok: workshop.txt/mod.info/manifest/audit/preview are valid; new vs update, overwrite and bad-preview guards hold"
+        touch "$out"
+      '';
+
   # ── pz-manage: RCON framing and backup roundtrip, offline ──────────
   # The dashboard's two risky pieces are a hand-written Source RCON
   # client and a tar-based backup/restore. Both are exercised here

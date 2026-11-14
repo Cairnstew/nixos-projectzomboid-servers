@@ -201,6 +201,22 @@ a duplicate Mod ID, and a `Mods=` order that contradicts
 known upstream defect with `--ignore <substring>` (it is still printed as
 `ignored:`).
 
+## Publishing the connector ("pack web")
+
+A pack can ship one small companion mod that **loads last** and audits the active
+mod list at server start. It is generated from the catalogue, contains no other
+author's files, and is therefore publishable:
+
+```bash
+nix run .#pz-pack-web -- --pack viewpoint          # writes ~/Zomboid/Workshop/PZPackWeb-viewpoint
+```
+
+Replace the placeholder `preview.png`, then Project Zomboid → Main Menu →
+Workshop → Create/Update and upload. Add the new Workshop id to the pack's
+`workshopMods` and `PZPackWeb<Pack>` to `mods` afterwards. Full steps:
+`docs/pack-web.md`. It does **not** override any other mod's files; a real patch
+needs the target's permission (see `docs/plans/pack-web.md`).
+
 ## Without a NixOS host
 
 ```bash
@@ -214,6 +230,7 @@ nix run .#pz-workshop -- resolve pack <name>       # same, for an existing pack
 nix run .#pz-workshop -- emit vanilla-plus         # paste-ready Workshop URLs
 nix run .#pz-client-mods -- vanilla-plus           # install a pack's mods for a client
 nix run .#pz-pack-doctor -- --pack vanilla-plus --workshop-root <dir>   # verify after download
+nix run .#pz-pack-web -- --pack viewpoint          # connector mod -> upload tree
 ```
 
 Full option reference: `docs/options.md`. Host recipes: `docs/host-recipes.md`.
