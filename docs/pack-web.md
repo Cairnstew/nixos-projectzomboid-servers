@@ -175,6 +175,27 @@ $ nix run .#pz-pack-doctor -- --pack viewpoint \
 The connector excludes its own id from `loadModAfter` and from the manifest, so
 adding it to the pack does not make it depend on or audit itself.
 
+### Verify before the download lands
+
+The doctor reports the new item and `PZPackWebViewpoint` as missing until
+steamcmd or a subscription fetches it — correct, but it hides whether the
+declared id and the mod id actually agree. Check that separately by building a
+root that contains every installed item plus the staged one:
+
+```console
+$ R=~/SteamLibrary/steamapps/workshop/content/108600
+$ T=$(mktemp -d)
+$ for d in "$R"/*/; do ln -s "${d%/}" "$T/$(basename "$d")"; done
+$ mkdir -p "$T/<new-id>/mods"
+$ cp -r ~/Zomboid/Workshop/PZPackWeb-<pack>/Contents/mods/<ModId> "$T/<new-id>/mods/"
+$ nix run .#pz-pack-doctor -- --pack <pack> --workshop-root "$T"
+```
+
+Copy, not symlink, for the new item: the doctor's walk does not descend into a
+symlinked mod folder. If the only errors left are the ones that predate the
+change, the wiring is correct and the real run will pass once the item is
+downloaded.
+
 ## Updating it
 
 Regenerate into the same folder with the existing id, replace the preview if
