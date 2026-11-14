@@ -15,6 +15,15 @@
 > publishable Workshop item that loads last, carries the manifest and audits the
 > active list. It contains only our code and data. File-patch overlays remain a
 > proposal, because they need the target author's permission.
+>
+> The connector's **client prompt** landed next: at the main menu it lists the
+> pack mods that are missing or installed-but-disabled, opens their Workshop page
+> and enables the ones already downloaded. The Mod ID → Workshop id map is
+> generated from an installed tree (`pz_pack_doctor.scan`), because only
+> `mod.info` connects the two namespaces. It cannot subscribe or download —
+> `SteamWorkshop.SubscribeItem` is not Lua-exposed — so the honest ceiling is
+> "open the page and let Steam ask", which is what vanilla's `MissedModsWindow`
+> does.
 
 ## 1. The question
 
@@ -197,6 +206,10 @@ asymmetry — not enforcement.
       `loadModAfter` of every pack Mod ID, a generated manifest, and a
       server-start audit. No hard `require=`, no file overrides, no
       redistribution. Publishing steps in `docs/pack-web.md`.
+- [x] **Client prompt in the connector.** Missing/disabled pack mods at the main
+      menu, per-mod Workshop button, and `setModActive`+`saveModsFile` for what
+      is already installed. Downloads stay manual: the API needed to subscribe
+      is not exposed to Lua.
 - [ ] `packOverlay` as **pack data** (`patches` = relative path -> text/source,
       `loadAfter`, `require`, `modInfoExtra`). Packs stay pkgs-free
       (`modpacks/default.nix:35` imports them with no arguments).

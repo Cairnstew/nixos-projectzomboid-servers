@@ -7,12 +7,19 @@
 #   * `loadModAfter=` every Mod ID in the pack, so it loads last and a future
 #     pack-wide patch file can override the mods it targets;
 #   * a generated manifest of the pack's Mod IDs;
-#   * a server-start audit that logs which pack mods are missing / extra.
+#   * a server-start audit that logs which pack mods are missing / extra;
+#   * a client prompt that names missing mods and opens their Workshop page,
+#     with a button to enable the ones that are installed but switched off.
 #
 # It does NOT copy, modify or redistribute any other mod's files. That is what
 # makes it publishable: the Workshop item is our own code and data only. A
-# future patch that overwrites another mod's relative path is a licensing
-# decision (see docs/plans/pack-web.md), not something this generator does.
+# patch that overwrites another mod's relative path is a separate, deliberate
+# change (see docs/plans/pack-web.md), not something this generator does.
+#
+# The client prompt cannot subscribe or download. `SteamWorkshop.SubscribeItem`
+# is not Lua-exposed; only the in-game server-join flow can do that. The prompt
+# therefore opens the item page (`activateSteamOverlayToWorkshopItem`) and lets
+# Steam do the rest, which is exactly what vanilla's MissedModsWindow does.
 #
 # The output follows the in-game uploader's layout (verified against
 # ~/Zomboid/Workshop/ModTemplate and an installed B42 item):
@@ -22,7 +29,10 @@
 #     preview.png
 #     Contents/mods/<mod-id>/42/mod.info
 #     Contents/mods/<mod-id>/42/media/lua/shared/PZPackWeb/manifest.lua
+#     Contents/mods/<mod-id>/42/media/lua/shared/PZPackWeb/workshop.lua
+#     Contents/mods/<mod-id>/42/media/lua/shared/PZPackWeb/state.lua
 #     Contents/mods/<mod-id>/42/media/lua/server/PZPackWeb/audit.lua
+#     Contents/mods/<mod-id>/42/media/lua/client/PZPackWeb/prompt.lua
 #
 # Then: Main Menu -> Workshop -> Create/Update, select the folder, set the
 # visibility, Upload. `--workshop-id` updates an existing item.
@@ -40,7 +50,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pz_client_mods as pcm  # noqa: E402
 
+# Reuse the doctor's "which Mod IDs does this Workshop item provide" scanner.
+# It is the one implementation of the B42 mod-root / version-folder rules, and
+# it is what turns an installed tree into the mod -> Workshop id map the client
+# prompt needs. Importing is safe: its CLI is behind main().
+import pz_pack_doctor as doctor  # noqa: E402
+
 CATALOGUE_ENV = pcm.CATALOGUE_ENV
+WORKSHOP_ENV = doctor.WORKSHOP_ENV
+STEAM_APP_ID = "108600"
 DEFAULT_WORKSHOP_DIR = os.path.join(os.path.expanduser("~"), "Zomboid", "Workshop")
 
 # The uploader validates the preview: 512x512 max, 8-bit.
@@ -123,6 +141,58 @@ def lua_string(value):
     return '"' + value + '"'
 
 
+def default_workshop_root():
+    """The first Steam library that has PZ Workshop content, or None.
+
+    The generator runs on a machine that plays the game, not necessarily a
+    server, so `--workshop-root` has a sensible default: read
+    `libraryfolders.vdf` and pick the first library with
+    `steamapps/workshop/content/108600`. This only ever reads.
+    """
+    home = os.path.expanduser("~")
+    steam_roots = [
+        os.path.join(home, ".local", "share", "Steam"),
+        os.path.join(home, ".steam", "steam"),
+    ]
+    candidates = list(steam_roots)
+    for steam in steam_roots:
+        vdf = os.path.join(steam, "steamapps", "libraryfolders.vdf")
+        try:
+            with open(vdf, encoding="utf-8", errors="replace") as fh:
+                candidates.extend(re.findall(r'"path"\s+"([^"]+)"', fh.read()))
+        except OSError:
+            continue
+    for root in candidates:
+        workshop = os.path.join(root, "steamapps", "workshop", "content", STEAM_APP_ID)
+        if os.path.isdir(workshop):
+            return workshop
+    return None
+
+
+def resolve_workshop_ids(pack_data, workshop_root):
+    """{Mod ID: Workshop item id} for the pack, from the installed tree.
+
+    The catalogue pairs Workshop ids with titles and lists Mod IDs separately;
+    the mapping between the two namespaces only exists inside each installed
+    item's `mod.info`. That is why this needs a Workshop root, and why a pack
+    generated without one still works — the prompt just cannot link.
+
+    Best effort by design: an item that is not installed is reported, not fatal,
+    because the item you are about to publish is by definition not installed
+    yet.
+    """
+    declared = []
+    for entry in pack_data.get("workshopMods") or []:
+        if isinstance(entry, dict) and str(entry.get("id", "")).isdigit():
+            declared.append(str(entry["id"]))
+    if not workshop_root or not declared or not os.path.isdir(workshop_root):
+        return {}, []
+
+    report = doctor.Report()
+    installed, _item_mods = doctor.scan(workshop_root, declared, report)
+    return {mod_id: info.item for mod_id, info in installed.items()}, report.errors
+
+
 # === PART 2 ===
 
 def render_mod_info(pack, mod_id, mods):
@@ -159,6 +229,24 @@ def render_manifest(pack, mods, mod_id):
     return "\n".join(lines)
 
 
+def render_workshop(pack, mods, links):
+    """`workshop.lua`: Mod ID -> Workshop item id, for the client prompt.
+
+    Generated from the installed tree rather than the catalogue, because a
+    Workshop item and a Mod ID are different namespaces and only `mod.info`
+    connects them. A Mod ID with no entry is still listed by the prompt; it just
+    has no page to open.
+    """
+    lines = [
+        "-- Generated by pz-pack-web from the installed Workshop tree. Do not edit.",
+        "PZPackWeb = PZPackWeb or {}",
+        "PZPackWeb.workshop = {",
+    ]
+    lines += [f"    [{lua_string(mod_id)}] = {lua_string(links[mod_id])}," for mod_id in mods if mod_id in links]
+    lines += ["}", ""]
+    return "\n".join(lines)
+
+
 def render_audit():
     """Server-start audit. Read-only, no files, no network, no game state."""
     return r"""-- Generated by pz-pack-web. Read-only: it logs, it changes nothing.
@@ -167,20 +255,18 @@ def render_audit():
 -- cleanly; PZ only logs a generic "required mod not found" for the entries it
 -- tries to load. This compares the ACTIVE list to the generated manifest, so a
 -- missing or extra pack mod is named at start.
+-- Shared files load before server files for the same mod, so this is normally a
+-- no-op; the require is a fallback so a load-order change cannot silently kill
+-- the audit. `PZPackWeb/manifest` lives in shared/, hence the require path.
 PZPackWeb = PZPackWeb or {}
-
-local function active_mods()
-    local set = {}
-    local active = getActivatedMods and getActivatedMods() or nil
-    if not active then
-        return set
-    end
-    -- A java.util.ArrayList, not a Lua table: 0-based :get/:size.
-    for i = 0, active:size() - 1 do
-        set[active:get(i)] = true
-    end
-    return set
+if not PZPackWeb.mods then
+    require "PZPackWeb/manifest"
 end
+if not PZPackWeb.state then
+    require "PZPackWeb/state"
+end
+
+local state = PZPackWeb.state
 
 local function summarize(list, limit)
     if #list <= limit then
@@ -200,21 +286,8 @@ local function audit()
     if not PZPackWeb.mods then
         return
     end
-    local active = active_mods()
-    local missing, extra = {}, {}
-    for id in pairs(PZPackWeb.mods) do
-        if not active[id] then
-            table.insert(missing, id)
-        end
-    end
-    for id in pairs(active) do
-        -- The connector is active but deliberately not in its own manifest.
-        if id ~= PZPackWeb.id and not PZPackWeb.mods[id] then
-            table.insert(extra, id)
-        end
-    end
-    table.sort(missing)
-    table.sort(extra)
+    local active = state.toSet(getActivatedMods and getActivatedMods() or nil)
+    local missing, extra = state.diff(PZPackWeb.mods, active, PZPackWeb.id)
 
     if #missing == 0 and #extra == 0 then
         print(string.format("[PZPackWeb] %s: all %d pack mods active", PZPackWeb.pack, PZPackWeb.count))
@@ -238,6 +311,369 @@ Events.OnGameStart.Add(audit)
 """
 
 
+def render_state():
+    """Shared pure helpers: no UI, no IO, no game state, so CI can run them."""
+    return r"""-- Generated by pz-pack-web. Pure set helpers shared by the audit and the prompt.
+--
+-- Nothing here draws, reads a file or changes a mod: every function is an
+-- operation on the generated manifest, which is what makes it testable in CI.
+PZPackWeb = PZPackWeb or {}
+PZPackWeb.state = PZPackWeb.state or {}
+
+local state = PZPackWeb.state
+
+-- A java.util.ArrayList (getActivatedMods, ActiveMods:getMods) is 0-based and
+-- has :size/:get, not ipairs. Test for the methods, not type(): the Kahlua
+-- wrapper is a table, so type(list) == "table" for both shapes.
+function state.toSet(list)
+    local set = {}
+    if not list then
+        return set
+    end
+    if list.size and list.get then
+        for i = 0, list:size() - 1 do
+            set[list:get(i)] = true
+        end
+        return set
+    end
+    for _, id in ipairs(list) do
+        set[id] = true
+    end
+    return set
+end
+
+-- Every mod folder the game can see, active or not. getActivatedMods() answers
+-- only the active list, so it cannot tell "installed but switched off" from
+-- "not installed at all".
+function state.installedSet()
+    local set = {}
+    if not getModDirectoryTable or not getModInfo then
+        return set
+    end
+    for _, directory in ipairs(getModDirectoryTable()) do
+        local info = getModInfo(directory)
+        local id = info and info:getId() or nil
+        if id and id ~= "" then
+            set[id] = true
+        end
+    end
+    return set
+end
+
+-- Server view: manifest entries that are not active, and active mods the pack
+-- does not declare. Sorted so a log line is stable between runs.
+function state.diff(manifest, active, selfId)
+    local missing, extra = {}, {}
+    for id in pairs(manifest) do
+        if not active[id] then
+            missing[#missing + 1] = id
+        end
+    end
+    for id in pairs(active) do
+        -- The connector is active but deliberately not in its own manifest.
+        if id ~= selfId and not manifest[id] then
+            extra[#extra + 1] = id
+        end
+    end
+    table.sort(missing)
+    table.sort(extra)
+    return missing, extra
+end
+
+-- Client view: mods the player does not have at all, and mods they have but
+-- have not enabled. Both leave the pack incomplete; only the first needs a
+-- download, so the prompt treats them differently.
+function state.classify(manifest, active, installed, selfId)
+    local missing, inactive = {}, {}
+    for id in pairs(manifest) do
+        if id ~= selfId then
+            if not installed[id] then
+                missing[#missing + 1] = id
+            elseif not active[id] then
+                inactive[#inactive + 1] = id
+            end
+        end
+    end
+    table.sort(missing)
+    table.sort(inactive)
+    return missing, inactive
+end
+
+-- Changes when the incomplete set changes, so the prompt nags once per distinct
+-- problem instead of on every launch.
+function state.signature(missing, inactive)
+    return string.format("%d:%d", #missing, #inactive)
+end
+"""
+
+
+def render_prompt():
+    """Client-side "you are missing mods" panel.
+
+    It cannot download: `SteamWorkshop.SubscribeItem` is not exposed to Lua, and
+    the only automatic download path is the server-join flow that the server's
+    own `WorkshopItems=` already drives. So this does what vanilla's
+    MissedModsWindow does — open the item page — plus a button that enables mods
+    that are installed but switched off.
+    """
+    return r"""-- Generated by pz-pack-web. Client-only: it draws a panel and, when the player
+-- presses a button, either opens a Workshop page or enables installed mods.
+--
+-- It never downloads and never subscribes. `SteamWorkshop.SubscribeItem` is not
+-- exposed to Lua; the game's only automatic download path is the in-game
+-- server-join flow. Opening the page and letting Steam ask is the honest limit.
+require "ISUI/ISPanel"
+require "ISUI/ISButton"
+require "ISUI/ISScrollingListBox"
+require "ISUI/ISModalDialog"
+
+-- Shared files load before client files for the same mod, so this is normally a
+-- no-op; the require is a fallback.
+PZPackWeb = PZPackWeb or {}
+if not PZPackWeb.mods then
+    require "PZPackWeb/manifest"
+end
+if not PZPackWeb.workshop then
+    require "PZPackWeb/workshop"
+end
+if not PZPackWeb.state then
+    require "PZPackWeb/state"
+end
+
+local state = PZPackWeb.state
+
+local function cfg_name()
+    return "pzpackweb_" .. string.gsub(PZPackWeb.pack or "pack", "[^%w_]", "_") .. ".cfg"
+end
+
+-- The dismissed-problem signature. Comparing it to the current one means the
+-- panel appears when the incomplete set changes, not on every launch.
+local function read_signature()
+    local ok, line = pcall(function()
+        local file = getFileReader(cfg_name(), true)
+        if not file then
+            return nil
+        end
+        local value = file:readLine()
+        file:close()
+        return value
+    end)
+    if ok then
+        return line
+    end
+    return nil
+end
+
+local function write_signature(value)
+    pcall(function()
+        local file = getFileWriter(cfg_name(), true, false)
+        if file then
+            file:write(tostring(value) .. "\n")
+            file:close()
+        end
+    end)
+end
+
+-- Save the "default" active-mod list with these ids switched on. This is the
+-- same pair of calls the mod selector makes when it accepts changes; it has no
+-- effect on the current session, hence the restart notice.
+local function enable_installed(ids)
+    local active = ActiveMods and ActiveMods.getById and ActiveMods.getById("default") or nil
+    if not active then
+        return 0
+    end
+    local count = 0
+    for _, id in ipairs(ids) do
+        active:setModActive(id, true)
+        count = count + 1
+    end
+    if saveModsFile then
+        saveModsFile()
+    end
+    return count
+end
+
+PZPackWeb.prompt = ISPanel:derive("PZPackWebPrompt")
+local Prompt = PZPackWeb.prompt
+
+function Prompt:new(x, y, width, height, missing, inactive, links)
+    local o = ISPanel:new(x, y, width, height)
+    setmetatable(o, self)
+    self.__index = self
+    o.missing = missing
+    o.inactive = inactive
+    o.links = links
+    o.backgroundColor = { r = 0.05, g = 0.05, b = 0.05, a = 0.94 }
+    o.borderColor = { r = 0.4, g = 0.4, b = 0.4, a = 1 }
+    return o
+end
+
+local function row_text(id, installed, linked)
+    if installed then
+        return id .. "   [installed, not enabled]"
+    end
+    if linked then
+        return id .. "   [missing]"
+    end
+    return id .. "   [missing, no Workshop link]"
+end
+
+function Prompt:createChildren()
+    local pad = 12
+    local listY = 58
+    local listH = self.height - listY - 58
+
+    self.list = ISScrollingListBox:new(pad, listY, self.width - pad * 2, listH)
+    self.list:initialise()
+    self.list:instantiate()
+    self.list:setFont(UIFont.Small)
+    self.list.itemheight = math.floor(getTextManager():getFontHeight(UIFont.Small) + 6)
+    self.list.drawBorder = true
+    for _, id in ipairs(self.missing) do
+        self.list:addItem(row_text(id, false, self.links[id] ~= nil), { id = id, installed = false })
+    end
+    for _, id in ipairs(self.inactive) do
+        self.list:addItem(row_text(id, true, self.links[id] ~= nil), { id = id, installed = true })
+    end
+    if #self.list.items > 0 then
+        self.list.selected = 1
+    end
+    self:addChild(self.list)
+
+    local y = self.height - 44
+    self.workshopButton = ISButton:new(pad, y, 190, 30, "Open Workshop page", self, Prompt.onWorkshop)
+    self.workshopButton:initialise()
+    self.workshopButton:instantiate()
+    self.workshopButton:setFont(UIFont.Small)
+    self:addChild(self.workshopButton)
+
+    self.enableButton = ISButton:new(pad + 198, y, 210, 30,
+        string.format("Enable %d installed", #self.inactive), self, Prompt.onEnable)
+    self.enableButton:initialise()
+    self.enableButton:instantiate()
+    self.enableButton:setFont(UIFont.Small)
+    self.enableButton:setEnable(#self.inactive > 0)
+    self:addChild(self.enableButton)
+
+    self.copyButton = ISButton:new(pad + 416, y, 110, 30, "Copy list", self, Prompt.onCopy)
+    self.copyButton:initialise()
+    self.copyButton:instantiate()
+    self.copyButton:setFont(UIFont.Small)
+    self:addChild(self.copyButton)
+
+    self.closeButton = ISButton:new(self.width - pad - 100, y, 100, 30, "Close", self, Prompt.onClose)
+    self.closeButton:initialise()
+    self.closeButton:instantiate()
+    self.closeButton:setFont(UIFont.Small)
+    self:addChild(self.closeButton)
+end
+
+function Prompt:prerender()
+    ISPanel.prerender(self)
+    self:drawTextCentre("PZ Pack Web - " .. (PZPackWeb.pack or "pack"),
+        self.width / 2, 12, 1, 1, 1, 1, UIFont.Large)
+    local line = string.format("%d of %d pack mods missing", #self.missing, PZPackWeb.count or 0)
+    if #self.inactive > 0 then
+        line = line .. string.format(", %d installed but not enabled", #self.inactive)
+    end
+    self:drawTextCentre(line, self.width / 2, 34, 0.85, 0.85, 0.85, 1, UIFont.Small)
+    if self.notice then
+        self:drawTextCentre(self.notice, self.width / 2, self.height - 68, 0.6, 0.9, 0.6, 1, UIFont.Small)
+    end
+end
+
+function Prompt:update()
+    ISPanel.update(self)
+    local row = self.list.items[self.list.selected]
+    local canLink = row ~= nil and self.links[row.item.id] ~= nil
+    if self.workshopButton then
+        self.workshopButton:setEnable(canLink)
+    end
+end
+
+function Prompt:onWorkshop()
+    local row = self.list.items[self.list.selected]
+    if not row then
+        return
+    end
+    local workshop = self.links[row.item.id]
+    if workshop and activateSteamOverlayToWorkshopItem then
+        activateSteamOverlayToWorkshopItem(workshop)
+        return
+    end
+    self.notice = "No Workshop id for " .. row.item.id
+end
+
+function Prompt:onEnable()
+    local count = enable_installed(self.inactive)
+    write_signature(state.signature(self.missing, {}))
+    self:setVisible(false)
+    self:removeFromUIManager()
+    local text = string.format("Enabled %d mod(s). Restart Project Zomboid to load them.", count)
+    local modal = ISModalDialog:new(getCore():getScreenWidth() / 2 - 220,
+        getCore():getScreenHeight() / 2 - 60, 440, 120, text, false, nil, nil)
+    modal:initialise()
+    modal:addToUIManager()
+end
+
+function Prompt:onCopy()
+    if not (Clipboard and Clipboard.setClipboard) then
+        return
+    end
+    local lines = { "Missing from modpack " .. (PZPackWeb.pack or "?") .. ":" }
+    for _, id in ipairs(self.missing) do
+        local workshop = self.links[id]
+        if workshop then
+            lines[#lines + 1] = id .. " https://steamcommunity.com/sharedfiles/filedetails/?id=" .. workshop
+        else
+            lines[#lines + 1] = id
+        end
+    end
+    Clipboard.setClipboard(table.concat(lines, "\n"))
+    self.notice = "Copied " .. #self.missing .. " mod(s) to the clipboard"
+end
+
+function Prompt:onClose()
+    write_signature(state.signature(self.missing, self.inactive))
+    self:setVisible(false)
+    self:removeFromUIManager()
+end
+
+-- The signature already shown this session. OnMainMenuEnter fires again after
+-- leaving a game, and a second panel for the same problem is noise.
+local shown_signature = nil
+
+local function check()
+    if not PZPackWeb.mods or not PZPackWeb.count then
+        return
+    end
+    local active = state.toSet(getActivatedMods and getActivatedMods() or nil)
+    local installed = state.installedSet()
+    local missing, inactive = state.classify(PZPackWeb.mods, active, installed, PZPackWeb.id)
+    if #missing == 0 and #inactive == 0 then
+        return
+    end
+    local sig = state.signature(missing, inactive)
+    -- Once per distinct problem per session, and once per dismissal across
+    -- launches. OnMainMenuEnter fires again after leaving a game.
+    if sig == shown_signature or read_signature() == sig then
+        return
+    end
+    local w = math.min(760, getCore():getScreenWidth() - 80)
+    local h = math.min(620, getCore():getScreenHeight() - 80)
+    local panel = Prompt:new((getCore():getScreenWidth() - w) / 2,
+        (getCore():getScreenHeight() - h) / 2, w, h,
+        missing, inactive, PZPackWeb.workshop or {})
+    panel:initialise()
+    panel:addToUIManager()
+    panel:bringToTop()
+    shown_signature = sig
+end
+
+Events.OnMainMenuEnter.Add(check)
+"""
+
+
 def render_workshop_txt(pack, pack_data, mods, visibility, workshop_id):
     """`workshop.txt`. Repeated `description=` lines, BBCode is allowed."""
     title = f"PZ Pack Web - {pack}"
@@ -255,6 +691,10 @@ def render_workshop_txt(pack, pack_data, mods, visibility, workshop_id):
         "load order and logs any pack mod that is missing (or any extra mod) when a "
         "server starts.",
         "description=",
+        "description=On the client it names the pack mods you are missing at the main "
+        "menu, opens their Workshop page, and can enable the ones you already have but "
+        "have switched off. It cannot download anything for you.",
+        "description=",
         "description=It adds no content, overrides no files, and does not redistribute "
         "any other mod. Safe to add to an existing world.",
         "description=",
@@ -266,8 +706,9 @@ def render_workshop_txt(pack, pack_data, mods, visibility, workshop_id):
     return "\n".join(lines)
 
 
-def build_tree(pack, pack_data, target, args):
+def build_tree(pack, pack_data, target, args, links=None):
     """Write the upload tree into a fresh temp dir, then move it into place."""
+    links = links or {}
     mods = [check_value("mod id", m) for m in (pack_data.get("mods") or [])]
     if not mods:
         raise SystemExit(f"pz-pack-web: pack {pack!r} has no mods to link")
@@ -284,6 +725,10 @@ def build_tree(pack, pack_data, target, args):
     if not linked:
         raise SystemExit(f"pz-pack-web: pack {pack!r} has no mods besides the connector")
 
+    # Only link mods the pack actually loads, and only those the installed tree
+    # could resolve. A stray id from an item's other mods is not ours to link.
+    emitted = {mod_id_: links[mod_id_] for mod_id_ in linked if mod_id_ in links}
+
     parent = os.path.dirname(os.path.abspath(target)) or "."
     os.makedirs(parent, exist_ok=True)
     staging = tempfile.mkdtemp(prefix=".pz-pack-web-", dir=parent)
@@ -292,13 +737,18 @@ def build_tree(pack, pack_data, target, args):
         mod_dir = os.path.join(item, "Contents", "mods", mod_id, "42")
         lua_shared = os.path.join(mod_dir, "media", "lua", "shared", "PZPackWeb")
         lua_server = os.path.join(mod_dir, "media", "lua", "server", "PZPackWeb")
+        lua_client = os.path.join(mod_dir, "media", "lua", "client", "PZPackWeb")
         os.makedirs(lua_shared)
         os.makedirs(lua_server)
+        os.makedirs(lua_client)
 
         files = {
             os.path.join(mod_dir, "mod.info"): render_mod_info(pack, mod_id, linked),
             os.path.join(lua_shared, "manifest.lua"): render_manifest(pack, linked, mod_id),
+            os.path.join(lua_shared, "workshop.lua"): render_workshop(pack, linked, emitted),
+            os.path.join(lua_shared, "state.lua"): render_state(),
             os.path.join(lua_server, "audit.lua"): render_audit(),
+            os.path.join(lua_client, "prompt.lua"): render_prompt(),
             os.path.join(item, "workshop.txt"): render_workshop_txt(
                 pack, pack_data, linked, args.visibility, args.workshop_id
             ),
@@ -323,7 +773,7 @@ def build_tree(pack, pack_data, target, args):
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
-    return mod_id, len(linked)
+    return mod_id, len(linked), len(emitted)
 
 
 def main(argv=None):
@@ -348,6 +798,15 @@ def main(argv=None):
         "--catalogue",
         default=os.environ.get(CATALOGUE_ENV),
         help=f"JSON catalogue (default: ${CATALOGUE_ENV})",
+    )
+    parser.add_argument(
+        "--workshop-root",
+        default=os.environ.get(WORKSHOP_ENV) or default_workshop_root(),
+        help=(
+            "steamapps/workshop/content/108600 root, used to map Mod IDs to "
+            f"Workshop ids for the client prompt (default: ${WORKSHOP_ENV}, then the "
+            "first Steam library that has PZ Workshop content)"
+        ),
     )
     parser.add_argument("--mod-id", default=None, help="Override the generated Mod ID")
     parser.add_argument(
@@ -390,7 +849,15 @@ def main(argv=None):
     target = args.out_dir or os.path.join(DEFAULT_WORKSHOP_DIR, f"PZPackWeb-{args.pack}")
     target = os.path.expanduser(target)
 
-    mod_id, count = build_tree(args.pack, pack_data, target, args)
+    links, link_errors = resolve_workshop_ids(pack_data, args.workshop_root)
+    if args.workshop_root and not os.path.isdir(args.workshop_root):
+        print(
+            f"pz-pack-web: {args.workshop_root} is not a directory; "
+            "the client prompt will have no Workshop links",
+            file=sys.stderr,
+        )
+
+    mod_id, count, linked_count = build_tree(args.pack, pack_data, target, args, links)
 
     summary = {
         "pack": args.pack,
@@ -400,9 +867,14 @@ def main(argv=None):
         "workshop_id": args.workshop_id,
         "visibility": args.visibility,
         "preview": "provided" if args.preview else "generated placeholder",
+        "workshop_root": os.path.abspath(args.workshop_root) if args.workshop_root else None,
+        "workshop_links": linked_count,
+        "link_errors": link_errors,
     }
     if args.json:
         print(json.dumps(summary, indent=2))
+        for message in link_errors[:5]:
+            print(f"  note: {message}", file=sys.stderr)
         return 0
 
     print(f"pz-pack-web: wrote {summary['out_dir']}")
@@ -411,6 +883,15 @@ def main(argv=None):
         f"  workshop.txt: visibility={args.visibility}, "
         + (f"updating id {args.workshop_id}" if args.workshop_id else "new item (no id)")
     )
+    if links:
+        print(f"  client prompt: {linked_count}/{count} pack mods have a Workshop link")
+    else:
+        print(
+            "  client prompt: no Workshop links "
+            "(pass --workshop-root or set $PZ_WORKSHOP_DIR to add them)"
+        )
+    for message in link_errors[:5]:
+        print(f"  note: {message}", file=sys.stderr)
     if not args.preview:
         print("  preview.png is a generated placeholder - replace it with a real 512x512 PNG")
     print()

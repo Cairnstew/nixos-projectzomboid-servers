@@ -1091,6 +1091,17 @@ in
         grep -qx 'loadModAfter=Alpha,Beta' "$info" || fail "loadModAfter is not the pack order"
         ! grep -q '^require=' "$info" || fail "the connector must not hard-require the pack"
 
+        shared="$item/Contents/mods/PZPackWebTest/42/media/lua/shared/PZPackWeb"
+        client="$item/Contents/mods/PZPackWebTest/42/media/lua/client/PZPackWeb"
+        [ -f "$shared/state.lua" ] || fail "no shared state helper"
+        [ -f "$shared/workshop.lua" ] || fail "no shared Workshop map"
+        [ -f "$client/prompt.lua" ] || fail "no client prompt"
+        ! grep -qE 'SubscribeItem[[:space:]]*\(' "$client/prompt.lua" \
+          || fail "the prompt calls SubscribeItem, which is not Lua-exposed"
+        grep -q 'activateSteamOverlayToWorkshopItem' "$client/prompt.lua" \
+          || fail "the prompt does not open Workshop pages"
+        grep -q 'saveModsFile' "$client/prompt.lua" || fail "the prompt cannot enable installed mods"
+
         grep -q 'PZPackWeb.id = "PZPackWebTest"' "$manifest" || fail "manifest has no self id"
         [ "$(grep -c '= true' "$manifest")" = 2 ] || fail "manifest does not list both pack mods"
         grep -q 'Events.OnGameStart.Add(audit)' "$audit" || fail "audit is not registered"
@@ -1101,6 +1112,7 @@ in
 
         # The audit must name a missing mod and not crash on a Java-list stub.
         ( cd "$item/Contents/mods/PZPackWebTest/42/media/lua" && lua -e '
+          package.path = "shared/?.lua;" .. package.path
           Events = { OnGameStart = { Add = function(f) f() end } }
           isServer = function() return true end
           getActivatedMods = function()
@@ -1111,6 +1123,165 @@ in
           dofile("server/PZPackWeb/audit.lua")
         ' ) > audit.log 2>&1 || fail "the audit raised a Lua error"
         grep -q '1 pack mod(s) missing: Beta' audit.log || fail "the audit did not name the missing mod"
+
+        # ── Workshop links: resolved from an installed tree, never invented ──
+        ws="$TMPDIR/ws"
+        mkdir -p "$ws/111/mods/Alpha/42" "$ws/222/mods/Beta/42"
+        printf 'name=Alpha\nid=Alpha\n' > "$ws/111/mods/Alpha/42/mod.info"
+        printf 'name=Beta\nid=Beta\n' > "$ws/222/mods/Beta/42/mod.info"
+        python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack test --out-dir "$TMPDIR/linked" \
+          --workshop-root "$ws" --force --json > linked.json || fail "generation with a Workshop root failed"
+        grep -q '"workshop_links": 2' linked.json || fail "the Workshop link count is wrong"
+        wl="$TMPDIR/linked/Contents/mods/PZPackWebTest/42/media/lua/shared/PZPackWeb/workshop.lua"
+        grep -q '\["Alpha"\] = "111"' "$wl" || fail "Alpha has no Workshop link"
+        grep -q '\["Beta"\] = "222"' "$wl" || fail "Beta has no Workshop link"
+
+        # A declared item that is not installed is a note, not a failure: the
+        # item being published is by definition not installed yet.
+        ws2="$TMPDIR/ws2"
+        mkdir -p "$ws2/111/mods/Alpha/42"
+        printf 'name=Alpha\nid=Alpha\n' > "$ws2/111/mods/Alpha/42/mod.info"
+        python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack test --out-dir "$TMPDIR/partial" \
+          --workshop-root "$ws2" --force --json > partial.json 2> partial.err \
+          || fail "a partially installed Workshop tree made generation fail"
+        grep -q '"workshop_links": 1' partial.json || fail "the partial link count is wrong"
+        grep -q 'not installed' partial.err || fail "an uninstalled item was not reported"
+
+        # No root at all still produces a valid item, just without links.
+        python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack test --out-dir "$TMPDIR/unlinked" \
+          --workshop-root "" --force --json > unlinked.json \
+          || fail "generation without a Workshop root failed"
+        grep -q '"workshop_links": 0' unlinked.json || fail "links appeared without a Workshop root"
+
+        # ── state.lua is the only logic, so it gets a real unit test ──
+        ( cd "$item/Contents/mods/PZPackWebTest/42/media/lua" && lua -e '
+          function getModDirectoryTable() return { "a", "b" } end
+          function getModInfo(d)
+            if d == "a" then return { getId = function() return "Alpha" end } end
+            return { getId = function() return "Beta" end }
+          end
+          dofile("shared/PZPackWeb/state.lua")
+          local s = PZPackWeb.state
+          local manifest = { Alpha = true, Beta = true, Gamma = true }
+          local active = s.toSet({ "Alpha" })
+          local installed = s.installedSet()
+          local missing, inactive = s.classify(manifest, active, installed, "Self")
+          assert(#missing == 1 and missing[1] == "Gamma", "classify: Gamma should be missing")
+          assert(#inactive == 1 and inactive[1] == "Beta", "classify: Beta should be inactive")
+          local diffMissing, extra = s.diff(manifest, active, "Self")
+          assert(#diffMissing == 2, "diff: Beta and Gamma are not active")
+          assert(#extra == 0, "diff: nothing is outside the pack")
+          assert(s.signature(missing, inactive) == "1:1", "signature is not stable")
+          assert(s.toSet({ "X", "Y" }).Y, "toSet does not accept a plain array")
+        ' ) > state.log 2>&1 || { cat state.log; fail "state.lua unit test failed"; }
+
+        # ── prompt.lua: shows once, and enables what is already installed ──
+        cat > "$TMPDIR/prompt-test.lua" <<'LUA'
+        local shown = 0
+        local saved = {}
+        local save_calls = 0
+        local activated = {}
+
+        package.path = "shared/?.lua;" .. package.path
+
+        package.preload["ISUI/ISPanel"] = function()
+            ISPanel = {}
+            function ISPanel:new(x, y, w, h) return {} end
+            function ISPanel:derive(name)
+                return {
+                    addChild = function() end,
+                    initialise = function() end,
+                    addToUIManager = function() shown = shown + 1 end,
+                    bringToTop = function() end,
+                    setVisible = function() end,
+                    removeFromUIManager = function() end,
+                }
+            end
+            function ISPanel.prerender() end
+            function ISPanel.update() end
+        end
+        package.preload["ISUI/ISButton"] = function()
+            ISButton = {}
+            function ISButton:new()
+                return { initialise = function() end, instantiate = function() end,
+                         setFont = function() end, setEnable = function() end }
+            end
+        end
+        package.preload["ISUI/ISScrollingListBox"] = function()
+            ISScrollingListBox = {}
+            function ISScrollingListBox:new()
+                return { items = {}, initialise = function() end, instantiate = function() end,
+                         setFont = function() end,
+                         addItem = function(self, text, data)
+                             self.items[#self.items + 1] = { text = text, item = data }
+                         end }
+            end
+        end
+        package.preload["ISUI/ISModalDialog"] = function()
+            ISModalDialog = {}
+            function ISModalDialog:new()
+                return { initialise = function() end, addToUIManager = function() end }
+            end
+        end
+
+        UIFont = { Small = 0, Medium = 0, Large = 0 }
+        getTextManager = function() return { getFontHeight = function() return 12 end } end
+        getCore = function()
+            return { getScreenWidth = function() return 1280 end, getScreenHeight = function() return 720 end }
+        end
+        getFileReader = function(name)
+            return { readLine = function() return saved[name] end, close = function() end }
+        end
+        getFileWriter = function(name)
+            local buf = ""
+            return {
+                write = function(_, s) buf = buf .. s end,
+                close = function() saved[name] = (buf:gsub("\n$", "")) end,
+            }
+        end
+
+        local active_ids = { "Alpha" }
+        getActivatedMods = function()
+            local t = active_ids
+            return { size = function() return #t end, get = function(_, i) return t[i + 1] end }
+        end
+        getModDirectoryTable = function() return { "a", "b" } end
+        getModInfo = function(d)
+            if d == "a" then return { getId = function() return "Alpha" end } end
+            return { getId = function() return "Beta" end }
+        end
+        ActiveMods = { getById = function() return { setModActive = function(_, id, on) activated[id] = on end } end }
+        saveModsFile = function() save_calls = save_calls + 1 end
+        Events = { OnMainMenuEnter = { Add = function(f) handler = f end } }
+
+        dofile("client/PZPackWeb/prompt.lua")
+        assert(type(handler) == "function", "the prompt did not register OnMainMenuEnter")
+
+        -- Beta is installed but not active: that is a panel, not a download.
+        handler()
+        assert(shown == 1, "the panel was not shown for an incomplete pack")
+
+        -- Same problem, same signature: no nagging.
+        handler()
+        assert(shown == 1, "the panel nagged again for the same problem")
+
+        PZPackWeb.prompt.onEnable({
+            inactive = { "Beta" }, missing = {}, links = {},
+            setVisible = function() end, removeFromUIManager = function() end,
+        })
+        assert(activated["Beta"] == true, "onEnable did not activate the installed mod")
+        assert(save_calls == 1, "onEnable did not save mods.txt")
+        assert(saved["pzpackweb_test.cfg"] == "0:0", "onEnable did not record the dismissal")
+
+        -- A complete pack shows nothing.
+        shown = 0
+        active_ids = { "Alpha", "Beta" }
+        handler()
+        assert(shown == 0, "the panel was shown for a complete pack")
+        print("prompt ok")
+        LUA
+        ( cd "$item/Contents/mods/PZPackWebTest/42/media/lua" && lua "$TMPDIR/prompt-test.lua" ) \
+          > prompt.log 2>&1 || { cat prompt.log; fail "prompt.lua headless test failed"; }
 
         # 512x512 PNG, as the uploader requires.
         python3 - "$item/preview.png" <<'PY'
@@ -1145,7 +1316,7 @@ in
         fi
         grep -q 'not a PNG' err || fail "the preview failure was not explained"
 
-        echo "pack web ok: workshop.txt/mod.info/manifest/audit/preview are valid; new vs update, overwrite and bad-preview guards hold"
+        echo "pack web ok: workshop.txt/mod.info/manifest/state/workshop/audit/prompt/preview are valid; links resolve from the installed tree; the prompt shows once, enables installed mods and never claims to subscribe; new vs update, overwrite and bad-preview guards hold"
         touch "$out"
       '';
 

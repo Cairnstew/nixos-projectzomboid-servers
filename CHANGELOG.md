@@ -30,6 +30,15 @@ All notable changes to this project. Format follows
   content and overrides no other author's files, so it is safe to publish. See
   `docs/pack-web.md`.
 
+- **The connector prompts the player about missing pack mods.** A client-side
+  panel at the main menu lists the pack mods that are absent or installed but
+  switched off, opens each one's Workshop page (`activateSteamOverlayToWorkshopItem`)
+  and can enable what is already downloaded (`setModActive` + `saveModsFile`).
+  The Mod ID → Workshop id map is generated from an installed tree, since only
+  `mod.info` connects the two namespaces. It cannot subscribe or download:
+  `SteamWorkshop.SubscribeItem` is not Lua-exposed, and the only automatic
+  download path remains the server-join flow driven by `WorkshopItems=`.
+
 - **The catalogue check catches the "download but load nothing" class.** A pack
   with `workshopMods` and an empty `mods` now fails `nix flake check`; duplicate
   Workshop ids and duplicate Mod IDs are rejected too.
