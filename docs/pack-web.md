@@ -116,6 +116,33 @@ the preview and description you edit there are the ones the uploader sends.
 uploader update that item instead. Steam has no public write API, so this step
 is manual by design.
 
+## Test it before publishing
+
+`~/Zomboid/Workshop/<item>` is **upload staging**, not a mod folder: the game
+reads mods from `~/Zomboid/mods` and from Steam's subscribed Workshop content,
+so the tree you just generated is not loaded by anything. To try it first, copy
+the mod folder and enable it:
+
+```console
+$ mkdir -p ~/Zomboid/mods
+$ cp -r ~/Zomboid/Workshop/PZPackWeb-viewpoint/Contents/mods/PZPackWebViewpoint \
+        ~/Zomboid/mods/
+```
+
+Then Mods → enable **PZ Pack Web - viewpoint**. The same copy works for a local
+server (`localMods` symlinks into `Zomboid/mods`).
+
+The prompt only appears when the pack is incomplete, so on a machine with every
+pack mod active it stays silent by design. Disable a pack mod, or start
+single-player with just the connector enabled, to see the panel. The copy is a
+snapshot — re-copy it after regenerating.
+
+Publishing is what makes it downloadable: the staging folder is not, and the
+prompt cannot install itself. Until a client subscribes (Workshop page, a
+collection, or the server-join prompt driven by `WorkshopItems=`), it has
+nothing to run.
+
+
 ## After publishing
 
 Add the item to the pack so the dedicated install downloads it and clients are
