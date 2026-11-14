@@ -29,6 +29,18 @@ All notable changes to this project. Format follows
 
 ### Changed
 
+- **`viewpoint` swaps its batch-ripping mod.** `Rip All Clothing Plus XP`
+  (`RipAllClothing`, 3793908682) replaces `Tear All Clothes [B42 MP]`
+  (`TearAllClothesMP`, 3798812018): the old mod aborted a whole batch with
+  `output_unconfirmed` whenever a mapped-cotton shoe completed, because its
+  client-side confirmation could not see the created ripped sheets inside the
+  five-second window. The replacement queues the vanilla Rip Clothing / Rip
+  Denim Clothing recipes instead of its own, and grants a flat 2.5 Tailoring XP
+  per rip (which stacks with `TailoringXP`). It has no mapping for modded
+  clothing. `Reduce Reuse Recycle` (`ReduceReuseRecycle`, 3276044985) is added
+  alongside it for the items Teardown does not reach: wallets, hide gear and
+  the clothing B42 no longer lets you rip (socks, underwear, shoes, hats).
+
 - **Options and unit builders are split by concern.** `modules/options/` holds
   the declarations (`core`, `servers`, `client-hosts`, `web`, `manage`,
   `backup`) with the shared submodule types in `types.nix`; `modules/services/`

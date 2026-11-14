@@ -346,16 +346,16 @@
     { id = "3789037653"; title = "Tailor's Cut - Cut Clothing Holes Anywhere"; }
     { id = "3416525606"; title = "Recut"; }
     { id = "2142622992"; title = "Repair Any Clothes"; }
-    # Batch ripping lives here, not in Rip-A-Holic (3667745474, removed): its
-    # Rip All only scanned the player's inventory and bags, so clothing on
-    # corpses and in nearby containers still had to be ripped one item at a
-    # time. This fork's Selected / Surrounding / All batches reach open
-    # containers, the floor and corpses, run through its own recipes (so
-    # consumption and output are server-authoritative, not a client-side item
-    # move) and cover socks, belts, underwear, bandanas, gloves and recoverable
-    # shoes. It declares the ORIGINAL item (3519629457) incompatible, so never
-    # add that one alongside it.
-    { id = "3798812018"; title = "Tear All Clothes [B42 MP]"; } # TearAllClothesMP
+    # Rip All Clothing Plus XP replaces Tear All Clothes MP (3798812018,
+    # removed): it queues the vanilla Rip Clothing / Rip Denim Clothing
+    # recipes, so consumption and output stay server-authoritative, and its
+    # Rip All / per-material submenu also cover the vanilla accessories those
+    # recipes skip (underwear, gloves, bandanas, scarves, hockey shorts, burlap
+    # gear, several shoe/hat models). Two caveats: it has no mapping for
+    # modded clothing (Tear All did, via ClothingRecipesDefinitions), and its
+    # flat 2.5 Tailoring XP per rip stacks with TailoringXP, which already
+    # awards XP for the same recipes. No require=/incompatible=.
+    { id = "3793908682"; title = "Rip All Clothing Plus Custom Tailoring XP"; } # RipAllClothing
     { id = "3810122988"; title = "My Tailor Is Rich - Clothing & Shoe Sizes"; }
     { id = "3822249892"; title = "Master Sewing Kit"; }
     { id = "3696197915"; title = "Suture Needles are for Sewing"; }
@@ -395,6 +395,12 @@
     { id = "3792605253"; title = "Teardown - Junk Into Materials"; }
     { id = "3470205514"; title = "[B42]Recycling of waste"; }
     { id = "3787169788"; title = "Improvised Glass & Windows (B42 Stable)"; }
+    # Teardown stops at small junk, so wallets and the clothing B42 dropped
+    # from RipClothing (socks, underwear, shoes, hats, hide gear, burlap
+    # satchels) had no salvage path at all. This adds exactly those static
+    # recipes: leather/denim/burlap/cloth strips back out of them. No Lua, no
+    # item redefinitions, so it is MP-safe next to Teardown/WasteConversion.
+    { id = "3276044985"; title = "Reduce Reuse Recycle"; } # ReduceReuseRecycle
 
     # Structural salvage / cleanup. Dismantle All Buildables is deliberately
     # omitted: it adds the same Dismantle option to workstations/structures
@@ -1137,11 +1143,10 @@
     "TailorsCut"
     "RecutB42"
     "RepairAnyClothes"
-    # Tear All Clothes MP replaces rip-a-holic: batches reach corpses/containers
-    # too, and its recipes are what the context menu queues. It has no
-    # require=, but switches itself off if the original Tear All Clothes
-    # (3519629457) is active, which is why the pack must not add that item.
-    "TearAllClothesMP"
+    # Rip All Clothing Plus XP queues vanilla Rip Clothing / Rip Denim recipes
+    # for its batches; no require=/loadModAfter=, so position is free. It does
+    # not cover modded clothing (Tear All Clothes MP, which it replaced, did).
+    "RipAllClothing"
     "batman_MyTailorIsRich"
     "MasterSewingKit"
     "SutureNeedles4Sewing"
@@ -1210,6 +1215,7 @@
     "Teardown"
     "WasteConversion"
     "ImprovisedGlassB42"
+    "ReduceReuseRecycle"
     "KentuckyWorkstationSalvage"
     "DismantleAllElectronics"
     "TFC_RemoveDebrisMod"
