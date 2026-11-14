@@ -850,6 +850,7 @@
     { id = "3479667649"; title = "Willowbrook Bastion!"; }
     { id = "3823399562"; title = "小音庄园 XiaoYinEstate"; }
     { id = "3495993590"; title = "榛果庄园 Hazelnut Manor"; }
+    { id = "3839932016"; title = "PZ Pack Web - viewpoint"; } # PZPackWebViewpoint
   ];
 
   mods = [
@@ -1516,6 +1517,9 @@
     "Willowbrook Bastion! 2"
     "小音庄园XiaoYinEstate"
     "HazelnutManor"
+    # Last: it declares loadModAfter= every other Mod ID, so a Mods= position
+    # after it would contradict that and the doctor would warn.
+    "PZPackWebViewpoint"
   ];
 
   defaultSettings = {
