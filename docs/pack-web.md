@@ -118,10 +118,14 @@ is manual by design.
 
 ## Test it before publishing
 
-`~/Zomboid/Workshop/<item>` is **upload staging**, not a mod folder: the game
-reads mods from `~/Zomboid/mods` and from Steam's subscribed Workshop content,
-so the tree you just generated is not loaded by anything. To try it first, copy
-the mod folder and enable it:
+In this build the client also enumerates a **staged** item: on 2026-11-14 the
+connector loaded from `~/Zomboid/Workshop/PZPackWeb-viewpoint/Contents/mods`
+with no copy under `~/Zomboid/mods` and no Steam subscription (`loading
+PZPackWebViewpoint` / `overrides .` in `~/Zomboid/Logs`). That makes the staging
+tree usable for a smoke test, and it is **not** distribution — no other machine
+sees anything until the item is published and subscribed.
+
+Copying is still the reliable route if the staged copy is not picked up:
 
 ```console
 $ mkdir -p ~/Zomboid/mods
@@ -137,8 +141,8 @@ pack mod active it stays silent by design. Disable a pack mod, or start
 single-player with just the connector enabled, to see the panel. The copy is a
 snapshot — re-copy it after regenerating.
 
-Publishing is what makes it downloadable: the staging folder is not, and the
-prompt cannot install itself. Until a client subscribes (Workshop page, a
+Publishing is what makes it downloadable: a staged or copied folder is not, and
+the prompt cannot install itself. Until a client subscribes (Workshop page, a
 collection, or the server-join prompt driven by `WorkshopItems=`), it has
 nothing to run.
 
