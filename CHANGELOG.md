@@ -81,6 +81,16 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **Non-ASCII Mod IDs survive the round trip into Lua.** PZ's Lua source reader
+  does not decode UTF-8: the generated manifest's `小音庄园XiaoYinEstate` key
+  reached the engine as `0x0f` plus two replacement characters, so the audit
+  reported that mod as missing *and* as outside the pack on every start — a
+  permanent false positive that hid the real six drops. `lua_string` now emits
+  the UTF-8 bytes as `\ddd` escapes, keeping the file ASCII and the Lua string
+  byte-identical to the Java id. Verified on the running server: the report went
+  from `7 missing` + `1 outside the pack` to exactly the six version-gated or
+  mis-required mods. `checks` covers it with a non-ASCII test pack.
+
 - **The connector's server audit actually runs on a dedicated server.** It was
   registered on `Events.OnGameStart`, which PZ raises from the client's
   `IngameState`; a dedicated server raises `Events.OnServerStarted` from

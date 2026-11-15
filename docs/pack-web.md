@@ -10,7 +10,10 @@ It does four things:
    deliberately absent: a missing or mature-gated item must not stop the
    connector from loading, because that is exactly when its audit matters.
 2. **Carries the manifest.** A generated Lua table of every Mod ID the pack
-   declares, in the pack's order.
+   declares, in the pack's order. Non-ASCII ids are written as `\ddd` byte
+   escapes: PZ does not decode UTF-8 in Lua source, so a raw `小` in a literal
+   reaches the engine as garbage and could never match the id
+   `getActivatedMods()` returns.
 3. **Audits at server start.** On `Events.OnServerStarted` (dedicated server)
    and `Events.OnGameStart` (a hosted world), it compares the active mod list to
    the manifest and logs missing and extra mods by name. It writes nothing,
@@ -122,6 +125,26 @@ the preview and description you edit there are the ones the uploader sends.
 `workshop.txt` carries no `id` for a new item on purpose; adding one makes the
 uploader update that item instead. Steam has no public write API, so this step
 is manual by design.
+
+### Re-uploading an existing item
+
+Regenerate with the same `--out-dir`, `--workshop-id` and `--visibility` you
+published with, then upload again. Steam logs the result in
+`~/.steam/steam/logs/workshop_log.txt` (`Uploaded new content ( ManifestID … )`),
+which is the only reliable confirmation that a re-publish took.
+
+**A dedicated server will not fetch the new content on its own.** The install
+script downloads only items whose directory is missing or empty — deliberately,
+because re-downloading 440 items on every activation is slow. To pull an update
+after re-publishing:
+
+```console
+$ ssh <server> 'sudo rm -rf <workshopDir>/<item-id> && \
+    sudo systemctl restart project-zomboid-install.service'
+```
+
+`systemctl start` is a no-op here: the unit is a completed oneshot with
+`RemainAfterExit`, so it is still "active" and only `restart` runs it again.
 
 ## Test it before publishing
 

@@ -137,8 +137,25 @@ def copy_preview(source, path):
 
 
 def lua_string(value):
-    """A Lua short-string literal. Values were already checked for quotes."""
-    return '"' + value + '"'
+    """A Lua short-string literal that is safe for PZ's reader.
+
+    PZ does not decode UTF-8 in Lua source. A raw non-ASCII character in a
+    literal reaches the engine as garbage (`小音庄园XiaoYinEstate` became
+    `0x0f` + two replacement chars), so a manifest key copied straight from the
+    catalogue never matches the id `getActivatedMods()` returns — the Java side
+    keeps the real UTF-8 bytes. Emitting each byte as a `\\ddd` escape keeps the
+    file ASCII and makes the Lua string byte-identical to the Java one.
+    """
+    out = ['"']
+    for char in value:
+        if char in ('"', "\\"):
+            out.append("\\" + char)
+        elif ord(char) < 128:
+            out.append(char)
+        else:
+            out.extend("\\%03d" % byte for byte in char.encode("utf-8"))
+    out.append('"')
+    return "".join(out)
 
 
 def default_workshop_root():

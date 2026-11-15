@@ -1049,6 +1049,18 @@ in
             defaultSettings = { };
             defaultSandbox = { };
           };
+          unicode = {
+            description = "A pack whose Mod ID is not ASCII.";
+            workshopMods = [
+              {
+                id = "333";
+                title = "XiaoYin";
+              }
+            ];
+            mods = [ "小音庄园XiaoYinEstate" ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
         }
       );
     in
@@ -1167,6 +1179,28 @@ in
           --workshop-root "" --force --json > unlinked.json \
           || fail "generation without a Workshop root failed"
         grep -q '"workshop_links": 0' unlinked.json || fail "links appeared without a Workshop root"
+
+        # ── Non-ASCII ids: PZ does not decode UTF-8 in Lua source ──────────
+        # A raw `小` in a literal reaches the engine as 0x0f + replacement
+        # chars, so the key can never match getActivatedMods(). The literal has
+        # to be ASCII `\ddd` escapes of the UTF-8 bytes.
+        python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack unicode --out-dir "$TMPDIR/unicode" \
+          --workshop-root "" --force --json > /dev/null || fail "generation for a non-ASCII pack failed"
+        umanifest="$TMPDIR/unicode/Contents/mods/PZPackWebUnicode/42/media/lua/shared/PZPackWeb/manifest.lua"
+        grep -qF '\229\176\143' "$umanifest" || fail "a non-ASCII id was written raw into the manifest"
+        python3 - "$umanifest" <<'PY'
+        import sys
+        data = open(sys.argv[1], "rb").read()
+        assert all(b < 128 for b in data), "manifest.lua is not ASCII-only"
+        PY
+        ( cd "$TMPDIR/unicode/Contents/mods/PZPackWebUnicode/42/media/lua" && lua -e '
+          dofile("shared/PZPackWeb/manifest.lua")
+          local found = false
+          for id in pairs(PZPackWeb.mods) do
+            if id:find("XiaoYinEstate") then found = #id == 25 end
+          end
+          assert(found, "the escaped id did not round-trip to the UTF-8 bytes")
+        ' ) || fail "the escaped non-ASCII id is wrong"
 
         # ── state.lua is the only logic, so it gets a real unit test ──
         ( cd "$item/Contents/mods/PZPackWebTest/42/media/lua" && lua -e '
