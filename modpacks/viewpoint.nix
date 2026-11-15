@@ -1527,6 +1527,12 @@
     PauseEmpty = true;
     SaveWorldEveryMinutes = 10;
     DoLuaChecksum = false;
+    # 1 = ban, 2 = kick, 3 = log, 4 = disabled (UI_ServerOption_AntiCheat_optionN).
+    # PZ's default is 2, and it kicked the only player twice in one minute on
+    # 2026-11-15 for "PlayerUpdate update failed" at 151-175 ms ping (T-Mobile
+    # CGNAT + ZeroTier). That check is a false positive on a link this slow, and
+    # a kick costs a ~6 minute world load, so log the violation instead.
+    AntiCheatPlayer = 3;
     # The public server-browser blurb (`PublicDescription=`, a real B42 key).
     # Kept on one line: PZ renders `<LINE>` as a break, and a listing reads
     # worse wrapped. ASCII only, so the .ini stays unambiguous.

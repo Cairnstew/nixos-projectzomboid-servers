@@ -130,11 +130,23 @@ let
   # transition"), failing the whole resetup service with exit 65. A tiny root
   # oneshot with one fixed `install -d` is both simpler and honest about the
   # one privileged operation the backup path needs.
+  #
+  # The per-server directory is created here too, and not left to whichever
+  # process writes first: the dashboard runs as `manage.user` (a different uid,
+  # though the same group) and its umask leaves the directory 0755, which locks
+  # the backup unit out of its own archive directory. That failure is silent
+  # until the first timer run, when tar reports "Cannot open: Permission
+  # denied". `install -d` on an existing path also repairs the mode and owner,
+  # so a machine that already hit this heals on the next activation.
   backupDirScript = pkgs.writeShellApplication {
     name = "project-zomboid-backup-dir";
     runtimeInputs = [ pkgs.coreutils ];
     text = ''
       install -d -o ${cfg.user} -g ${cfg.group} -m 0770 ${lib.escapeShellArg backupRoot}
+      ${lib.concatMapStringsSep "\n" (
+        name:
+        "install -d -o ${cfg.user} -g ${cfg.group} -m 2770 " + lib.escapeShellArg "${backupRoot}/${name}"
+      ) serverNames}
     '';
   };
 in

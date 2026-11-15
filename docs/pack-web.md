@@ -11,9 +11,16 @@ It does four things:
    connector from loading, because that is exactly when its audit matters.
 2. **Carries the manifest.** A generated Lua table of every Mod ID the pack
    declares, in the pack's order.
-3. **Audits at server start.** On `Events.OnGameStart`, it compares the active
-   mod list to the manifest and logs missing and extra mods by name. It writes
-   nothing, changes nothing, and makes no network calls.
+3. **Audits at server start.** On `Events.OnServerStarted` (dedicated server)
+   and `Events.OnGameStart` (a hosted world), it compares the active mod list to
+   the manifest and logs missing and extra mods by name. It writes nothing,
+   changes nothing, and makes no network calls.
+
+   Both events are wired on purpose, and the first one wins. PZ raises
+   `OnGameStart` from the client's `IngameState`, so a connector that registers
+   only that event audits nothing on a dedicated server — the server raises
+   `OnServerStarted` from `GameServer` instead. That mistake made the first
+   published item silent on `server` for a whole day.
 4. **Prompts the client.** At the main menu it names the pack mods you are
    missing, opens their Workshop page on click, and can enable the ones you
    already have but have switched off.
@@ -169,11 +176,22 @@ Then verify the declaration against the installed tree:
 
 ```console
 $ nix run .#pz-pack-doctor -- --pack viewpoint \
-    --workshop-root /path/to/steamapps/workshop/content/108600 --strict
+    --workshop-root /path/to/steamapps/workshop/content/108600 \
+    --game-version "$(cut -d' ' -f1 ~/Zomboid/version.txt)" --strict
 ```
 
 The connector excludes its own id from `loadModAfter` and from the manifest, so
 adding it to the pack does not make it depend on or audit itself.
+
+### Version gates
+
+`--game-version` is worth passing: PZ refuses a mod whose `versionMin` is above
+the running build or whose `versionMax` is below it (`ChooseGameInfo$Mod`), then
+removes it from `ServerMods`. The only log line is
+`ZomboidFileSystem.loadModAndRequired> required mod "<id>" not found`, which
+names the mod but not the reason. Without `--game-version` the doctor still
+warns that a declared `versionMax` exists, because such a mod loads today and
+disappears on the next game update.
 
 ### Verify before the download lands
 

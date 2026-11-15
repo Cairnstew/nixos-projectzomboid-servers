@@ -1104,6 +1104,8 @@ in
 
         grep -q 'PZPackWeb.id = "PZPackWebTest"' "$manifest" || fail "manifest has no self id"
         [ "$(grep -c '= true' "$manifest")" = 2 ] || fail "manifest does not list both pack mods"
+        grep -q 'Events.OnServerStarted.Add(audit)' "$audit" \
+          || fail "audit is not registered on OnServerStarted (dead on a dedicated server)"
         grep -q 'Events.OnGameStart.Add(audit)' "$audit" || fail "audit is not registered"
 
         # A real Lua parser, not an eyeball.
@@ -1111,9 +1113,16 @@ in
           || fail "the generated Lua does not parse"
 
         # The audit must name a missing mod and not crash on a Java-list stub.
+        # A dedicated server raises OnServerStarted and never OnGameStart, so
+        # the harness fires only the server handler: registering just
+        # OnGameStart is the bug this protects against.
         ( cd "$item/Contents/mods/PZPackWebTest/42/media/lua" && lua -e '
           package.path = "shared/?.lua;" .. package.path
-          Events = { OnGameStart = { Add = function(f) f() end } }
+          local server_handler, game_handler
+          Events = {
+            OnServerStarted = { Add = function(f) server_handler = f end },
+            OnGameStart = { Add = function(f) game_handler = f end },
+          }
           isServer = function() return true end
           getActivatedMods = function()
             local t = { "Alpha" }
@@ -1121,8 +1130,14 @@ in
           end
           dofile("shared/PZPackWeb/manifest.lua")
           dofile("server/PZPackWeb/audit.lua")
-        ' ) > audit.log 2>&1 || fail "the audit raised a Lua error"
+          assert(type(server_handler) == "function", "the audit did not register OnServerStarted")
+          assert(type(game_handler) == "function", "the audit did not register OnGameStart")
+          server_handler()
+          game_handler()
+        ' ) > audit.log 2>&1 || { cat audit.log; fail "the audit raised a Lua error"; }
         grep -q '1 pack mod(s) missing: Beta' audit.log || fail "the audit did not name the missing mod"
+        [ "$(grep -c 'pack mod(s) missing: Beta' audit.log)" = 1 ] \
+          || fail "the audit logged twice when a host raised both events"
 
         # ── Workshop links: resolved from an installed tree, never invented ──
         ws="$TMPDIR/ws"

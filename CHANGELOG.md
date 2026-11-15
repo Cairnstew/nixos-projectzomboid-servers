@@ -8,6 +8,19 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`pz-pack-doctor --game-version` reports mods PZ silently drops.** PZ's
+  `ChooseGameInfo$Mod.isAvailableSelf` refuses a mod whose `versionMin` is above
+  the running build or whose `versionMax` is below it, then removes it from
+  `ServerMods`; the only trace is `required mod "<id>" not found`. Given the
+  version, the doctor now reports each such mod as an error, and without it
+  warns when a declared `versionMax` exists at all (it loads today, it vanishes
+  on the next update). `mod.info` parsing now keeps `versionMin`/`versionMax`
+  and the JSON output carries them.
+
+- **The client prompt logs what it computed.** One `[PZPackWeb]` line per
+  distinct `missing:inactive` signature at the main menu. Without it, "the pack
+  is complete" and "the prompt never ran" are indistinguishable in a log.
+
 - **Mod sandbox options are now declarative.** `servers.<name>.sandboxNamespaces`
   (and the same key in a pack) declares a mod's SandboxVars group, so
   `sandbox."Bandits.Enabled"` renders the nested table a mod's
@@ -67,6 +80,30 @@ All notable changes to this project. Format follows
   completeness-checked reference.
 
 ### Fixed
+
+- **The connector's server audit actually runs on a dedicated server.** It was
+  registered on `Events.OnGameStart`, which PZ raises from the client's
+  `IngameState`; a dedicated server raises `Events.OnServerStarted` from
+  `GameServer` and never fires `OnGameStart`, so the audit was dead code on
+  every server and silent for as long as the item has been published. Both
+  events are now wired and the audit runs once. The first thing it reports is
+  real: six declared Mod IDs that PZ drops at load.
+
+- **The scheduled backup can write its own archive directory.**
+  `project-zomboid-backup-dir.service` now creates each enabled server's backup
+  subdirectory (`install -d`, `2770`, server user and group) instead of leaving
+  it to the first writer. The `pz-manage` dashboard runs as a different uid and
+  had created `viewpoint/` as `0755`, so `tar` failed with
+  `Cannot open: Permission denied` on three consecutive nightly runs while the
+  service reported only a failed unit. `install -d` on an existing path also
+  repairs the mode and owner, so a host that already hit this heals on the next
+  activation.
+
+- **`project-zomboid-viewpoint` logs player anti-cheat violations instead of
+  kicking.** `AntiCheatPlayer` defaults to 2 (kick); on 2026-11-15 it removed the
+  only player twice in one minute for `PlayerUpdate update failed` at 151-175 ms
+  ping over T-Mobile CGNAT + ZeroTier. The pack sets it to 3 (log), which keeps
+  the check visible without paying a six-minute world load per false positive.
 
 - **`viewpoint` no longer declares conflicting mods.** The
   Build 41 Improvised Silencers and its B42.20 replacement both provide

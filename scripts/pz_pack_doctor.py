@@ -57,6 +57,8 @@ class ModInfo:
         "incompatible",
         "load_after",
         "load_before",
+        "version_min",
+        "version_max",
         "lua",
     )
 
@@ -69,6 +71,8 @@ class ModInfo:
         self.incompatible = []
         self.load_after = []
         self.load_before = []
+        self.version_min = ""
+        self.version_max = ""
         self.lua = set()
 
     def as_dict(self):
@@ -81,6 +85,8 @@ class ModInfo:
             "incompatible": self.incompatible,
             "loadModAfter": self.load_after,
             "loadModBefore": self.load_before,
+            "versionMin": self.version_min,
+            "versionMax": self.version_max,
             "lua": sorted(self.lua),
         }
 
@@ -128,6 +134,8 @@ def parse_mod_info(root, item):
     name = (fields.get("name") or [""])[0].strip()
     if name:
         info.name = name
+    info.version_min = (fields.get("versionmin") or [""])[0].strip()
+    info.version_max = (fields.get("versionmax") or [""])[0].strip()
     for key, attr in LIST_KEYS.items():
         values = []
         for raw in fields.get(key, []):
@@ -213,6 +221,22 @@ def version_key(root):
     return tuple(int(part) for part in match.group(1).split("."))
 
 
+def parse_version(text):
+    """A `versionMin=`/`versionMax=` string as a comparable tuple, or None."""
+    if not text:
+        return None
+    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)*)\s*", text)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def version_less(left, right):
+    """`left < right`, padding the shorter one: 42.21 == 42.21.0 < 42.22."""
+    width = max(len(left), len(right))
+    return left + (0,) * (width - len(left)) < right + (0,) * (width - len(right))
+
+
 def metadata_root(roots):
     """The one mod.info PZ loads for a Build 42 target.
 
@@ -284,7 +308,7 @@ def scan(workshop_root, declared_item_ids, report):
     return mods, item_mods
 
 
-def check(pack_name, pack, workshop_root, strict=False, ignore=()):
+def check(pack_name, pack, workshop_root, strict=False, ignore=(), game_version=None):
     report = Report()
 
     declared_items = []
@@ -315,6 +339,40 @@ def check(pack_name, pack, workshop_root, strict=False, ignore=()):
             report.error(
                 f"Mod ID {mod_id!r} is declared in mods= but no installed item provides it "
                 "(a Workshop id and a Mod ID are different namespaces)"
+            )
+
+    # Version gates. PZ refuses a mod whose `versionMin` is above the running
+    # game or whose `versionMax` is below it (`ChooseGameInfo$Mod.isAvailableSelf`)
+    # and then removes it from `ServerMods`. The only trace is
+    # "required mod ... not found", which names the mod but not the reason, so
+    # a versionMax is a time bomb: it loads today and vanishes after a patch.
+    #
+    # `GameVersion` has only major/minor (no patch component), so `42.22.2` is
+    # the gate (42, 22): `versionMax=42.22` still loads, `versionMax=42.21` does
+    # not. Comparing the patch number would flag every correctly-gated mod.
+    game = parse_version(game_version)
+    game_gate = game[:2] if game is not None else None
+    for mod_id in declared_mods:
+        info = installed.get(mod_id)
+        if info is None:
+            continue
+        low = parse_version(info.version_min)
+        high = parse_version(info.version_max)
+        if game_gate is not None:
+            if low is not None and version_less(game_gate, low[:2]):
+                report.error(
+                    f"{mod_id!r} declares versionMin={info.version_min} but the game is "
+                    f"{game_version}; PZ will not load it"
+                )
+            elif high is not None and version_less(high[:2], game_gate):
+                report.error(
+                    f"{mod_id!r} declares versionMax={info.version_max} but the game is "
+                    f"{game_version}; PZ drops the mod from Mods= at load"
+                )
+        elif high is not None:
+            report.warn(
+                f"{mod_id!r} declares versionMax={info.version_max}; PZ drops it as soon as "
+                "the game is newer (pass --game-version to check this against a build)"
             )
 
     # A declared item that provides NO loaded mod is worth reporting: it is
@@ -418,6 +476,7 @@ def check(pack_name, pack, workshop_root, strict=False, ignore=()):
         "warnings": warnings,
         "suppressed": suppressed,
         "lua_classes": counts,
+        "game_version": game_version,
         "ok": ok,
     }
 
@@ -429,6 +488,8 @@ def print_human(result):
         f"{result['installed_mod_ids']}/{result['declared_mod_ids']} Mod ID(s)"
     )
     print(f"  workshop root: {result['workshop_root']}")
+    if result["game_version"]:
+        print(f"  game version: {result['game_version']}")
     classes = result["lua_classes"]
     print(
         "  lua: "
@@ -483,6 +544,14 @@ def main(argv=None):
         help="Drop warnings containing TEXT (repeatable). Print them as 'ignored' so a "
         "known upstream defect does not force a permanent red --strict run.",
     )
+    parser.add_argument(
+        "--game-version",
+        default=None,
+        metavar="X.Y.Z",
+        help="Running game version, e.g. 42.22.2 (Zomboid/version.txt). Mods whose "
+        "versionMin/versionMax exclude it are reported as errors, because PZ drops "
+        "them from Mods= without saying why.",
+    )
     parser.add_argument("--json", action="store_true", help="Machine-readable output")
     args = parser.parse_args(argv)
 
@@ -513,6 +582,7 @@ def main(argv=None):
         args.workshop_root,
         strict=args.strict,
         ignore=args.ignore,
+        game_version=args.game_version,
     )
     if args.json:
         print(json.dumps(result, indent=2))

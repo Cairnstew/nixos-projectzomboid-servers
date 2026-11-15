@@ -407,7 +407,8 @@ nix run .#pz-workshop -- resolve pack vanilla-plus       # internal Mod IDs + Mo
 nix run .#pz-workshop -- expand 3812346398 > draft.nix   # collection -> draft pack (mods prefilled)
 
 # Verify a pack against what steamcmd actually installed
-nix run .#pz-pack-doctor -- --pack viewpoint --workshop-root <dir>
+nix run .#pz-pack-doctor -- --pack viewpoint --workshop-root <dir> \
+  --game-version "$(cut -d' ' -f1 ~/Zomboid/version.txt)"
 
 # Generate the connector mod's ready-to-upload Workshop tree
 nix run .#pz-pack-web -- --pack viewpoint

@@ -268,6 +268,13 @@ end
 
 local state = PZPackWeb.state
 
+-- Both events are wired below and the first one wins: a dedicated server
+-- triggers `OnServerStarted` (zombie.network.GameServer) and never
+-- `OnGameStart`, which is raised by the client's IngameState. Registering only
+-- `OnGameStart` -- what this file used to do -- made the audit dead code on
+-- every dedicated server.
+local done = false
+
 local function summarize(list, limit)
     if #list <= limit then
         return table.concat(list, "; ")
@@ -280,12 +287,16 @@ local function summarize(list, limit)
 end
 
 local function audit()
+    if done then
+        return
+    end
     if not isServer or not isServer() then
         return
     end
     if not PZPackWeb.mods then
         return
     end
+    done = true
     local active = state.toSet(getActivatedMods and getActivatedMods() or nil)
     local missing, extra = state.diff(PZPackWeb.mods, active, PZPackWeb.id)
 
@@ -307,6 +318,10 @@ local function audit()
     end
 end
 
+-- `OnServerStarted` covers a dedicated server; `OnGameStart` covers a hosted
+-- world (single-player / the listen server inside a client). A host that
+-- raises both audits once, because `audit` returns after its first run.
+Events.OnServerStarted.Add(audit)
 Events.OnGameStart.Add(audit)
 """
 
@@ -643,6 +658,11 @@ end
 -- leaving a game, and a second panel for the same problem is noise.
 local shown_signature = nil
 
+-- The signature last written to the log. `print` makes the client's view
+-- observable: without it, "the pack is complete" and "the prompt never ran"
+-- look identical in a log.
+local logged_signature = nil
+
 local function check()
     if not PZPackWeb.mods or not PZPackWeb.count then
         return
@@ -650,10 +670,17 @@ local function check()
     local active = state.toSet(getActivatedMods and getActivatedMods() or nil)
     local installed = state.installedSet()
     local missing, inactive = state.classify(PZPackWeb.mods, active, installed, PZPackWeb.id)
+    local sig = state.signature(missing, inactive)
+    if sig ~= logged_signature then
+        print(string.format(
+            "[PZPackWeb] %s: client %d pack mod(s) missing, %d installed but not enabled",
+            PZPackWeb.pack or "pack", #missing, #inactive
+        ))
+        logged_signature = sig
+    end
     if #missing == 0 and #inactive == 0 then
         return
     end
-    local sig = state.signature(missing, inactive)
     -- Once per distinct problem per session, and once per dismissal across
     -- launches. OnMainMenuEnter fires again after leaving a game.
     if sig == shown_signature or read_signature() == sig then
