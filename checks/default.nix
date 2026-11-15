@@ -1576,9 +1576,15 @@ in
         [ -n "$archive" ] || fail "no archive was created"
         [ "$(stat -c %a "$archive")" = 640 ] \
           || fail "backup archive mode is $(stat -c %a "$archive"), expected 640"
-        tar --zstd -tf "$archive" | grep -qx 'Zomboid/Saves/Multiplayer/test/map.bin' \
+        # List into a file, not into `grep -q`: the builder shell sets
+        # pipefail, so grep exiting on its first match makes tar die of
+        # SIGPIPE (141) and the pipeline "fails" even when the entry is there.
+        # That raced green locally and red in CI on 2026-11-15.
+        tar --zstd -tf "$archive" > "$root/listing.txt" \
+          || fail "the archive does not list"
+        grep -qx 'Zomboid/Saves/Multiplayer/test/map.bin' "$root/listing.txt" \
           || fail "the world was not in the archive"
-        if tar --zstd -tf "$archive" | grep -q '\.local/share/Steam'; then
+        if grep -q '\.local/share/Steam' "$root/listing.txt"; then
           fail "the Steam token directory was archived"
         fi
 
