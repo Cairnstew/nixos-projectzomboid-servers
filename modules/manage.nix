@@ -138,6 +138,11 @@ let
   # until the first timer run, when tar reports "Cannot open: Permission
   # denied". `install -d` on an existing path also repairs the mode and owner,
   # so a machine that already hit this heals on the next activation.
+  #
+  # 0770 only: the unit runs with `RestrictSUIDSGID`, which makes a 2770
+  # (setgid) chmod fail with EPERM. Group ownership is explicit, and every
+  # writer already has project-zomboid as its primary group, so the setgid bit
+  # would buy nothing.
   backupDirScript = pkgs.writeShellApplication {
     name = "project-zomboid-backup-dir";
     runtimeInputs = [ pkgs.coreutils ];
@@ -145,7 +150,7 @@ let
       install -d -o ${cfg.user} -g ${cfg.group} -m 0770 ${lib.escapeShellArg backupRoot}
       ${lib.concatMapStringsSep "\n" (
         name:
-        "install -d -o ${cfg.user} -g ${cfg.group} -m 2770 " + lib.escapeShellArg "${backupRoot}/${name}"
+        "install -d -o ${cfg.user} -g ${cfg.group} -m 0770 " + lib.escapeShellArg "${backupRoot}/${name}"
       ) serverNames}
     '';
   };

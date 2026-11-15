@@ -91,13 +91,14 @@ All notable changes to this project. Format follows
 
 - **The scheduled backup can write its own archive directory.**
   `project-zomboid-backup-dir.service` now creates each enabled server's backup
-  subdirectory (`install -d`, `2770`, server user and group) instead of leaving
+  subdirectory (`install -d`, `0770`, server user and group) instead of leaving
   it to the first writer. The `pz-manage` dashboard runs as a different uid and
   had created `viewpoint/` as `0755`, so `tar` failed with
   `Cannot open: Permission denied` on three consecutive nightly runs while the
   service reported only a failed unit. `install -d` on an existing path also
   repairs the mode and owner, so a host that already hit this heals on the next
-  activation.
+  activation. The mode is plain `0770`, not `2770`: the unit sets
+  `RestrictSUIDSGID`, and a setgid chmod fails there with `EPERM`.
 
 - **`project-zomboid-viewpoint` logs player anti-cheat violations instead of
   kicking.** `AntiCheatPlayer` defaults to 2 (kick); on 2026-11-15 it removed the
