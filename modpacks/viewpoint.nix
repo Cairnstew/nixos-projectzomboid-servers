@@ -794,7 +794,13 @@
     { id = "3694705423"; title = "Oujinjin's Tile Pack B42 Overhaul"; }
     { id = "3666137359"; title = "Rocco's Tiles"; }
     { id = "3736154771"; title = "LiuDing_Tiles"; }
-    { id = "2844685624"; title = "TryHonesty's Tiles B41 & B42"; }
+    # The original item (2844685624) was removed from the Workshop. This is the
+    # B42-only repack under the same Mod ID: its `common/media` tree is
+    # byte-identical to the original's, so the tile definitions and texturepack
+    # Chinatown is built against are unchanged; only the legacy B41 `media/`
+    # tree is gone. A fresh install cannot fetch the removed item, and a new
+    # player cannot subscribe to it, which is why the id has to move.
+    { id = "3827402516"; title = "TryHonesty's Tiles B42 (Redux)"; }
     { id = "3346506593"; title = "Erika's tiles"; }
 
     # ── Viewpoint map rendering / furniture fixes ──────────────────────────

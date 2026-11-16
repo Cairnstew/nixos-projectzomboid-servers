@@ -58,6 +58,22 @@ All notable changes to this project. Format follows
 
 ### Changed
 
+- **`viewpoint` moves TryHonesty's Tiles to the surviving re-upload.** The
+  original item (`2844685624`, *TryHonesty's Tiles B41 & B42*) was removed from
+  the Workshop: its page answers "item has been removed" and
+  `GetPublishedFileDetails` returns result 9. It is a hard `require=` of
+  `Chinatown Expansion B42`, so with `failOnMissingMods = true` a fresh install
+  would abort on it, and a player who never subscribed can no longer obtain it
+  and therefore cannot join. The catalogue now pins `3827402516`
+  (*Try Honesty Tiles B42 Redux Test*), same Mod ID `TryhonestyTiles`, and the
+  swap was verified file by file first: 70 of its 72 files are byte-identical to
+  the original's `common/media` tree, including `LCtiles.tiles` (596 KB),
+  `LCpack.pack` and every depthmap, and `42/mod.info` declares the same
+  `tiledef=LCtiles 7367`. Only the legacy B41 `media/` tree and the duplicate
+  metadata are gone. Existing clients keep the old item subscribed; it supplies
+  the same Mod ID, so they should unsubscribe from it after Steam fetches the
+  replacement.
+
 - **`viewpoint` swaps its batch-ripping mod.** `Rip All Clothing Plus XP`
   (`RipAllClothing`, 3793908682) replaces `Tear All Clothes [B42 MP]`
   (`TearAllClothesMP`, 3798812018): the old mod aborted a whole batch with
