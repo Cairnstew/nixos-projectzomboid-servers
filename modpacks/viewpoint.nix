@@ -326,6 +326,37 @@
     { id = "3408740647"; title = "Wesch's Better Wringing 42.20"; } # w_betterwringing
     { id = "3785172581"; title = "[MP FIX] Wesch's Better Wringing"; } # w_betterwringing_mpfix
 
+    # ── Automation (chores, salvage, training) ─────────────────────────────
+    # Auto All is one client-side mod (Mod ID AutoAll) that only queues
+    # vanilla actions: no extra XP, no recipes, no item redefinitions. It
+    # replaces two entries that did the same job alone:
+    #   DWTB Auto Reader (3779355903) - Auto Read is the same vanilla
+    #     ISReadABook sweep (level-appropriate skill books, magazines that
+    #     still teach something, fetched from containers, each book returned)
+    #     and Auto VHS is added on top.
+    #   Dismantle All Electronics (3776658529) - Auto Dismantle queues the
+    #     same four vanilla recipes (DismantleElectronics,
+    #     DismantleMiscElectronics, DismantleElectronicsDevice,
+    #     DismantlePowerBar).
+    # Three overlaps are handled in `defaultSandbox`/`sandboxNamespaces`
+    # below rather than by dropping the mod:
+    #   * Auto Rip is forced OFF - it only uses RipClothing/
+    #     RipDenimClothing/RipSheets, so RipAllClothing's accessory rip
+    #     (underwear, gloves, socks, shoes, hats, burlap) and its per-rip XP
+    #     would be lost. Rip All keeps the niche.
+    #   * Auto Farming is forced OFF - Area Tasks already owns batch
+    #     sow/water/harvest, the reason Batch Farming was never added.
+    #   * Wesch's wrings in place without unequipping (the MP fix); Auto
+    #     All's wring is unequip-based and is a menu entry inside the Clean
+    #     module, so it cannot be disabled on its own. Clean still earns its
+    #     place for the wash, which nothing else in the pack does.
+    # Modules are also client-togglable in Mod Options. Its entries are vanilla
+    # inventory/world context menus, so the Viewpoint first-person caveat
+    # applies: in first person either enable Viewpoint Interface -> "Use the
+    # game's inventory windows" or use the isometric view (same as the rest of
+    # this pack's inventory mods).
+    { id = "3777237134"; title = "[B42.20] Auto All - Cook, Medicine, Read, Clean, Rip, Tailoring, Mechanics, Exercise, Reload, Open & Dismantle"; } # AutoAll
+
     # ── Sewing / tailoring progression ──────────────────────────────────────
     # All Build 42 and multiplayer-safe (Workshop `Multiplayer` tag, or verified
     # from the download: items/recipes/shared Lua only). Dependencies first:
@@ -412,7 +443,6 @@
     # omitted: it adds the same Dismantle option to workstations/structures
     # that Kentucky Workstation Salvage already covers.
     { id = "3783972702"; title = "Kentucky Workstation Salvage"; }
-    { id = "3776658529"; title = "[42.20 SP/MP] Dismantle All Electronics"; }
     { id = "3793407081"; title = "Remove Debris (Tree Stumps & Boulders) / Delete Trash Tiles"; }
     { id = "3779330500"; title = "VRO Salvage Condition Lock"; }
 
@@ -669,14 +699,6 @@
     # group sleep as the default and only adds an opt-in solo nap, so it needs
     # no sandbox table like Sleep with Friends (2686624983).
     { id = "3786647452"; title = "Read While Walking - Updated (B41 + B42)"; } # SimpleReadWhileWalkingUpdated
-    # Queues every still-useful recipe magazine and skill book within reach
-    # through the vanilla ISReadABook action, then returns borrowed books.
-    # Client-side and dependency-free, so Read While Walking above still
-    # applies. Its entry is in the INVENTORY context menu; Viewpoint's
-    # first-person inventory is its own, so in first person either enable
-    # Viewpoint Interface -> "Use the game's inventory windows" or use the
-    # isometric view (same caveat as this pack's other inventory mods).
-    { id = "3779355903"; title = "DWTB Auto Reader - Recipes & Skill Books (B42.20.2)"; } # DWTB_AutoRead
     { id = "3781533687"; title = "True Sleep - Better Multiplayer Sleep"; } # TrueSleep
     # The maintained B42 rewrite of Fast Forward (MP): pause plus three speeds,
     # agreed by every player or forced by an admin, cancelled by movement or a
@@ -1137,6 +1159,11 @@
     "w_betterwringing"
     "w_betterwringing_mpfix"
 
+    # ── Automation (chores, salvage, training) ─────────────────────────────
+    # One mod id; no require=/loadModAfter=, so position is free. Rip and
+    # farming are forced off here via SandboxVars.AutoAll (see defaultSandbox).
+    "AutoAll"
+
     # ── Sewing / tailoring progression ──────────────────────────────────────
     # Load order: dependencies before dependents; AdvancedFabricsMP last.
     "TooltipLib"
@@ -1230,7 +1257,6 @@
     "ImprovisedGlassB42"
     "ReduceReuseRecycle"
     "KentuckyWorkstationSalvage"
-    "DismantleAllElectronics"
     "TFC_RemoveDebrisMod"
 
     # ── Lockpicking / entry / locks ────────────────────────────────────────
@@ -1378,7 +1404,6 @@
     # load on both sides. No require= between them, so this is just the pack's
     # reading/time group.
     "SimpleReadWhileWalkingUpdated"
-    "DWTB_AutoRead"
     "TrueSleep"
     "MPFastForward"
 
@@ -1559,5 +1584,18 @@
     map = "Jasperville;LeavenburgBridge;Leavenburg;AnruisiTown;SafeharborGarrison;Chinatown B42 version;Chinatown Expansion B42 version;New Ellroy;Shadyside;Cathaya Valley2.0;Cathaya Valley2.0 highway;Asakusa lake town;Atlanta;Begonia_Town;Blackstone;Blackwood;BrandenburgBeachHouses;Bunker 12;Bunker 42;Chestown, KY;Constown, KY;Daisy County;DawnTown;Jester;EchoCreek MilitaryBase回音河 军事基地;EkronCastle;ForgottenFarmBunker;Fort Benning B42;Frogtown;Greenport, KY;HavenFall;Hazelnut Manor;Hershel's Farm;IrisEyot;LastMinutePrepperReloaded;lvinternationalairport;Maplewood;muldraughmilitarybaseas24;RabbitHashKY;RaccoonCity;Raven Creek B42;Rosewood Prison;RosewoodVhsAndGunStores;TheWalkingDeadPrison;Towhead-Island-FOB;Uncle Red's Bunker Redux B42;WestPoint-MilitaryTugBoat;WILDSTEEL;Willowbrook Bastion! 2026;小音庄园XiaoYinEstate;Muldraugh, KY";
   };
 
-  defaultSandbox = { };
+  # Auto All declares its module switches as tri-state integers in
+  # media/sandbox-options.txt (`option AutoAll.EnableRip`), so the table must be
+  # named here or renderSandbox rejects the dotted key as an unknown namespace.
+  sandboxNamespaces = [ "AutoAll" ];
+
+  # -1 = leave the player's Mod Options choice, 0 = force off for everyone,
+  # 1 = force on. One owner per niche: Rip All Clothing owns ripping (it covers
+  # the accessories and the per-rip XP Auto Rip does not) and Area Tasks owns
+  # the farming batch loop. The Clean module cannot be split, so Auto All's
+  # unequip-based wring entry stays visible next to Wesch's in-place MP fix.
+  defaultSandbox = {
+    "AutoAll.EnableRip" = 0;
+    "AutoAll.EnableFarming" = 0;
+  };
 }

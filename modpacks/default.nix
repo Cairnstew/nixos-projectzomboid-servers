@@ -24,6 +24,8 @@
 #                                  as sibling mod roots; each must also be in `mods`
 #   defaultSettings attrset        .ini keys servers inherit
 #   defaultSandbox  attrset        SandboxVars servers inherit
+#   sandboxNamespaces [ str ]      optional: mod SandboxVars groups a pack sets
+#                                  through defaultSandbox (`"AutoAll.EnableRip"`)
 #
 # Adding a pack means dropping in a file — no registration step.
 { lib }:

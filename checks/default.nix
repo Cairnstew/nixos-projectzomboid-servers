@@ -2919,6 +2919,38 @@ in
         server = modNamespaceServer;
         name = "guard-mod-namespace-prep-SandboxVars.lua";
       };
+      # A pack declares the namespace too, because `defaultSandbox` is where a
+      # pack pins a mod option (`"AutoAll.EnableRip" = 0`). The resolver must
+      # union the pack's list with the server's; if it dropped it, the dotted
+      # key would render as an undeclared table and PZ would ignore it.
+      packNamespaceServer =
+        pz-lib.resolveServer
+          {
+            guard-pack = {
+              description = "namespace fixture";
+              workshopMods = [ ];
+              mods = [ ];
+              defaultSettings = { };
+              defaultSandbox = {
+                "GuardMod.Enabled" = true;
+              };
+              sandboxNamespaces = [ "GuardMod" ];
+            };
+          }
+          "guard"
+          (
+            (serverDefaults "guard")
+            // {
+              modpack = "guard-pack";
+              sandboxNamespaces = [ "ServerMod" ];
+            }
+          );
+      packNamespaceFile = pkgs.writeText "guard-pack-namespace.lua" (
+        pz-lib.renderSandbox {
+          settings = packNamespaceServer.sandbox;
+          namespaces = packNamespaceServer.sandboxNamespaces;
+        }
+      );
     in
     pkgs.runCommand "pz-render-guards-check"
       {
@@ -2930,6 +2962,7 @@ in
         NESTED_FILE = nestedFile;
         MOD_NAMESPACE_FILE = modNamespaceFile;
         MOD_NAMESPACE_PREP = modNamespacePrep;
+        PACK_NAMESPACE_FILE = packNamespaceFile;
       }
       ''
         fail() { echo "FAIL: $1" >&2; exit 1; }
@@ -3122,6 +3155,19 @@ in
           || fail "the prep helper did not render the mod namespace"
         grep -qE 'Enabled = true' "$MOD_NAMESPACE_PREP" \
           || fail "the prep helper dropped the mod option"
+
+        # The pack's own namespace list must survive the resolver and render,
+        # alongside the server's (union, not replace).
+        ${expectTrue "the resolver dropped a pack's sandboxNamespaces" (
+          packNamespaceServer.sandboxNamespaces == [
+            "GuardMod"
+            "ServerMod"
+          ]
+        )}
+        grep -qF '    GuardMod = {' "$PACK_NAMESPACE_FILE" \
+          || fail "a pack-declared namespace did not render as a nested table"
+        grep -qE 'Enabled = true' "$PACK_NAMESPACE_FILE" \
+          || fail "the pack's defaultSandbox option did not land in its namespace"
 
         # The version header must be present: without it PZ treats the
         # file as version 0 and migrates values (e.g. DayLength 8 -> 14).

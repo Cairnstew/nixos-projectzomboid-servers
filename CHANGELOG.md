@@ -67,6 +67,21 @@ All notable changes to this project. Format follows
 
 ### Changed
 
+- **`viewpoint` consolidates its chore/training automation into Auto All.**
+  `[B42.20] Auto All` (`AutoAll`, 3777237134) replaces `DWTB Auto Reader`
+  (`DWTB_AutoRead`, 3779355903) and `Dismantle All Electronics`
+  (`DismantleAllElectronics`, 3776658529): the same vanilla `ISReadABook` sweep
+  (plus VHS tapes) and the same four Dismantle recipes behind one item, and it
+  adds cook/clean/sterilise/open/train/generator automation the pack had none of.
+  Its `Auto Rip` and `Auto Farming` modules are forced off through
+  `defaultSandbox` (`"AutoAll.EnableRip" = 0`, `"AutoAll.EnableFarming" = 0`,
+  declared with `sandboxNamespaces = [ "AutoAll" ]`): `Rip All Clothing Plus XP`
+  is kept because Auto Rip only uses the three vanilla rip recipes and would
+  lose the accessory rip and its per-rip XP, and `Area Tasks` keeps the farming
+  batch loop the pack already chose over `Batch Farming`. Auto All's wring is a
+  menu entry inside its `clean` module and cannot be switched off on its own, so
+  Wesch's in-place MP-fixed wring stays and both entries remain visible.
+
 - **`viewpoint` moves TryHonesty's Tiles to the surviving re-upload.** The
   original item (`2844685624`, *TryHonesty's Tiles B41 & B42*) was removed from
   the Workshop: its page answers "item has been removed" and
@@ -105,6 +120,14 @@ All notable changes to this project. Format follows
   completeness-checked reference.
 
 ### Fixed
+
+- **A pack can declare `sandboxNamespaces` again.** `docs/options.md`, the
+  server option's own description ("A pack may declare the same list") and
+  `lib.resolveServer` all said a pack may declare its SandboxVars groups, but
+  the `modpacks.<name>` submodule had no such option, so evaluation failed with
+  `does not exist` the first time a pack tried. Added to the pack type, and
+  `render-guards` now proves the resolver unions the pack's list with the
+  server's rather than dropping it.
 
 - **Non-ASCII Mod IDs survive the round trip into Lua.** PZ's Lua source reader
   does not decode UTF-8: the generated manifest's `小音庄园XiaoYinEstate` key

@@ -300,6 +300,17 @@ in
                 comma-separated where WorkshopItems is semicolon-separated.
               '';
             };
+            bundledMods = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              description = ''
+                Our own in-repo mods shipped as sibling mod roots inside the
+                pack's connector Workshop item. Metadata for
+                <command>pz-pack-web</command>; each id must also appear in
+                <option>mods</option>, or the item would download it and the
+                game would never load it. Ignored by the server runtime.
+              '';
+            };
             defaultSettings = mkOption {
               type = settings;
               default = { };
@@ -315,6 +326,26 @@ in
               description = ''
                 SandboxVars any server using this pack inherits. A server's own
                 <option>sandbox</option> wins.
+              '';
+            };
+            sandboxNamespaces = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              example = [ "AutoAll" ];
+              description = ''
+                Mod-defined SandboxVars groups the pack's mods ship, added to
+                the server's own
+                <option>sandboxNamespaces</option>. Declare one here when
+                <option>defaultSandbox</option> sets a mod option, which is
+                written as a dotted key:
+
+                <programlisting>
+                  sandboxNamespaces = [ "AutoAll" ];
+                  defaultSandbox."AutoAll.EnableRip" = 0;
+                </programlisting>
+
+                See the server's own <option>sandboxNamespaces</option> for the
+                Lua-identifier and vanilla-table rules.
               '';
             };
           };
