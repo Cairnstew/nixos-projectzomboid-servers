@@ -366,6 +366,31 @@ A preset is a *set*, not an ordered list: PZ re-sorts it by each mod's
 `require=` when applied, so the order in the file is not the load order you will
 see. That is vanilla behaviour, not something the module can pin.
 
+### The client crashes at the main menu with `programs that did not link`
+
+Viewpoint's crash report says it crashed while *preparing* with
+`the renderer could not start: programs that did not link`, and `console.txt`
+names the same cause for every model program:
+
+```
+[Viewpoint] model program: [ViewpointDoorLighting] Incompatible model shader; missing: vLight = texelFetch(uDraws, record + LIGHT);
+```
+
+The bracketed name is a **shader-patching add-on**, not Viewpoint itself. Such an
+add-on rewrites Viewpoint's shader sources as they are read
+(`viewpoint.platform.Shaders.read`) and matches exact lines from the build it was
+written for. Viewpoint 0.1.7 moved `model.vert` from `samplerBuffer` to an SSBO
+(`vLight = uDraws[record + LIGHT];`) and `model_gbuffer.frag` to `gNormalPack`,
+so an add-on written before that throws during compilation and takes every
+program that includes `model.vert` with it — the client dies at the menu, before
+any world loads.
+
+Disable the add-on named in the brackets; Door Fix (`ViewpointDoor`, 3812151347)
+is the one this happened to, and the `viewpoint` pack no longer lists it. Do not
+disable Viewpoint to work around it. Add-ons that *degrade* are safe: True
+Weathers logs `… is not the one this version knows; left as Viewpoint draws it`
+and keeps rendering.
+
 ### A client host fails with `InvalidPathException` (non-ASCII mod folder)
 
 The Host flow aborts and you land back in the menu, with this in

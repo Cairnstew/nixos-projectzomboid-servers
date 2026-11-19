@@ -119,6 +119,18 @@ All notable changes to this project. Format follows
   longer repeats the option tables; it points at `docs/options.md`, which is the
   completeness-checked reference.
 
+### Removed
+
+- **Viewpoint Door Fix from the `viewpoint` pack.** Viewpoint 0.1.7 (2026-11-16)
+  moved its model shader from a `samplerBuffer` (`texelFetch(uDraws, …)`) to an
+  SSBO (`uDraws[…]`) and packs the gbuffer normal through `gNormalPack`. Door
+  Fix's Java add-on patches those shader sources by exact line match and throws
+  `IllegalStateException: … programs that did not link: model, model shadow, …`
+  with `[ViewpointDoorLighting] Incompatible model shader`, so the client aborts
+  at the main menu before any world loads. Its last published build
+  (2026-10-11) predates 0.1.7; restore the item when it ships a matching build.
+  Doors keep Viewpoint's own lighting; only the add-on's extra correction goes.
+
 ### Fixed
 
 - **A pack can declare `sandboxNamespaces` again.** `docs/options.md`, the

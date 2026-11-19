@@ -159,7 +159,21 @@
     #     at vpinteriors.Pz.objects -> vpinteriors.Grime.capture
     # The upstream collection (3812346398) dropped it too. Restore it only when
     # the author publishes a 42.22 build.
-    { id = "3812151347"; title = "Door Fix - Project Viewpoint"; }
+    #
+    # Door Fix (3812151347) is deliberately absent for a different reason: its
+    # Java add-on rewrites Viewpoint's shader sources on read and matches exact
+    # lines from Viewpoint before 0.1.7. 0.1.7 replaced `samplerBuffer` reads
+    # with an SSBO (`vLight = texelFetch(uDraws, record + LIGHT);` became
+    # `vLight = uDraws[record + LIGHT];`) and packs the gbuffer normal through
+    # `gNormalPack`, so the add-on throws while the renderer compiles:
+    #   IllegalStateException: the renderer could not start: programs that did
+    #   not link: model, model shadow, …; the last error: … [ViewpointDoorLighting]
+    #   Incompatible model shader; missing: vLight = texelFetch(uDraws, record + LIGHT);
+    # That aborts the client at the main menu, before a world loads. The item's
+    # newest published build (2026-10-11) predates Viewpoint 0.1.7 (2026-11-16),
+    # so there is nothing to pin instead. Restore it only when it ships a
+    # Viewpoint 0.1.7-aware build. Doors keep Viewpoint's own lighting; only the
+    # add-on's extra correction is lost.
     # Viewpoint-native construction companions. Interface supplies the
     # first-person craft/build/place flow (K), 3D build preview and furniture
     # moving; it deliberately overlaps Neat Building's build window and
@@ -994,7 +1008,9 @@
     # returns `List<IsoObject>`, so Surface Fix crashes the client during
     # meshing and Physics & Collision switches itself off. Add them back only
     # with a 42.22 build.
-    "ViewpointDoor"
+    # ViewpointDoor (Door Fix) is omitted as well: its shader patches match
+    # Viewpoint before 0.1.7, whose model shader has since moved to an SSBO
+    # (see the Workshop list above). It fails renderer start, not meshing.
     "ViewpointProperRoofs"
     "ViewpointUI"
     "ViewpointWorkstations3D"
