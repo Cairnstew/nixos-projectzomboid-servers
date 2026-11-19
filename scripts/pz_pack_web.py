@@ -71,6 +71,93 @@ VALID_VISIBILITY = ("public", "friendsOnly", "private", "unlisted")
 _SAFE_GENERATED_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _UNSAFE_VALUE = re.compile(r"[\r\n\"\\]")
 
+REPO_ROOT = os.environ.get("PZ_REPO_ROOT") or os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
+)
+
+# In-repo mods the connector item can carry as SIBLING mod roots. A pack opts in
+# with `bundledMods = [ "<mod id>" ]`, and each id must also be in `mods`, so the
+# game loads it. Paths are relative to the repository root; `PZ_REPO_ROOT` makes
+# the same lookup work when Nix runs the script from a store path.
+# This is transport, not a patch: each bundled mod is our own code and overrides
+# nothing in the connector or in another author's mod.
+BUNDLED_MODS = {
+    "PZButcherAll": os.path.join("mods", "butcher-all"),
+}
+
+
+def read_mod_id(path):
+    """The `id=` line of a mod.info, or "" when it has none."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("id="):
+                    return line[3:].strip()
+    except OSError:
+        return ""
+    return ""
+
+
+def copy_bundled_mods(pack_data, item):
+    """Copy each opted-in in-repo mod into the item as a sibling mod root.
+
+    A Workshop item may hold several mod roots; `Mods=` selects which load. The
+    connector mod stays exactly what it was — this function never writes into
+    its folder and never touches another author's files.
+    """
+    bundled = pack_data.get("bundledMods") or []
+    if not isinstance(bundled, list) or not all(isinstance(m, str) for m in bundled):
+        raise SystemExit("pz-pack-web: bundledMods must be a list of Mod IDs")
+    mods = pack_data.get("mods") or []
+
+    copied = []
+    for mod_id in bundled:
+        if mod_id not in mods:
+            raise SystemExit(
+                f"pz-pack-web: bundledMod {mod_id!r} is not in the pack's mods list; "
+                "the item would ship it and the game would never load it"
+            )
+        relative = BUNDLED_MODS.get(mod_id)
+        if not relative:
+            raise SystemExit(f"pz-pack-web: no in-repo source for bundled mod {mod_id!r}")
+        source = os.path.join(REPO_ROOT, relative)
+        if not os.path.isdir(source):
+            raise SystemExit(
+                f"pz-pack-web: no in-repo source for bundled mod {mod_id!r} "
+                f"(looked under {REPO_ROOT!r})"
+            )
+
+        # B42-only helper mods keep their metadata in `42/mod.info`, the same
+        # layout the connector uses. A root mod.info would be the Build 41 one.
+        version_dirs = [
+            d for d in ("42", "common", "41") if os.path.isdir(os.path.join(source, d))
+        ]
+        if "42" not in version_dirs:
+            raise SystemExit(
+                f"pz-pack-web: bundled mod {mod_id!r} has no 42/ version folder"
+            )
+        info = os.path.join(source, "42", "mod.info")
+        declared = read_mod_id(info)
+        if declared != mod_id:
+            raise SystemExit(
+                f"pz-pack-web: {info} declares id={declared!r}, "
+                f"but the pack's bundledMods names {mod_id!r}"
+            )
+
+        dest = os.path.join(item, "Contents", "mods", mod_id)
+        os.makedirs(dest)
+        for version_dir in version_dirs:
+            # copyfile, not copy2: the source lives in the Nix store, whose
+            # read-only modes would make the staged tree un-removable on the
+            # next --force run.
+            shutil.copytree(
+                os.path.join(source, version_dir),
+                os.path.join(dest, version_dir),
+                copy_function=shutil.copyfile,
+            )
+        copied.append(mod_id)
+    return copied
+
 
 def generated_id(pack):
     """`viewpoint` -> `PZPackWebViewpoint`; stable and a Lua identifier."""
@@ -718,8 +805,9 @@ Events.OnMainMenuEnter.Add(check)
 """
 
 
-def render_workshop_txt(pack, pack_data, mods, visibility, workshop_id):
+def render_workshop_txt(pack, pack_data, mods, visibility, workshop_id, bundled=None):
     """`workshop.txt`. Repeated `description=` lines, BBCode is allowed."""
+    bundled = bundled or []
     title = f"PZ Pack Web - {pack}"
     description = pack_data.get("description") or f"Pack-wide companion for {pack}."
     lines = [
@@ -739,8 +827,18 @@ def render_workshop_txt(pack, pack_data, mods, visibility, workshop_id):
         "menu, opens their Workshop page, and can enable the ones you already have but "
         "have switched off. It cannot download anything for you.",
         "description=",
-        "description=It adds no content, overrides no files, and does not redistribute "
-        "any other mod. Safe to add to an existing world.",
+        "description=The connector mod adds no content, overrides no files, and does "
+        "not redistribute any other mod. Safe to add to an existing world.",
+    ]
+    if bundled:
+        lines += [
+            "description=",
+            "description=This item also bundles our own in-repo helper mod(s): "
+            + ", ".join(bundled)
+            + ". They override nothing and are loaded only because the pack lists them "
+            "in Mods=.",
+        ]
+    lines += [
         "description=",
         "description=Generated from the nixos-projectzomboid-servers modpack catalogue.",
         "tags=Build 42;Multiplayer",
@@ -748,6 +846,25 @@ def render_workshop_txt(pack, pack_data, mods, visibility, workshop_id):
         "",
     ]
     return "\n".join(lines)
+
+
+def make_writable(path):
+    """Best-effort `chmod -R u+rwX`, so rmtree can remove a copied store tree.
+
+    A staging folder produced by an older run (or by `copytree` preserving Nix
+    store modes) can contain read-only directories; `rmtree` cannot unlink their
+    children until the owner can write to them.
+    """
+    for root, dirs, files in os.walk(path):
+        for name in dirs + files:
+            try:
+                os.chmod(os.path.join(root, name), 0o755)
+            except OSError:
+                pass
+    try:
+        os.chmod(path, 0o755)
+    except OSError:
+        pass
 
 
 def build_tree(pack, pack_data, target, args, links=None):
@@ -786,6 +903,8 @@ def build_tree(pack, pack_data, target, args, links=None):
         os.makedirs(lua_server)
         os.makedirs(lua_client)
 
+        bundled = copy_bundled_mods(pack_data, item)
+
         files = {
             os.path.join(mod_dir, "mod.info"): render_mod_info(pack, mod_id, linked),
             os.path.join(lua_shared, "manifest.lua"): render_manifest(pack, linked, mod_id),
@@ -794,7 +913,7 @@ def build_tree(pack, pack_data, target, args, links=None):
             os.path.join(lua_server, "audit.lua"): render_audit(),
             os.path.join(lua_client, "prompt.lua"): render_prompt(),
             os.path.join(item, "workshop.txt"): render_workshop_txt(
-                pack, pack_data, linked, args.visibility, args.workshop_id
+                pack, pack_data, linked, args.visibility, args.workshop_id, bundled
             ),
         }
         for path, text in files.items():
@@ -812,12 +931,13 @@ def build_tree(pack, pack_data, target, args, links=None):
                     f"pz-pack-web: {target} already exists; pass --force to replace it "
                     "(a published item's preview/description edits live there)"
                 )
+            make_writable(target)
             shutil.rmtree(target)
         os.replace(item, target)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
-    return mod_id, len(linked), len(emitted)
+    return mod_id, len(linked), len(emitted), bundled
 
 
 def main(argv=None):
@@ -901,12 +1021,13 @@ def main(argv=None):
             file=sys.stderr,
         )
 
-    mod_id, count, linked_count = build_tree(args.pack, pack_data, target, args, links)
+    mod_id, count, linked_count, bundled = build_tree(args.pack, pack_data, target, args, links)
 
     summary = {
         "pack": args.pack,
         "mod_id": mod_id,
         "mods": count,
+        "bundled_mods": bundled,
         "out_dir": os.path.abspath(target),
         "workshop_id": args.workshop_id,
         "visibility": args.visibility,
@@ -923,6 +1044,8 @@ def main(argv=None):
 
     print(f"pz-pack-web: wrote {summary['out_dir']}")
     print(f"  mod id: {mod_id}   linked mods: {count}")
+    if bundled:
+        print(f"  bundled mods: {', '.join(bundled)}")
     print(
         f"  workshop.txt: visibility={args.visibility}, "
         + (f"updating id {args.workshop_id}" if args.workshop_id else "new item (no id)")

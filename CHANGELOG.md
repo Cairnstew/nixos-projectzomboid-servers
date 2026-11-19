@@ -8,6 +8,15 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`PZButcherAll`: an additive "Butcher All Nearby" hook for Zombie Butchery.**
+  A 6-tile, nearest-first chain over `ISButcherZombieCorpse`, then
+  `ISBreakZombieSkeleton` for the skeletons it leaves; cancellable from the same
+  menu, capped at the nearest 60. It overrides no Zombie Butchery file and copies
+  none of its code — it uses the mod's public globals and fails closed if they
+  disappear. Packs ship in-repo add-ons as sibling mod roots inside their
+  connector Workshop item with `bundledMods`, which the catalogue check requires
+  to be in `mods` as well; `viewpoint` opts in.
+
 - **`pz-pack-doctor --game-version` reports mods PZ silently drops.** PZ's
   `ChooseGameInfo$Mod.isAvailableSelf` refuses a mod whose `versionMin` is above
   the running build or whose `versionMax` is below it, then removes it from

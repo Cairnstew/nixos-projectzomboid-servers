@@ -606,6 +606,8 @@ let
       duplicateModIds = lib.unique (
         builtins.filter (id: builtins.length (builtins.filter (x: x == id) modIds) > 1) modIds
       );
+      bundledMods = pack.bundledMods or [ ];
+      missingBundled = builtins.filter (id: !(builtins.elem id modIds)) bundledMods;
       namespaces = pack.sandboxNamespaces or [ ];
     in
     if missing != [ ] then
@@ -620,6 +622,14 @@ let
       "lists the same Workshop id twice: ${lib.concatStringsSep ", " duplicateWorkshopIds}"
     else if duplicateModIds != [ ] then
       "lists the same Mod ID twice: ${lib.concatStringsSep ", " duplicateModIds}"
+    else if !(builtins.isList bundledMods) || !(builtins.all builtins.isString bundledMods) then
+      "bundledMods must be a list of mod.info id= strings"
+    else if missingBundled != [ ] then
+      ''
+        ships bundled mod(s) that are not in `mods`: ${lib.concatStringsSep ", " missingBundled}.
+        A bundled mod is a sibling mod root inside the connector Workshop item;
+        `Mods=` is what loads it, so add each id to `mods` as well.
+      ''
     else if pack.workshopMods != [ ] && pack.mods == [ ] then
       ''
         lists ${toString (builtins.length pack.workshopMods)} Workshop item(s) but no
@@ -1014,6 +1024,236 @@ in
         touch "$out"
       '';
 
+  # ── PZButcherAll: the additive "Butcher All Nearby" hook ────────────
+  # Client Lua cannot load outside the game, so the check covers the parts that
+  # can be proven here: the mod.info load contract, a real Lua parser over every
+  # file, and the pure radius scan against a fake cell. The chain itself is
+  # driven by Zombie Butchery's timed actions and is exercised in-game.
+  butcher-all =
+    pkgs.runCommand "pz-butcher-all-check"
+      {
+        nativeBuildInputs = [
+          pkgs.lua5_1
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        SRC = ../mods/butcher-all;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+
+        info="$SRC/42/mod.info"
+        [ -f "$info" ] || fail "no 42/mod.info (B42 layout)"
+        grep -qx 'id=PZButcherAll' "$info" || fail "mod.info id is not PZButcherAll"
+        grep -qx 'require=ZombieButchery' "$info" || fail "Zombie Butchery is not a hard dependency"
+        grep -qx 'loadModAfter=ZombieButchery' "$info" || fail "no loadModAfter hint"
+
+        for f in "$SRC"/42/media/lua/client/PZButcherAll/*.lua \
+                 "$SRC"/42/media/lua/shared/PZButcherAll/*.lua; do
+          lua -e "assert(loadfile('$f'))" || fail "Lua does not parse: $f"
+        done
+
+        client="$SRC/42/media/lua/client/PZButcherAll/ButcherAll.lua"
+        grep -q 'Events.OnFillWorldObjectContextMenu.Add' "$client" \
+          || fail "the context menu hook is not registered"
+        grep -q 'Events.OnTick.Add' "$client" || fail "the chain tick is not registered"
+        grep -q 'ISButcherZombieCorpse:new' "$client" \
+          || fail "it does not drive Zombie Butchery's butcher action"
+        grep -q 'ISBreakZombieSkeleton:new' "$client" \
+          || fail "it does not drive Zombie Butchery's skeleton action"
+
+        test_lua="$PWD/scan-test.lua"
+        cat > "$test_lua" <<'LUA'
+        package.path = "shared/?.lua;" .. package.path
+        instanceof = function(value, kind) return value and value.type == kind end
+        local function list(items)
+          return {
+            size = function() return #items end,
+            get = function(_, i) return items[i + 1] end,
+          }
+        end
+        local function body(kind)
+          return {
+            type = "IsoDeadBody",
+            isZombie = function() return true end,
+            isAnimal = function() return false end,
+            isSkeleton = function() return kind == "skeleton" end,
+          }
+        end
+        local grid = {
+          ["1:0"] = { getStaticMovingObjects = function() return list({ body("flesh") }) end },
+          ["2:0"] = { getStaticMovingObjects = function() return list({ body("skeleton") }) end },
+          ["0:1"] = { getStaticMovingObjects = function() return list({ body("flesh"), body("flesh") }) end },
+          ["3:0"] = { getStaticMovingObjects = function() return list({ body("flesh") }) end },
+          ["9:0"] = { getStaticMovingObjects = function() return list({ body("flesh") }) end },
+        }
+        local cell = { getGridSquare = function(_, x, y) return grid[x .. ":" .. y] end }
+        dofile("shared/PZButcherAll/scan.lua")
+        local scan = PZButcherAll.scan
+        local flesh = scan.collect(cell, 0, 0, 0, 3, false)
+        assert(#flesh == 4, "flesh count " .. #flesh)
+        assert(flesh[#flesh].dist == 3, "not sorted nearest first")
+        local skeletons = scan.collect(cell, 0, 0, 0, 3, true)
+        assert(#skeletons == 1, "skeleton count " .. #skeletons)
+        assert(#scan.collect(cell, 0, 0, 0, 0, false) == 0, "radius 0 found a corpse")
+        print("scan ok")
+        LUA
+        ( cd "$SRC/42/media/lua" && lua "$test_lua" ) \
+          || fail "the radius scan unit test failed"
+
+        chain_lua="$PWD/chain-test.lua"
+        cat > "$chain_lua" <<'LUA'
+        package.path = "shared/?.lua;" .. package.path
+
+        local function makeSquare(x, y)
+          local square = { x = x, y = y, bodies = { } }
+          function square:getX() return self.x end
+          function square:getY() return self.y end
+          function square:getZ() return 0 end
+          function square:getStaticMovingObjects()
+            local live = { }
+            for _, body in ipairs(self.bodies) do
+              if body.alive then live[#live + 1] = body end
+            end
+            return {
+              size = function() return #live end,
+              get = function(_, i) return live[i + 1] end,
+            }
+          end
+          return square
+        end
+
+        local function makeBody(square, skeleton)
+          return {
+            type = "IsoDeadBody",
+            alive = true,
+            skeleton = skeleton,
+            square = square,
+            getSquare = function(self) return self.square end,
+            isZombie = function() return true end,
+            isAnimal = function() return false end,
+            isSkeleton = function(self) return self.skeleton end,
+          }
+        end
+
+        local squares = {
+          ["0:0"] = makeSquare(0, 0),
+          ["1:0"] = makeSquare(1, 0),
+        }
+        local first = makeBody(squares["0:0"], false)
+        local second = makeBody(squares["0:0"], false)
+        local bone = makeBody(squares["1:0"], true)
+        squares["0:0"].bodies = { first, second }
+        squares["1:0"].bodies = { bone }
+        local cell = {
+          getGridSquare = function(_, x, y) return squares[x .. ":" .. y] end,
+        }
+
+        local queued, actions = false, { }
+        local butchered, bones = { }, { }
+        local good, bad = { }, { }
+        local logged = { }
+
+        print = function(...)
+          local parts = { }
+          for i = 1, select("#", ...) do parts[#parts + 1] = tostring(select(i, ...)) end
+          logged[#logged + 1] = table.concat(parts, " ")
+        end
+
+        local player = {
+          getCurrentSquare = function() return squares["0:0"] end,
+          getPrimaryHandItem = function() return nil end,
+          getVehicle = function() return nil end,
+          isDead = function() return false end,
+          getUsername = function() return "tester" end,
+          getCharacterActions = function()
+            return { isEmpty = function() return not queued end }
+          end,
+        }
+
+        local hooks = { }
+        Events = {
+          OnFillWorldObjectContextMenu = { Add = function(fn) hooks.menu = fn end },
+          OnTick = { Add = function(fn) hooks.tick = fn end },
+        }
+        getText = function(key) return key end
+        getSpecificPlayer = function() return player end
+        getCell = function() return cell end
+        instanceof = function(value, kind) return value and value.type == kind end
+        HaloTextHelper = {
+          addGoodText = function(_, text) good[#good + 1] = text end,
+          addBadText = function(_, text) bad[#bad + 1] = text end,
+        }
+        ISWorldObjectContextMenu = { equip = function() end }
+        ISTimedActionQueue = {
+          add = function(action)
+            queued = true
+            actions[#actions + 1] = action
+            if action.kind == "butcher" then butchered[#butchered + 1] = action end
+            if action.kind == "bones" then bones[#bones + 1] = action end
+          end,
+        }
+        luautils = { walkAdj = function() return true end }
+        ZombieButchery = {
+          findSharpButcherTool = function() return { id = "knife" } end,
+          isCorpseOnSquare = function(body) return body.alive == true end,
+          isAdjacentToCorpse = function() return true end,
+        }
+        ISButcherZombieCorpse = {
+          new = function(_, _, body) return { kind = "butcher", body = body } end,
+        }
+        ISBreakZombieSkeleton = {
+          new = function(_, _, body) return { kind = "bones", body = body } end,
+        }
+
+        package.preload["ISUI/ISWorldObjectContextMenu"] = function() end
+        package.preload["TimedActions/ISButcherZombieCorpse"] = function() end
+        package.preload["TimedActions/ISBreakZombieSkeleton"] = function() end
+
+        dofile("client/PZButcherAll/ButcherAll.lua")
+        assert(type(hooks.menu) == "function", "the menu hook was not registered")
+        assert(type(hooks.tick) == "function", "the tick hook was not registered")
+
+        local option
+        hooks.menu(0, {
+          addOption = function(_, text, target, fn)
+            option = { text = text, target = target, fn = fn }
+          end,
+        }, { }, false)
+        assert(option, "no Butcher All option")
+        assert(option.text:find("%(3%)") ~= nil, "the count is wrong: " .. option.text)
+
+        option.fn(option.target)
+        for _ = 1, 500 do
+          hooks.tick()
+          if queued then
+            for _, action in ipairs(actions) do
+              action.body.alive = false
+              if action.kind == "butcher" then
+                local skeleton = makeBody(action.body.square, true)
+                action.body.square.bodies[#action.body.square.bodies + 1] = skeleton
+              end
+            end
+            actions = { }
+            queued = false
+          end
+        end
+
+        assert(#butchered == 2, "butchered " .. #butchered .. " corpses, want 2")
+        assert(#bones == 3, "broke " .. #bones .. " skeletons, want 3")
+        assert(good[#good] == "ContextMenu_PZButcherAll_Done", "no completion message")
+        for _, line in ipairs(logged) do
+          assert(not line:find("chain error"), line)
+        end
+        io.write("chain ok\n")
+        LUA
+        ( cd "$SRC/42/media/lua" && lua "$chain_lua" ) \
+          || fail "the chain unit test failed"
+
+        echo "pz-butcher-all ok"
+        touch "$out"
+      '';
+
   # ── pz-pack-web: the ready-to-upload connector tree ─────────────────
   # The artefact is what a human uploads to the Workshop, so the check is
   # structural: workshop.txt fields, the B42 mod layout, no hard `require=`, a
@@ -1061,6 +1301,35 @@ in
             defaultSettings = { };
             defaultSandbox = { };
           };
+          bundled = {
+            description = "A pack that ships an in-repo mod in the connector item.";
+            workshopMods = [
+              {
+                id = "444";
+                title = "Zombie Butchery";
+              }
+            ];
+            mods = [
+              "ZombieButchery"
+              "PZButcherAll"
+            ];
+            bundledMods = [ "PZButcherAll" ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
+          badbundle = {
+            description = "A pack that ships a bundled mod it does not load.";
+            workshopMods = [
+              {
+                id = "555";
+                title = "Zombie Butchery";
+              }
+            ];
+            mods = [ "ZombieButchery" ];
+            bundledMods = [ "PZButcherAll" ];
+            defaultSettings = { };
+            defaultSandbox = { };
+          };
         }
       );
     in
@@ -1075,6 +1344,7 @@ in
         SCRIPT = ../scripts/pz_pack_web.py;
         PYTHONPATH = "${../scripts}";
         CATALOGUE = catalogue;
+        PZ_REPO_ROOT = "${../.}";
       }
       ''
         fail() { echo "FAIL: $1" >&2; exit 1; }
@@ -1179,6 +1449,55 @@ in
           --workshop-root "" --force --json > unlinked.json \
           || fail "generation without a Workshop root failed"
         grep -q '"workshop_links": 0' unlinked.json || fail "links appeared without a Workshop root"
+
+        # ── Bundled in-repo mods: a sibling root inside the item, not a patch ──
+        # The connector's own folder must stay content-free; the add-on is a
+        # separate mod root in the same Workshop item, loaded only because the
+        # pack lists it in `mods`.
+        python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack bundled --out-dir "$TMPDIR/bundled" \
+          --workshop-root "" --force --json > bundled.json \
+          || fail "bundled-mod generation failed"
+        python3 - "$TMPDIR/bundled" <<'PY'
+        import json, os, sys
+        root = sys.argv[1]
+        summary = json.load(open("bundled.json"))
+        assert summary["bundled_mods"] == ["PZButcherAll"], summary
+        base = os.path.join(root, "Contents", "mods", "PZButcherAll", "42")
+        info = os.path.join(base, "mod.info")
+        assert os.path.isfile(info), info
+        text = open(info).read()
+        assert "id=PZButcherAll" in text, text
+        assert "require=ZombieButchery" in text, text
+        for rel in (
+            "media/lua/client/PZButcherAll/ButcherAll.lua",
+            "media/lua/shared/PZButcherAll/scan.lua",
+            "media/lua/shared/Translate/EN/ContextMenu.json",
+        ):
+            assert os.path.isfile(os.path.join(base, rel)), rel
+        assert os.path.isfile(
+            os.path.join(root, "Contents", "mods", "PZPackWebBundled",
+                         "42", "media", "lua", "shared", "PZPackWeb", "manifest.lua")
+        ), "the connector mod is missing"
+        txt = open(os.path.join(root, "workshop.txt")).read()
+        assert "bundles our own in-repo helper mod(s): PZButcherAll" in txt, txt
+        PY
+        ( cd "$TMPDIR/bundled/Contents/mods/PZButcherAll/42/media/lua" \
+          && lua -e "assert(loadfile('client/PZButcherAll/ButcherAll.lua')); assert(loadfile('shared/PZButcherAll/scan.lua'))" ) \
+          || fail "the bundled mod Lua does not parse"
+        grep -qx 'loadModAfter=ZombieButchery,PZButcherAll' \
+          "$TMPDIR/bundled/Contents/mods/PZPackWebBundled/42/mod.info" \
+          || fail "the connector does not order itself after the bundled mod"
+
+        # Regenerating over a copied store tree must work: copytree used to
+        # preserve the store's read-only modes, so --force could not unlink it.
+        python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack bundled --out-dir "$TMPDIR/bundled" \
+          --workshop-root "" --force --json > /dev/null \
+          || fail "regenerating a bundled item with --force failed"
+
+        if python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack badbundle --out-dir "$TMPDIR/badbundle" --force > /dev/null 2> err; then
+          fail "a bundled mod missing from mods was accepted"
+        fi
+        grep -q 'not in the pack' err || fail "the bundled-mod failure was not explained"
 
         # ── Non-ASCII ids: PZ does not decode UTF-8 in Lua source ──────────
         # A raw `小` in a literal reaches the engine as 0x0f + replacement

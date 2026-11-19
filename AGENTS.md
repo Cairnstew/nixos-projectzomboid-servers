@@ -38,6 +38,7 @@ modules/manage/*.py`.
 | `lib/default.nix` | pure renderer/resolver/proxy helpers, `unitName`, `mkWebPort` |
 | `lib/prepare.nix` | the prep and install scripts shared with `nix run` |
 | `modpacks/` | plain data catalogue; no module, no `pkgs` |
+| `mods/` | in-repo Project Zomboid mod sources a pack ships as `bundledMods` (e.g. `butcher-all`) |
 | `pkgs/` | launcher, standalone runner, client mod fetcher |
 | `scripts/` | Python helpers (merge, maps, prune, Workshop, client mods) |
 | `docs/options.md` | the complete option reference, checked by CI |
@@ -49,6 +50,10 @@ modules/manage/*.py`.
 - **One implementation.** A value or script shared by the module, the runner and
   the checks lives in `lib/` or `pkgs/`. Do not copy `webPort`, `unitName`,
   rendering or merge logic.
+- **In-repo mods are additive.** A `mods/<slug>/` source ships inside a pack's
+  connector Workshop item as a sibling mod root (`bundledMods`). It must not
+  override another author's file: hook their public globals and fail closed if
+  the surface disappears. `mods/butcher-all/README.md` is the worked example.
 - **Secrets never enter the store.** `settings`, `sandbox`, `extraArgs` and
   `jvmOpts` are world-readable. Use `secretFiles`/`passwordFile`/`adminAccount`.
   The merged `.ini` is mode `0600`; do not relax that.

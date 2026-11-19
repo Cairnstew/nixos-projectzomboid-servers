@@ -20,6 +20,8 @@
 #   description     str            human-readable summary
 #   workshopMods    [ { id, title } ]   Steam Workshop items, order preserved
 #   mods            [ str ]        local mod folder names (mod.info `id=` values)
+#   bundledMods     [ str ]        optional: in-repo mods the connector item ships
+#                                  as sibling mod roots; each must also be in `mods`
 #   defaultSettings attrset        .ini keys servers inherit
 #   defaultSandbox  attrset        SandboxVars servers inherit
 #

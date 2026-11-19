@@ -389,6 +389,7 @@
                   text = ''
                     export PZ_MODPACKS_JSON=${pkgs.writeText "modpacks.json" (builtins.toJSON self.modpacks)}
                     export PYTHONPATH=${./scripts}''${PYTHONPATH:+:$PYTHONPATH}
+                    export PZ_REPO_ROOT=${./.}
                     exec python3 ${./scripts/pz_pack_web.py} "$@"
                   '';
                 }

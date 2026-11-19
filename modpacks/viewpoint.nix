@@ -6,6 +6,12 @@
 {
   description = "Project Viewpoint Vanilla+ (updated from collection 3812346398 + progression/mechanics additions).";
 
+  # Our own in-repo add-ons, shipped as sibling mod roots inside the published
+  # connector item (3839932016). Each id must also be in `mods`, or the item
+  # downloads it and the game never loads it. `PZButcherAll` is the additive
+  # "Butcher All Nearby" hook for Zombie Butchery; see mods/butcher-all/.
+  bundledMods = [ "PZButcherAll" ];
+
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
     { id = "3809306528"; title = "Project Viewpoint"; }
@@ -1242,6 +1248,7 @@
     # B42MPZombieCorpseFix requires ZombieBuddy (already first);
     # the Viewpoint corpse-menu fix requires Viewpoint (already loaded).
     "ZombieButchery"
+    "PZButcherAll" # in-repo add-on: Butcher All Nearby; requires ZombieButchery
     "BetterCorpseBurning"
     "CorpseDumper"
     "B42MPZombieCorpseFix"

@@ -31,6 +31,11 @@ It does four things:
 It adds no items, recipes, maps or UI of its own. Adding it to a world is inert
 apart from the ordering and the log line.
 
+The **Workshop item** can additionally carry our own in-repo add-ons as sibling
+mod roots, listed by a pack's `bundledMods`. They are separate mods — not part
+of `PZPackWeb<Pack>`, not overrides, and loaded only because the pack's `Mods=`
+names them. See [Bundled in-repo mods](#bundled-in-repo-mods).
+
 ## What the client prompt can and cannot do
 
 | It can | It cannot |
@@ -49,14 +54,47 @@ The prompt shows once per distinct problem: the counts are stored in
 `~/Zomboid/Lua/pzpackweb_<pack>.cfg` when you close it, and again in memory per
 session. Install something and it reappears with the new numbers.
 
+## Bundled in-repo mods
+
+Some QoL glue is our own code and too small for a Workshop page of its own.
+A pack opts one in with `bundledMods`:
+
+```nix
+# modpacks/viewpoint.nix
+bundledMods = [ "PZButcherAll" ];
+```
+
+The rules are deliberately narrow:
+
+- **It is a sibling mod root**, `Contents/mods/PZButcherAll/`, not a file inside
+  the connector's folder. The connector mod's `mod.info` still truthfully says
+  "adds no content, overrides no files".
+- **Every bundled id must also be in `mods`.** The item downloads the files;
+  `Mods=` is what loads them. The catalogue check rejects the mismatch.
+- **No third-party code.** The source lives in `mods/<slug>/` in this
+  repository. A bundled mod is never an override of another author's file.
+- **It is optional.** Omit `bundledMods` and the item is exactly the connector.
+
+The first one is `PZButcherAll`, the additive "Butcher All Nearby" action for
+Zombie Butchery. Its source and design notes are in `mods/butcher-all/`.
+
+**Publish before you deploy the pack change.** Adding an id to a pack's `mods`
+is a promise that some downloaded item provides it. The dedicated install only
+downloads items whose directory is missing or empty, so the old item content
+persists until you remove it. If the pack change lands first, `Mods=` names a
+mod nothing provides — `failOnMissingMods` (the default) refuses the boot, and
+`pz-pack-doctor` reports it with the same answer. The order is: regenerate,
+upload, force the server to re-download the item, then roll the pack change out.
+
 ## Generate the upload tree
 
 ```console
 $ nix run .#pz-pack-web -- --pack viewpoint
 pz-pack-web: wrote /home/you/Zomboid/Workshop/PZPackWeb-viewpoint
-  mod id: PZPackWebViewpoint   linked mods: 480
+  mod id: PZPackWebViewpoint   linked mods: 481
+  bundled mods: PZButcherAll
   workshop.txt: visibility=private, new item (no id)
-  client prompt: 478/480 pack mods have a Workshop link
+  client prompt: 479/481 pack mods have a Workshop link
   preview.png is a generated placeholder - replace it with a real 512x512 PNG
 ```
 
@@ -75,6 +113,11 @@ PZPackWeb-viewpoint/
       state.lua             pure diff helpers, no UI
     media/lua/server/PZPackWeb/audit.lua
     media/lua/client/PZPackWeb/prompt.lua
+  Contents/mods/PZButcherAll/42/       # bundledMods = [ "PZButcherAll" ]
+    mod.info
+    media/lua/client/PZButcherAll/ButcherAll.lua
+    media/lua/shared/PZButcherAll/scan.lua
+    media/lua/shared/Translate/EN/ContextMenu.json
 ```
 
 `workshop.lua` is built by scanning an installed Workshop tree, because a
@@ -193,6 +236,10 @@ mods = [
   # …
   "PZPackWebViewpoint"
 ];
+
+# If the item ships bundledMods, declare them too. The game loads only what
+# `mods` names; `bundledMods` is what makes pz-pack-web copy the source in.
+bundledMods = [ "PZButcherAll" ];
 ```
 
 Then verify the declaration against the installed tree:
@@ -240,14 +287,18 @@ downloaded.
 ## Updating it
 
 Regenerate into the same folder with the existing id, replace the preview if
-needed, and re-upload:
+needed, and re-upload. If you replaced the generated preview, pass
+`--preview <that file>` as well: `--force` replaces the whole staging folder,
+including `preview.png` and your hand edits to `workshop.txt`.
 
 ```console
 $ nix run .#pz-pack-web -- --pack viewpoint --workshop-id <id> --force
 ```
 
-Regenerate after any change to the pack's `mods` list; the manifest and the
-`loadModAfter` line are snapshots of that list.
+Regenerate after any change to the pack's `mods` list; the manifest, the
+`loadModAfter` line and any `bundledMods` tree are snapshots of that list. When
+a bundled mod changes, re-upload and re-download the item on the dedicated
+server — the install script deliberately does not re-fetch a present item.
 
 ## What it deliberately does not do
 

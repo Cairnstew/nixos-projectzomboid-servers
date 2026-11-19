@@ -1,0 +1,8 @@
+name=Butcher All Nearby
+id=PZButcherAll
+author=nixos-projectzomboid-servers
+modversion=1.0.0
+description=Adds a "Butcher All Nearby" world-context-menu action that drives Zombie Butchery over every zombie corpse within 6 tiles, then breaks the skeletons it leaves behind. Additive hook: it overrides no Zombie Butchery file and copies none of its code. Requires Zombie Butchery.
+require=ZombieButchery
+loadModAfter=ZombieButchery
+versionMin=42.20

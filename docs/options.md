@@ -270,6 +270,7 @@ independently of your configuration.
 | `workshopMods.*.id` | str | — | Numeric id **as a string**, e.g. `"2847184718"`. |
 | `workshopMods.*.title` | str \| null | `null` | Cosmetic; for humans reading the pack. |
 | `mods` | listOf str | `[]` | Local mod **folder** names — the `id=` values from each mod's `mod.info`, *not* Workshop ids. A pack with `workshopMods` must list at least one, or `Mods=` is empty and nothing loads. |
+| `bundledMods` | listOf str | `[]` | In-repo mods shipped as sibling mod roots inside the pack's connector Workshop item (read by `pz-pack-web`; ignored by the server runtime). Each id must also be in `mods`. |
 | `defaultSettings` | attrs | `{}` | `.ini` keys any server using this pack inherits. A server's own `settings` wins. |
 | `defaultSandbox` | attrs | `{}` | Same, for SandboxVars. |
 | `sandboxNamespaces` | listOf str | `[]` | Mod-defined SandboxVars groups a pack's mods ship (e.g. `Bandits`). Added to the server's own list. |

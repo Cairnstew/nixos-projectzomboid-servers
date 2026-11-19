@@ -1,0 +1,11 @@
+{
+    "ContextMenu_PZButcherAll": "Butcher All Nearby",
+    "ContextMenu_PZButcherAll_Stop": "Stop Butcher All",
+    "ContextMenu_PZButcherAll_Started": "Butchering all nearby corpses...",
+    "ContextMenu_PZButcherAll_Stopped": "Butcher All stopped.",
+    "ContextMenu_PZButcherAll_Done": "Butcher All complete.",
+    "ContextMenu_PZButcherAll_NoTool": "Butcher All needs a sharp butchering tool.",
+    "ContextMenu_PZButcherAll_None": "Butcher All found no corpses nearby.",
+    "ContextMenu_PZButcherAll_TooDark": "It is too dark to butcher.",
+    "ContextMenu_PZButcherAll_Capped": "Limited to the nearest 60."
+}
