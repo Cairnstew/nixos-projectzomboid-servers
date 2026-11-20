@@ -1348,6 +1348,77 @@ in
         touch "$out"
       '';
 
+  # ── PZAreaTasksBatchMove: fill inventory before returning to the destination ──
+  # Same shape as the other client-Lua mod check: metadata, hook points by
+  # inspection, a real parser, and the pure endpoint-ordering/deferred helpers.
+  area-tasks-batch-move =
+    pkgs.runCommand "pz-area-tasks-batch-move-check"
+      {
+        nativeBuildInputs = [
+          pkgs.lua5_1
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        SRC = ../mods/area-tasks-batch-move;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+
+        info="$SRC/42/mod.info"
+        [ -f "$info" ] || fail "no 42/mod.info (B42 layout)"
+        grep -qx 'id=PZAreaTasksBatchMove' "$info" || fail "mod.info id is wrong"
+        grep -qx 'require=AreaTasks' "$info" || fail "Area Tasks is not a hard dependency"
+        grep -qx 'loadModAfter=AreaTasks' "$info" || fail "no loadModAfter hint"
+        grep -qx 'versionMin=42.20' "$info" || fail "wrong versionMin"
+
+        for f in "$SRC"/42/media/lua/client/PZAreaTasksBatchMove/*.lua \
+                 "$SRC"/42/media/lua/shared/PZAreaTasksBatchMove/*.lua; do
+          lua -e "assert(loadfile('$f'))" || fail "Lua does not parse: $f"
+        done
+
+        hooks="$SRC/42/media/lua/client/PZAreaTasksBatchMove/hooks.lua"
+        grep -q 'sourceMode == "containers"' "$hooks" || fail "the route filter is missing"
+        grep -q 'toMode == "container"' "$hooks" || fail "the destination filter is missing"
+        grep -q 'API_VERSION ~= 1' "$hooks" || fail "the API version is not checked"
+        grep -q 'getGroundItemCarryLimit' "$hooks" || fail "the carry limit is not read"
+        grep -q 'hasDeferred' "$hooks" || fail "deferred items are not guarded"
+        grep -q 'collectTargets' "$hooks" || fail "collectTargets is not wrapped"
+        grep -q 'queueTarget' "$hooks" || fail "queueTarget is not wrapped"
+
+        test_lua="$PWD/batching-test.lua"
+        cat > "$test_lua" <<'LUA'
+        dofile("shared/PZAreaTasksBatchMove/batching.lua")
+        local B = PZAreaTasksBatchMove.Batching
+
+        local endpoints = {
+          { x = 9, y = 9 },
+          { x = 1, y = 0 },
+          { x = 0, y = 2 },
+        }
+        local sorted = B.sortNearest(0, 0, endpoints)
+        assert(sorted[1].x == 1 and sorted[1].y == 0, "nearest endpoint is wrong")
+        assert(sorted[2].x == 0 and sorted[2].y == 2, "second endpoint is wrong")
+        assert(sorted[3].x == 9, "farthest endpoint is wrong")
+        assert(endpoints[1].x == 9, "sortNearest mutated the input")
+
+        assert(not B.hasRemainingSources({ }), "empty sources reported items")
+        assert(not B.hasRemainingSources({ { next = 3, items = { 1, 2 } } }),
+          "an exhausted source reported items")
+        assert(B.hasRemainingSources({ { next = 1, items = { 1 } } }),
+          "a source with items was missed")
+
+        assert(not B.hasDeferred({ { deferred = { } } }), "empty deferred reported")
+        assert(B.hasDeferred({ { deferred = { 1 } } }), "deferred item was missed")
+
+        print("batching ok")
+        LUA
+        ( cd "$SRC/42/media/lua" && lua "$test_lua" ) \
+          || fail "the batching unit test failed"
+
+        echo "pz-area-tasks-batch-move ok"
+        touch "$out"
+      '';
+
   # ── pz-pack-web: the ready-to-upload connector tree ─────────────────
   # The artefact is what a human uploads to the Workshop, so the check is
   # structural: workshop.txt fields, the B42 mod layout, no hard `require=`, a
@@ -1412,10 +1483,12 @@ in
               "AreaTasks"
               "PZButcherAll"
               "PZAreaTasksFilter"
+              "PZAreaTasksBatchMove"
             ];
             bundledMods = [
               "PZButcherAll"
               "PZAreaTasksFilter"
+              "PZAreaTasksBatchMove"
             ];
             defaultSettings = { };
             defaultSandbox = { };
@@ -1564,7 +1637,11 @@ in
         import json, os, sys
         root = sys.argv[1]
         summary = json.load(open("bundled.json"))
-        assert summary["bundled_mods"] == ["PZButcherAll", "PZAreaTasksFilter"], summary
+        assert summary["bundled_mods"] == [
+            "PZButcherAll",
+            "PZAreaTasksFilter",
+            "PZAreaTasksBatchMove",
+        ], summary
         base = os.path.join(root, "Contents", "mods", "PZButcherAll", "42")
         info = os.path.join(base, "mod.info")
         assert os.path.isfile(info), info
@@ -1593,12 +1670,26 @@ in
         ):
             assert os.path.isfile(os.path.join(filter_base, rel)), rel
 
+        batch_base = os.path.join(root, "Contents", "mods", "PZAreaTasksBatchMove", "42")
+        batch_info = os.path.join(batch_base, "mod.info")
+        assert os.path.isfile(batch_info), batch_info
+        batch_text = open(batch_info).read()
+        assert "id=PZAreaTasksBatchMove" in batch_text, batch_text
+        assert "require=AreaTasks" in batch_text, batch_text
+        for rel in (
+            "media/lua/client/PZAreaTasksBatchMove/hooks.lua",
+            "media/lua/client/PZAreaTasksBatchMove/init.lua",
+            "media/lua/shared/PZAreaTasksBatchMove/batching.lua",
+        ):
+            assert os.path.isfile(os.path.join(batch_base, rel)), rel
+
         assert os.path.isfile(
             os.path.join(root, "Contents", "mods", "PZPackWebBundled",
                          "42", "media", "lua", "shared", "PZPackWeb", "manifest.lua")
         ), "the connector mod is missing"
         txt = open(os.path.join(root, "workshop.txt")).read()
-        assert "bundles our own in-repo helper mod(s): PZButcherAll, PZAreaTasksFilter" in txt, txt
+        assert ("bundles our own in-repo helper mod(s): PZButcherAll, PZAreaTasksFilter, "
+                "PZAreaTasksBatchMove") in txt, txt
         PY
         ( cd "$TMPDIR/bundled/Contents/mods/PZButcherAll/42/media/lua" \
           && lua -e "assert(loadfile('client/PZButcherAll/ButcherAll.lua')); assert(loadfile('shared/PZButcherAll/scan.lua'))" ) \
@@ -1606,7 +1697,10 @@ in
         ( cd "$TMPDIR/bundled/Contents/mods/PZAreaTasksFilter/42/media/lua" \
           && lua -e "assert(loadfile('client/PZAreaTasksFilter/hooks.lua')); assert(loadfile('client/PZAreaTasksFilter/ui.lua')); assert(loadfile('client/PZAreaTasksFilter/menu.lua')); assert(loadfile('client/PZAreaTasksFilter/state.lua')); assert(loadfile('client/PZAreaTasksFilter/init.lua')); assert(loadfile('shared/PZAreaTasksFilter/filter.lua'))" ) \
           || fail "the bundled filter mod Lua does not parse"
-        grep -qx 'loadModAfter=ZombieButchery,AreaTasks,PZButcherAll,PZAreaTasksFilter' \
+        ( cd "$TMPDIR/bundled/Contents/mods/PZAreaTasksBatchMove/42/media/lua" \
+          && lua -e "assert(loadfile('client/PZAreaTasksBatchMove/hooks.lua')); assert(loadfile('client/PZAreaTasksBatchMove/init.lua')); assert(loadfile('shared/PZAreaTasksBatchMove/batching.lua'))" ) \
+          || fail "the bundled batch-move mod Lua does not parse"
+        grep -qx 'loadModAfter=ZombieButchery,AreaTasks,PZButcherAll,PZAreaTasksFilter,PZAreaTasksBatchMove' \
           "$TMPDIR/bundled/Contents/mods/PZPackWebBundled/42/mod.info" \
           || fail "the connector does not order itself after the bundled mods"
 

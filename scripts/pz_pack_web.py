@@ -84,6 +84,7 @@ REPO_ROOT = os.environ.get("PZ_REPO_ROOT") or os.path.dirname(
 BUNDLED_MODS = {
     "PZButcherAll": os.path.join("mods", "butcher-all"),
     "PZAreaTasksFilter": os.path.join("mods", "area-tasks-filter"),
+    "PZAreaTasksBatchMove": os.path.join("mods", "area-tasks-batch-move"),
 }
 
 

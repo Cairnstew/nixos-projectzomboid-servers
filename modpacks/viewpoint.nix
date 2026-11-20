@@ -10,9 +10,10 @@
   # connector item (3839932016). Each id must also be in `mods`, or the item
   # downloads it and the game never loads it. `PZButcherAll` is the additive
   # "Butcher All Nearby" hook for Zombie Butchery; see mods/butcher-all/.
-  # `PZAreaTasksFilter` is the additive whitelist/blacklist adapter for the two
-  # Area Tasks items below; see mods/area-tasks-filter/.
-  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" ];
+  # `PZAreaTasksFilter` and `PZAreaTasksBatchMove` are the additive adapters for
+  # the two Area Tasks items below; see mods/area-tasks-filter/ and
+  # mods/area-tasks-batch-move/.
+  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" ];
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
@@ -1238,6 +1239,9 @@
     # collectTargets and ItemSources.eligible, and fails closed if that surface
     # changes. See mods/area-tasks-filter/README.md.
     "PZAreaTasksFilter"
+    # Batches the area-container -> single-container route so it fills carried
+    # inventory before walking to the destination; see mods/area-tasks-batch-move/.
+    "PZAreaTasksBatchMove"
     "MechanicsEye"
     "GarageWorks"
     "VehicleArmorCrafting"

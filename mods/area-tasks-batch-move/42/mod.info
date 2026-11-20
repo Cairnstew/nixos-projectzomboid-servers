@@ -1,0 +1,8 @@
+name=Area Tasks Batched Container Pickup
+id=PZAreaTasksBatchMove
+author=nixos-projectzomboid-servers
+modversion=1.0.0
+description=Changes Area Tasks' Containers (Area) to Container (Single) route so the character fills carried inventory from several source containers before walking to the destination, instead of delivering after every container. Additive patch: it wraps the registered route callbacks and overrides no Area Tasks file. Requires Area Tasks.
+require=AreaTasks
+loadModAfter=AreaTasks
+versionMin=42.20

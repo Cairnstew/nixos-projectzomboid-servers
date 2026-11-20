@@ -8,6 +8,18 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`PZAreaTasksBatchMove`: area-container pickup now fills inventory before
+  returning to the destination.** Area Tasks builds one target per source
+  container on the `Containers (Area) → Container (Single)` route, so it walked
+  to the destination after every container. This bundled adapter merges those
+  targets (nearest-first), keeps `carried` across endpoints, and re-enters Area
+  Tasks' own discover phase for the next container while there is capacity. If
+  the inventory fills, the built-in delivery runs and the rest continue after
+  it; endpoints with deferred items are deliberately not skipped, because the
+  built-in recycler only restores those on delivery. Guarded on API 1,
+  `ItemSources`, `Core.getGroundItemCarryLimit` and `Registry.getAll`; it
+  overrides no file and leaves the route untouched if that surface changes.
+
 - **`PZAreaTasksFilter`: a whitelist/blacklist for Area Tasks item routes.**
   A bundled in-repo adapter for the `viewpoint` pack's Area Tasks items. It adds
   a persistent, searchable item-type filter (off / only listed / exclude listed)
