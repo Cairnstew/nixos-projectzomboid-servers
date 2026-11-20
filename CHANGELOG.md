@@ -150,6 +150,18 @@ All notable changes to this project. Format follows
 
 ### Removed
 
+- **Helicopter Fix - Project Viewpoint (`3812896812`) from the `viewpoint`
+  pack.** Steam returns `result: 9` (FileNotFound) from
+  `GetPublishedFileDetails`, so the item can no longer be downloaded by anyone.
+  The client's pre-join check logs `GetItemState()=None` for it, renders a blank
+  title in the mod-install dialog, fails the subscribe with `result: 15`
+  (AccessDenied) and then retries forever in `WorkshopConfirm`, which blocks the
+  connection before the world loads. The item only shipped `ViewpointHeli`
+  (a helicopter fix for Viewpoint); nothing in the pack requires that mod id —
+  the UH-1B item requires `AviationCore` only — so dropping it removes no
+  dependency and no world content. Restore the entry if the author republishes
+  the fix.
+
 - **Viewpoint Door Fix from the `viewpoint` pack.** Viewpoint 0.1.7 (2026-11-16)
   moved its model shader from a `samplerBuffer` (`texelFetch(uDraws, …)`) to an
   SSBO (`uDraws[…]`) and packs the gbuffer normal through `gNormalPack`. Door

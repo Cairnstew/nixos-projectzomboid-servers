@@ -28,7 +28,12 @@
     { id = "3404737883"; title = "Autotsar Motor Club B42"; }
     { id = "3783444342"; title = "[B42]Aviation Core (Beta)"; }
     { id = "3409723807"; title = "[B42] UH-1B Helicopter (Beta)"; }
-    { id = "3812896812"; title = "Helicopter Fix - Project Viewpoint"; }
+    # Helicopter Fix - Project Viewpoint (3812896812) is deliberately absent:
+    # Steam returns FileNotFound for the item (removed/hidden from the Workshop),
+    # so a client can never subscribe. Its title is blank in the connect dialog
+    # and PZ retries the failed subscription forever. The mod it shipped,
+    # ViewpointHeli, is not required by the UH-1B or anything else in this pack
+    # (UH-1B requires only AviationCore); re-add the item if the author republishes.
     { id = "3761077099"; title = "[B42] Vanilla Firearms Expansion [CLASSIC]"; }
     # VFE add-ons: content for the base mod above. Do not swap the base for
     # "Complete Vanilla Firearms Expansion" (3820580321) — it ships a different
@@ -921,7 +926,8 @@
     "amclub"
     "AviationCore"
     "UH-1BHelicopter"
-    "ViewpointHeli"
+    # ViewpointHeli is gone with Workshop 3812896812 (removed from the Workshop);
+    # see the workshopMods note above. Nothing requires it.
     "VFExpansion1"
     "VFExpansion2"          # STALKER add-on (requires VFExpansion1)
     "VFExpansion3"          # Post '93 add-on (requires VFExpansion1)
