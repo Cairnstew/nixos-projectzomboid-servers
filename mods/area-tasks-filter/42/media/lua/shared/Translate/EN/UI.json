@@ -1,0 +1,23 @@
+{
+    "UI_AreaTasksFilter_Menu": "Area Tasks Filter",
+    "UI_AreaTasksFilter_Title": "Area Tasks Item Filter",
+    "UI_AreaTasksFilter_StatusOff": "Filter: off",
+    "UI_AreaTasksFilter_StatusOnly": "Filter: only listed",
+    "UI_AreaTasksFilter_StatusExcept": "Filter: exclude listed",
+    "UI_AreaTasksFilter_Unsupported": "Unsupported Area Tasks version: filter inert",
+    "UI_AreaTasksFilter_Edit": "Edit filter...",
+    "UI_AreaTasksFilter_Clear": "Clear filter",
+    "UI_AreaTasksFilter_OnlyItem": "Only this item type",
+    "UI_AreaTasksFilter_ExceptItem": "Exclude this item type",
+    "UI_AreaTasksFilter_Off": "Off",
+    "UI_AreaTasksFilter_Only": "Only listed",
+    "UI_AreaTasksFilter_Except": "Exclude listed",
+    "UI_AreaTasksFilter_Search": "Search item types...",
+    "UI_AreaTasksFilter_SelectResults": "Select results",
+    "UI_AreaTasksFilter_DeselectResults": "Clear results",
+    "UI_AreaTasksFilter_Close": "Close",
+    "UI_AreaTasksFilter_Shown": "shown",
+    "UI_AreaTasksFilter_Hint": "Type to search and click a type",
+    "UI_AreaTasksFilter_StartOnly": "Area Tasks filter: only listed",
+    "UI_AreaTasksFilter_StartExcept": "Area Tasks filter: excluding"
+}

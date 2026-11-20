@@ -10,7 +10,9 @@
   # connector item (3839932016). Each id must also be in `mods`, or the item
   # downloads it and the game never loads it. `PZButcherAll` is the additive
   # "Butcher All Nearby" hook for Zombie Butchery; see mods/butcher-all/.
-  bundledMods = [ "PZButcherAll" ];
+  # `PZAreaTasksFilter` is the additive whitelist/blacklist adapter for the two
+  # Area Tasks items below; see mods/area-tasks-filter/.
+  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" ];
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
@@ -1232,6 +1234,10 @@
     "FunctionalCarLift"
     "AreaTasks"
     "AreaTasksAutoMechanics"
+    # Our filter adapter loads after both: it wraps the registered ground
+    # collectTargets and ItemSources.eligible, and fails closed if that surface
+    # changes. See mods/area-tasks-filter/README.md.
+    "PZAreaTasksFilter"
     "MechanicsEye"
     "GarageWorks"
     "VehicleArmorCrafting"
@@ -1603,7 +1609,10 @@
   # Auto All declares its module switches as tri-state integers in
   # media/sandbox-options.txt (`option AutoAll.EnableRip`), so the table must be
   # named here or renderSandbox rejects the dotted key as an unknown namespace.
-  sandboxNamespaces = [ "AutoAll" ];
+  # Area Tasks declares its seven options the same way (`AreaTasks.*`); the two
+  # pinned below are its hard ceilings, so doubling them is the largest area and
+  # destination distance the mod itself allows (25 -> 50 tiles, 50 -> 100).
+  sandboxNamespaces = [ "AutoAll" "AreaTasks" ];
 
   # -1 = leave the player's Mod Options choice, 0 = force off for everyone,
   # 1 = force on. One owner per niche: Rip All Clothing owns ripping (it covers
@@ -1613,5 +1622,9 @@
   defaultSandbox = {
     "AutoAll.EnableRip" = 0;
     "AutoAll.EnableFarming" = 0;
+    # 2x the mod's defaults (25 and 50), which are also its hard maximums.
+    # Server-wide in multiplayer: every player's selection limit is this value.
+    "AreaTasks.MaximumAreaDimension" = 50;
+    "AreaTasks.MaximumDestinationDistance" = 100;
   };
 }

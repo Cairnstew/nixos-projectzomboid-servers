@@ -8,6 +8,23 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`PZAreaTasksFilter`: a whitelist/blacklist for Area Tasks item routes.**
+  A bundled in-repo adapter for the `viewpoint` pack's Area Tasks items. It adds
+  a persistent, searchable item-type filter (off / only listed / exclude listed)
+  and per-item "only this type" / "exclude this type" menu actions. It wraps
+  Area Tasks' `ItemSources.eligible` predicate (containers, vehicles) and each
+  ground route's `collectTargets` (ground, bag, ground to container/vehicle), so
+  both pickup and move routes are filtered without copying or overriding any
+  Area Tasks file; a missing API version leaves the routes untouched and the
+  menu says so. The editor is stock ISUI, and the filter is per client in
+  `Zomboid/Lua/PZAreaTasksFilter.txt`.
+
+- **`viewpoint`: Area Tasks selection limits doubled and declared.** The pack
+  now pins `AreaTasks.MaximumAreaDimension = 50` and
+  `AreaTasks.MaximumDestinationDistance = 100` (2x the mod defaults, which are
+  also its hard ceilings) and declares the `AreaTasks` sandbox namespace so the
+  options render. These are server-wide in multiplayer.
+
 - **`PZButcherAll`: an additive "Butcher All Nearby" hook for Zombie Butchery.**
   A 6-tile, nearest-first chain over `ISButcherZombieCorpse`, then
   `ISBreakZombieSkeleton` for the skeletons it leaves; cancellable from the same

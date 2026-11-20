@@ -1,0 +1,8 @@
+name=Area Tasks Item Filter
+id=PZAreaTasksFilter
+author=nixos-projectzomboid-servers
+modversion=1.0.0
+description=Adds a persistent whitelist/blacklist item filter to Area Tasks' item pickup and move routes. Filters by item full type, with an in-game searchable editor and per-item quick actions. Additive hook: it overrides no Area Tasks file and copies none of its code. Requires Area Tasks.
+require=AreaTasks
+loadModAfter=AreaTasks
+versionMin=42.20

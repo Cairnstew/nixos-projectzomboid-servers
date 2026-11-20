@@ -1254,6 +1254,100 @@ in
         touch "$out"
       '';
 
+  # ── PZAreaTasksFilter: whitelist/blacklist for Area Tasks item routes ──
+  # Client Lua cannot load outside the game, so this covers the mod.info load
+  # contract, the two hook points by inspection, a real Lua parser over every
+  # file, and the pure filter state/matcher/serialiser against plain Lua 5.1.
+  # The hooks themselves are exercised in-game.
+  area-tasks-filter =
+    pkgs.runCommand "pz-area-tasks-filter-check"
+      {
+        nativeBuildInputs = [
+          pkgs.lua5_1
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        SRC = ../mods/area-tasks-filter;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+
+        info="$SRC/42/mod.info"
+        [ -f "$info" ] || fail "no 42/mod.info (B42 layout)"
+        grep -qx 'id=PZAreaTasksFilter' "$info" || fail "mod.info id is not PZAreaTasksFilter"
+        grep -qx 'require=AreaTasks' "$info" || fail "Area Tasks is not a hard dependency"
+        grep -qx 'loadModAfter=AreaTasks' "$info" || fail "no loadModAfter hint"
+        grep -qx 'versionMin=42.20' "$info" || fail "wrong versionMin"
+
+        for f in "$SRC"/42/media/lua/client/PZAreaTasksFilter/*.lua \
+                 "$SRC"/42/media/lua/shared/PZAreaTasksFilter/*.lua; do
+          lua -e "assert(loadfile('$f'))" || fail "Lua does not parse: $f"
+        done
+
+        hooks="$SRC/42/media/lua/client/PZAreaTasksFilter/hooks.lua"
+        grep -q 'AreaTasks.ItemSources' "$hooks" || fail "the container hook is not present"
+        grep -q 'Registry.getAll' "$hooks" || fail "the ground task discovery is not present"
+        grep -q 'sourceMode == "ground"' "$hooks" \
+          || fail "ground routes are not selected by sourceMode"
+        grep -q 'API_VERSION ~= 1' "$hooks" || fail "the API version is not checked"
+        grep -q 'collectTargets' "$hooks" || fail "collectTargets is not wrapped"
+
+        client="$SRC/42/media/lua/client/PZAreaTasksFilter"
+        grep -q 'getFileWriter' "$client/state.lua" || fail "the filter is not persisted"
+        grep -q 'getFullType' "$client/state.lua" || fail "items are not matched by full type"
+        grep -q 'Events.AreaTaskStarted' "$client/init.lua" \
+          || fail "no start confirmation hook"
+        grep -q 'OnFillInventoryObjectContextMenu' "$client/menu.lua" \
+          || fail "no inventory context-menu entry"
+        grep -q 'OnFillWorldObjectContextMenu' "$client/menu.lua" \
+          || fail "no world context-menu entry"
+
+        test_lua="$PWD/filter-test.lua"
+        cat > "$test_lua" <<'LUA'
+        dofile("shared/PZAreaTasksFilter/filter.lua")
+        local F = PZAreaTasksFilter.Filter
+
+        local state = F.new()
+        assert(state.mode == "off", "a new filter is not off")
+        assert(F.matches(state, "Base.Axe"), "off must match everything")
+        assert(F.matches(state, nil), "off must match a missing type")
+
+        F.setMode(state, "only")
+        F.setListed(state, "Base.Axe", true)
+        assert(F.matches(state, "Base.Axe"), "listed type rejected by only")
+        assert(not F.matches(state, "Base.Hammer"), "unlisted type allowed by only")
+        assert(not F.matches(state, nil), "unknown type allowed by only")
+
+        F.setMode(state, "except")
+        assert(not F.matches(state, "Base.Axe"), "listed type allowed by except")
+        assert(F.matches(state, "Base.Hammer"), "unlisted type rejected by except")
+
+        F.toggle(state, "Base.Axe")
+        assert(not F.isListed(state, "Base.Axe"), "toggle did not remove")
+        F.toggle(state, "Base.Axe")
+        assert(F.isListed(state, "Base.Axe"), "toggle did not add")
+        assert(F.count(state) == 1, "count is wrong")
+
+        local text = F.serialize(state)
+        local round = F.parse(text)
+        assert(round.mode == "except", "mode did not round-trip")
+        assert(round.types["Base.Axe"], "type did not round-trip")
+        assert(F.count(round) == 1, "round-trip count is wrong")
+
+        local messy = F.parse("  mode = only \r\n# comment\ntype=Base.Axe\ntype=Base.Axe\njunk\nmode=bogus\ntype=\n")
+        assert(messy.mode == "only", "a bad mode changed the mode: " .. messy.mode)
+        assert(F.count(messy) == 1, "comment/duplicate handling is wrong")
+        F.clear(state)
+        assert(state.mode == "off" and F.count(state) == 0, "clear did not reset")
+        print("filter ok")
+        LUA
+        ( cd "$SRC/42/media/lua" && lua "$test_lua" ) \
+          || fail "the filter unit test failed"
+
+        echo "pz-area-tasks-filter ok"
+        touch "$out"
+      '';
+
   # ── pz-pack-web: the ready-to-upload connector tree ─────────────────
   # The artefact is what a human uploads to the Workshop, so the check is
   # structural: workshop.txt fields, the B42 mod layout, no hard `require=`, a
@@ -1302,18 +1396,27 @@ in
             defaultSandbox = { };
           };
           bundled = {
-            description = "A pack that ships an in-repo mod in the connector item.";
+            description = "A pack that ships in-repo mods in the connector item.";
             workshopMods = [
               {
                 id = "444";
                 title = "Zombie Butchery";
               }
+              {
+                id = "445";
+                title = "Area Tasks";
+              }
             ];
             mods = [
               "ZombieButchery"
+              "AreaTasks"
               "PZButcherAll"
+              "PZAreaTasksFilter"
             ];
-            bundledMods = [ "PZButcherAll" ];
+            bundledMods = [
+              "PZButcherAll"
+              "PZAreaTasksFilter"
+            ];
             defaultSettings = { };
             defaultSandbox = { };
           };
@@ -1461,7 +1564,7 @@ in
         import json, os, sys
         root = sys.argv[1]
         summary = json.load(open("bundled.json"))
-        assert summary["bundled_mods"] == ["PZButcherAll"], summary
+        assert summary["bundled_mods"] == ["PZButcherAll", "PZAreaTasksFilter"], summary
         base = os.path.join(root, "Contents", "mods", "PZButcherAll", "42")
         info = os.path.join(base, "mod.info")
         assert os.path.isfile(info), info
@@ -1474,19 +1577,38 @@ in
             "media/lua/shared/Translate/EN/ContextMenu.json",
         ):
             assert os.path.isfile(os.path.join(base, rel)), rel
+
+        filter_base = os.path.join(root, "Contents", "mods", "PZAreaTasksFilter", "42")
+        filter_info = os.path.join(filter_base, "mod.info")
+        assert os.path.isfile(filter_info), filter_info
+        filter_text = open(filter_info).read()
+        assert "id=PZAreaTasksFilter" in filter_text, filter_text
+        assert "require=AreaTasks" in filter_text, filter_text
+        for rel in (
+            "media/lua/client/PZAreaTasksFilter/hooks.lua",
+            "media/lua/client/PZAreaTasksFilter/ui.lua",
+            "media/lua/client/PZAreaTasksFilter/menu.lua",
+            "media/lua/shared/PZAreaTasksFilter/filter.lua",
+            "media/lua/shared/Translate/EN/UI.json",
+        ):
+            assert os.path.isfile(os.path.join(filter_base, rel)), rel
+
         assert os.path.isfile(
             os.path.join(root, "Contents", "mods", "PZPackWebBundled",
                          "42", "media", "lua", "shared", "PZPackWeb", "manifest.lua")
         ), "the connector mod is missing"
         txt = open(os.path.join(root, "workshop.txt")).read()
-        assert "bundles our own in-repo helper mod(s): PZButcherAll" in txt, txt
+        assert "bundles our own in-repo helper mod(s): PZButcherAll, PZAreaTasksFilter" in txt, txt
         PY
         ( cd "$TMPDIR/bundled/Contents/mods/PZButcherAll/42/media/lua" \
           && lua -e "assert(loadfile('client/PZButcherAll/ButcherAll.lua')); assert(loadfile('shared/PZButcherAll/scan.lua'))" ) \
           || fail "the bundled mod Lua does not parse"
-        grep -qx 'loadModAfter=ZombieButchery,PZButcherAll' \
+        ( cd "$TMPDIR/bundled/Contents/mods/PZAreaTasksFilter/42/media/lua" \
+          && lua -e "assert(loadfile('client/PZAreaTasksFilter/hooks.lua')); assert(loadfile('client/PZAreaTasksFilter/ui.lua')); assert(loadfile('client/PZAreaTasksFilter/menu.lua')); assert(loadfile('client/PZAreaTasksFilter/state.lua')); assert(loadfile('client/PZAreaTasksFilter/init.lua')); assert(loadfile('shared/PZAreaTasksFilter/filter.lua'))" ) \
+          || fail "the bundled filter mod Lua does not parse"
+        grep -qx 'loadModAfter=ZombieButchery,AreaTasks,PZButcherAll,PZAreaTasksFilter' \
           "$TMPDIR/bundled/Contents/mods/PZPackWebBundled/42/mod.info" \
-          || fail "the connector does not order itself after the bundled mod"
+          || fail "the connector does not order itself after the bundled mods"
 
         # Regenerating over a copied store tree must work: copytree used to
         # preserve the store's read-only modes, so --force could not unlink it.
