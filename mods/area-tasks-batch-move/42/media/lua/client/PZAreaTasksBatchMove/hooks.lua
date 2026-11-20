@@ -45,6 +45,7 @@ local function beginEndpoint(target, endpoint)
     target.sources = { }
     target.total = 1
     target.remaining = 1
+    target.guardLogged = nil
 end
 
 local function nextEndpoint(playerObj, target, Sources)
@@ -83,7 +84,9 @@ local function wrap(task, Sources, Core)
     local nativeQueue = task.queueTarget
 
     task.collectTargets = function(playerObj, bounds, destination, selectedTask)
-        return aggregate(playerObj, nativeCollect(playerObj, bounds, destination, selectedTask))
+        local collected = nativeCollect(playerObj, bounds, destination, selectedTask)
+        log(string.format("collectTargets %s: %d container(s)", tostring(task.id), #collected))
+        return aggregate(playerObj, collected)
     end
 
     task.queueTarget = function(job, target, resolved)
@@ -92,14 +95,24 @@ local function wrap(task, Sources, Core)
         -- Leave the finished endpoint only when the next one can be reached and
         -- there is room left; otherwise let the built-in code deliver, which is
         -- what frees capacity and recycles deferred items.
-        if target.phase == "collect" and #target.carried > 0
-                and not Batching.hasRemainingSources(target.sources)
-                and not Batching.hasDeferred(target.sources) then
-            local limit = Core.getGroundItemCarryLimit(job.playerObj)
-            local weight = job.playerObj:getInventory():getCapacityWeight()
-            local buffer = math.min(2, limit * 0.05)
-            if weight < limit - buffer then
-                local endpoint = nextEndpoint(job.playerObj, target, Sources)
+        if target.phase == "collect" and #target.carried > 0 then
+            local sourcesLeft = Batching.hasRemainingSources(target.sources)
+            local deferred = Batching.hasDeferred(target.sources)
+            if not sourcesLeft and not deferred then
+                local limit = Core.getGroundItemCarryLimit(job.playerObj)
+                local weight = job.playerObj:getInventory():getCapacityWeight()
+                local buffer = math.min(2, limit * 0.05)
+                local endpoint = nil
+                if weight < limit - buffer then
+                    endpoint = nextEndpoint(job.playerObj, target, Sources)
+                end
+                if not target.guardLogged then
+                    target.guardLogged = true
+                    log(string.format(
+                        "endpoint drained: carried=%d weight=%.2f limit=%.2f next=%d/%d switched=%s",
+                        #target.carried, weight, limit, target.nextEndpoint or -1,
+                        #(target.endpoints or { }), tostring(endpoint ~= nil)))
+                end
                 if endpoint then beginEndpoint(target, endpoint) end
             end
         end
