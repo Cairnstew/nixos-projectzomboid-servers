@@ -1291,6 +1291,7 @@ in
           || fail "ground routes are not selected by sourceMode"
         grep -q 'API_VERSION ~= 1' "$hooks" || fail "the API version is not checked"
         grep -q 'collectTargets' "$hooks" || fail "collectTargets is not wrapped"
+        grep -q 'hooks installed' "$hooks" || fail "no install confirmation line to verify from the log"
 
         client="$SRC/42/media/lua/client/PZAreaTasksFilter"
         grep -q 'getFileWriter' "$client/state.lua" || fail "the filter is not persisted"
@@ -1384,6 +1385,8 @@ in
         grep -q 'hasDeferred' "$hooks" || fail "deferred items are not guarded"
         grep -q 'collectTargets' "$hooks" || fail "collectTargets is not wrapped"
         grep -q 'queueTarget' "$hooks" || fail "queueTarget is not wrapped"
+        grep -q 'hooks installed' "$hooks" || fail "no install confirmation line to verify from the log"
+        grep -q 'batching %d containers' "$hooks" || fail "no batching confirmation line to verify from the log"
 
         test_lua="$PWD/batching-test.lua"
         cat > "$test_lua" <<'LUA'

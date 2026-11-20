@@ -70,16 +70,26 @@ local function wrapGroundTasks(AreaTasks)
     return wrapped
 end
 
+local function wrappedGroundCount()
+    local count = 0
+    for _ in pairs(Hooks.wrappedTasks) do count = count + 1 end
+    return count
+end
+
 function Hooks.install()
     local ok = pcall(require, "AreaTasks/API")
     if not ok then
         Hooks.ready = false
+        log("Area Tasks is not loaded; filter inactive")
         return false, "Area Tasks is not loaded"
     end
 
     local AreaTasks = _G.AreaTasks
     if type(AreaTasks) ~= "table" or AreaTasks.API_VERSION ~= 1 then
         Hooks.ready = false
+        log("Area Tasks API 1 is not available (API_VERSION="
+            .. tostring(type(AreaTasks) == "table" and AreaTasks.API_VERSION or nil)
+            .. "); filter inactive")
         return false, "Area Tasks API 1 is not available"
     end
 
@@ -91,5 +101,8 @@ function Hooks.install()
         log("no supported item route found; the filter editor is available but inert")
         return false, "no supported Area Tasks item routes"
     end
+    -- Positive evidence for a log-only verification: which routes are attached.
+    log(string.format("hooks installed: container sources %s, %d ground task(s)",
+        tostring(eligible), wrappedGroundCount()))
     return true
 end

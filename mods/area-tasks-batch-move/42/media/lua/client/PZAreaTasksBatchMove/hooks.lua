@@ -28,6 +28,10 @@ local Batching = PZAreaTasksBatchMove.Batching
 local Hooks = { ready = false, wrapped = { } }
 PZAreaTasksBatchMove.Hooks = Hooks
 
+local function log(message)
+    print("[PZAreaTasksBatchMove] " .. tostring(message))
+end
+
 local function beginEndpoint(target, endpoint)
     target.endpoint = endpoint
     target.x, target.y, target.z = endpoint.x, endpoint.y, endpoint.z
@@ -69,6 +73,8 @@ local function aggregate(playerObj, targets)
     -- Start-message count: one per container, as the unbatched route reported.
     target.total = #endpoints
     target.remaining = #endpoints
+    -- Positive evidence that the route was batched, and over how many sources.
+    log(string.format("batching %d containers into one trip", #endpoints))
     return { target }
 end
 
@@ -120,12 +126,14 @@ function Hooks.install()
     local ok = pcall(require, "AreaTasks/API")
     if not ok then
         Hooks.ready = false
+        log("Area Tasks is not loaded; batching inactive")
         return false
     end
 
     local AreaTasks = _G.AreaTasks
     if type(AreaTasks) ~= "table" or AreaTasks.API_VERSION ~= 1 then
         Hooks.ready = false
+        log("Area Tasks API 1 is not available; batching inactive")
         return false
     end
 
@@ -136,6 +144,7 @@ function Hooks.install()
             or type(Core) ~= "table" or type(Core.getGroundItemCarryLimit) ~= "function"
             or type(Registry) ~= "table" or type(Registry.getAll) ~= "function" then
         Hooks.ready = false
+        log("Area Tasks item API changed; route left as upstream")
         return false
     end
 
@@ -149,6 +158,9 @@ function Hooks.install()
         end
     end
 
-    Hooks.ready = installed
-    return installed
+    Hooks.ready = installed or Hooks.ready
+    if installed then
+        log("hooks installed: containers -> container route batched")
+    end
+    return Hooks.ready
 end

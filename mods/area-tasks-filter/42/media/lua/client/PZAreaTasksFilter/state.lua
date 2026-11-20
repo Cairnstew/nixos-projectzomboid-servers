@@ -86,6 +86,7 @@ function State.filterTargets(targets)
     if type(targets) ~= "table" or not State.modeActive() then return targets end
 
     local keptTargets = { }
+    local before, after = 0, 0
     for _, target in ipairs(targets) do
         local sources = target.sources
         if type(sources) ~= "table" then
@@ -95,6 +96,7 @@ function State.filterTargets(targets)
             for _, source in ipairs(sources) do
                 local items = source.items
                 if type(items) == "table" then
+                    before = before + #items
                     local kept = { }
                     for _, descriptor in ipairs(items) do
                         if descriptor.item == nil or State.matchesItem(descriptor.item) then
@@ -104,6 +106,7 @@ function State.filterTargets(targets)
                     source.items = kept
                     source.next = 1
                     total = total + #kept
+                    after = after + #kept
                 end
             end
             if total > 0 then
@@ -112,6 +115,11 @@ function State.filterTargets(targets)
                 keptTargets[#keptTargets + 1] = target
             end
         end
+    end
+    if before > after then
+        -- Confirmation that a built-in route was actually filtered (and by how
+        -- much) instead of silently doing nothing.
+        log(string.format("filter removed %d of %d collected item(s)", before - after, before))
     end
     return keptTargets
 end
