@@ -83,6 +83,24 @@ within the carry buffer (`min(2, limit*0.05)`) of its limit.
    returns to a container it visited earlier can fail with
    `Object tried to call nil` rather than reporting an unavailable source.
 
+## One bad container ends an area sweep (upstream, unfixed here)
+
+These only matter when a sweep touches many containers, which is exactly what
+batching makes likely. They are upstream behaviours; this mod does not override
+Area Tasks files to change them, so they are recorded rather than patched:
+
+- A cancelled walk to a container source returns `"blocked"`
+  (`Tasks/MoveItems.lua:838-840`), and `WorkController` reacts to `"blocked"` by
+  clearing `job.pending` (`AreaTasksWorkController.lua:463-470`). One closed
+  door at container 3 of 20 discards containers 4-20. The same classifier
+  already treats a ground source as `unreachable` and skips only that square.
+- No free adjacent tile during discovery is also `"blocked"`
+  (`MoveItems.lua:283-284`), while the collection phase skips that source
+  (`:406-409`).
+- A container that vanished or became locked during collection is `"blocked"`
+  too (`:394-396`), and a failed ground drop after pickup ends the job with the
+  load still in inventory (`:790-801`).
+
 ## Layout
 
 ```text
