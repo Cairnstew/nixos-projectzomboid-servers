@@ -8,15 +8,19 @@ All notable changes to this project. Format follows
 
 ### Added
 
-- **`PZAreaTasksBatchMove`: area-container pickup now fills inventory before
+- **`PZAreaTasksBatchMove`: area-source pickup now fills inventory before
   returning to the destination.** Area Tasks builds one target per source
-  container on the `Containers (Area) → Container (Single)` route, so it walked
-  to the destination after every container. This bundled adapter merges those
-  targets (nearest-first), keeps `carried` across endpoints, and re-enters Area
-  Tasks' own discover phase for the next container while there is capacity. If
-  the inventory fills, the built-in delivery runs and the rest continue after
-  it; endpoints with deferred items are deliberately not skipped, because the
-  built-in recycler only restores those on delivery. Guarded on API 1,
+  container on its area routes, so it walked to the destination after every
+  container. This bundled adapter merges those targets (nearest-first), keeps
+  `carried` and the `sources` records of every container visited, and re-enters
+  Area Tasks' own discover phase for the next container while there is capacity.
+  The second revision matters: items the destination had no room for were
+  previously treated as "inventory full", which forced a destination trip per
+  container even with empty pockets. It now covers every area source whose
+  destination needs a trip (`Containers (Area)` / `Vehicles (Area)` → container,
+  container area, vehicle, vehicle area or ground); `Bag` destinations are left
+  alone because they deposit on pickup. If the inventory fills, the built-in
+  delivery runs and the containers left continue after it. Guarded on API 1,
   `ItemSources`, `Core.getGroundItemCarryLimit` and `Registry.getAll`; it
   overrides no file and leaves the route untouched if that surface changes.
 
@@ -173,6 +177,14 @@ All notable changes to this project. Format follows
   Doors keep Viewpoint's own lighting; only the add-on's extra correction goes.
 
 ### Fixed
+
+- **The Area Tasks item filter no longer spams a Lua error on every right
+  click.** The world context-menu hook asked *every* object under the cursor for
+  `getItem()`, but that list also holds walls, doors and water pipes, which have
+  no such method; PZ logs the caught exception as
+  `Lua((MOD:Area Tasks Item Filter)).pcall> Exception thrown` with a stack
+  trace. Objects without `getItem` are now skipped, so only real placed items
+  offer "only this type" / "exclude this type".
 
 - **A pack can declare `sandboxNamespaces` again.** `docs/options.md`, the
   server option's own description ("A pack may declare the same list") and

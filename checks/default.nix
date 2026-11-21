@@ -1302,6 +1302,8 @@ in
           || fail "no inventory context-menu entry"
         grep -q 'OnFillWorldObjectContextMenu' "$client/menu.lua" \
           || fail "no world context-menu entry"
+        grep -q 'object.getItem ~= nil' "$client/menu.lua" \
+          || fail "world objects without getItem() are not guarded"
 
         test_lua="$PWD/filter-test.lua"
         cat > "$test_lua" <<'LUA'
@@ -1378,11 +1380,13 @@ in
         done
 
         hooks="$SRC/42/media/lua/client/PZAreaTasksBatchMove/hooks.lua"
-        grep -q 'sourceMode == "containers"' "$hooks" || fail "the route filter is missing"
-        grep -q 'toMode == "container"' "$hooks" || fail "the destination filter is missing"
+        grep -q 'BATCHED_SOURCES = { containers = true, vehicles = true }' "$hooks" \
+          || fail "the area-source filter is missing"
+        grep -q 'BATCHED_DESTINATIONS' "$hooks" || fail "the destination filter is missing"
         grep -q 'API_VERSION ~= 1' "$hooks" || fail "the API version is not checked"
         grep -q 'getGroundItemCarryLimit' "$hooks" || fail "the carry limit is not read"
-        grep -q 'hasDeferred' "$hooks" || fail "deferred items are not guarded"
+        grep -q 'deferredCount' "$hooks" || fail "deferred items are not reported"
+        grep -q 'outstanding' "$hooks" || fail "progress is not recomputed for the whole trip"
         grep -q 'collectTargets' "$hooks" || fail "collectTargets is not wrapped"
         grep -q 'queueTarget' "$hooks" || fail "queueTarget is not wrapped"
         grep -q 'hooks installed' "$hooks" || fail "no install confirmation line to verify from the log"
@@ -1412,6 +1416,19 @@ in
 
         assert(not B.hasDeferred({ { deferred = { } } }), "empty deferred reported")
         assert(B.hasDeferred({ { deferred = { 1 } } }), "deferred item was missed")
+
+        assert(B.deferredCount({ { deferred = { 1, 2 } }, { deferred = { 3 } } }) == 3,
+          "deferred count is wrong")
+
+        -- Progress counts what the trip still owes: picked-up (carried) items,
+        -- items not yet taken from a container, and deferred items.
+        assert(B.outstanding({ }, { }) == 0, "empty trip reported outstanding work")
+        assert(B.outstanding({ { next = 3, items = { 1, 2 }, deferred = { } } }, { 1, 2 }) == 2,
+          "a drained container was counted")
+        assert(B.outstanding({ { next = 1, items = { 1, 2, 3 }, deferred = { } } }, { }) == 3,
+          "untaken items were missed")
+        assert(B.outstanding({ { next = 3, items = { 1, 2 }, deferred = { 3, 4 } } }, { 1 }) == 3,
+          "deferred items plus carried items are wrong")
 
         print("batching ok")
         LUA

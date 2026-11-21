@@ -21,36 +21,67 @@ areas do not.
 
 ## What this patch does
 
-- Wraps `collectTargets` for the `sourceMode == "containers"` →
-  `toMode == "container"` route, merging the per-container targets into one
-  target with `endpoints` sorted nearest-first.
-- Wraps `queueTarget`. When the current endpoint is exhausted and there is
-  capacity left, it points `target.endpoint` at the next container and re-enters
-  Area Tasks' own `discover` phase, keeping `carried`.
-- If the built-in code completes early (for example an empty container), the
-  wrapper starts the next endpoint and returns `defer` instead of retiring the
-  job.
-- It never leaves an endpoint that still has deferred items: the built-in code
-  only recycles those on delivery, so leaving would strand them. In that case it
-  lets delivery happen, then continues.
+- Wraps `collectTargets` for every **area source** whose destination needs a
+  trip (`Containers (Area)` / `Vehicles (Area)` → container(s), vehicle(s) or
+  ground), merging the per-container targets into one target whose endpoints are
+  sorted nearest-first. `Bag` destinations are not wrapped: they deposit
+  straight into the worn container, so there is no trip to save.
+- Wraps `queueTarget`. When the current endpoint is exhausted and carried
+  inventory still has room, it points `target.endpoint` at the next container
+  and re-enters Area Tasks' own `discover` phase, keeping `carried`.
+- Keeps the `sources` records of every container already visited. Upstream
+  replaces that list on each discovery and only recycles leftover items that are
+  still in it, so this union is what lets the character leave a container it has
+  not fully emptied (for example because the destination had no room) without
+  stranding those items.
+- If the built-in discovery completes early (an empty container), the wrapper
+  starts the next endpoint and returns `defer` instead of retiring the job.
 
 No Area Tasks file is copied, read or overridden. The wrapper is guarded on
 `AreaTasks.API_VERSION == 1`, `ItemSources`, `Core.getGroundItemCarryLimit` and
 `Registry.getAll`; if any is missing the route stays exactly as upstream.
 
+## Log lines to verify it from a client log
+
+```
+[PZAreaTasksBatchMove] hooks installed: area sources batched for moveItems.containers.container, …
+[PZAreaTasksBatchMove] collectTargets moveItems.containers.container: 3 container(s)
+[PZAreaTasksBatchMove] batching 3 containers into one trip
+[PZAreaTasksBatchMove] endpoint drained: carried=4 deferred=0 weight=14.20 limit=27.00 next=3/3 switched=true
+```
+
+`switched=false` means the character delivered at that point: the inventory was
+within the carry buffer (`min(2, limit*0.05)`) of its limit.
+
 ## Scope and limits
 
-- **Single Container destination only** (`toMode == "container"`). Bag
-  destinations are carried, so they already avoid the walk; ground, vehicle and
-  area destinations are unchanged.
-- **Area container sources only** (`sourceMode == "containers"`). Vehicle area
-  sources are analogous and can be added by widening the one condition in
-  `hooks.lua` once tested.
-- The progress count resets to each new container's item count rather than
-  accumulating across the whole job; the work is still correct, the number is
-  cosmetic.
+- **Area sources only** (`sourceMode == "containers"` or `"vehicles"`), for
+  every destination that needs a walk (container, container area, vehicle,
+  vehicle area, ground). `Bag` destinations are left alone: they deposit
+  straight into the worn container on pickup, so there is no trip to save.
+- The progress count is recomputed from the whole trip (undelivered items in
+  every visited container plus what is being carried) instead of per container.
 - The route is batched unconditionally. There is no setting; remove the mod from
   the pack to restore upstream behaviour.
+- Leftovers are only retried while their chunk is loaded. Area Tasks itself
+  dereferences `endpoint.object:getSquare()` without a nil check, so a container
+  that unloads while the character is at the destination can still make the
+  built-in collector fail; that upstream behaviour is unchanged here.
+
+## Upstream behaviour this works around
+
+1. `collectTargets` returns **one target per source container** for area
+   sources, so the built-in worker delivers after every container
+   (`Tasks/MoveItems.lua:43-55`).
+2. `queueCollection` moves an item that does not fit the **destination** into
+   `source.deferred` (`:457-469`), and `queueDelivery` only recycles deferred
+   items on delivery (`:637-648`). A nearly full destination therefore produces
+   one destination trip per container even with empty pockets — the reason the
+   first revision of this patch still looked per-container.
+3. `ItemSources.containers` assumes the endpoint's chunk is loaded
+   (`endpoint.object:getSquare()`, `ItemSources.lua:102-105`), so any route that
+   returns to a container it visited earlier can fail with
+   `Object tried to call nil` rather than reporting an unavailable source.
 
 ## Layout
 

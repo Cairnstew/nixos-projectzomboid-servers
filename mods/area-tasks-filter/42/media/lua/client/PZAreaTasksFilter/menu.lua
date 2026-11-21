@@ -88,9 +88,13 @@ end
 
 local function worldItem(worldobjects)
     for _, object in ipairs(worldobjects or { }) do
-        local item = nil
-        pcall(function() item = object:getItem() end)
-        if item then return item end
+        -- The list holds every world object under the cursor, not just the
+        -- placed-item wrapper: walls, doors and water pipes have no getItem().
+        if object and object.getItem ~= nil then
+            local item = nil
+            pcall(function() item = object:getItem() end)
+            if item then return item end
+        end
     end
     return nil
 end

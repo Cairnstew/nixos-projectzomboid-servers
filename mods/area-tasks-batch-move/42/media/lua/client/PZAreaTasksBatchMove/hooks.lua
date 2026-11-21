@@ -1,23 +1,27 @@
 -- PZAreaTasksBatchMove/Hooks.lua
 --
--- Batches the built-in `Move Items > Containers (Area) > Container (Single)`
--- route: collect from several source containers, filling carried inventory,
--- then walk to the destination once, instead of delivering after every source.
+-- Batches Area Tasks' area-source item routes (`Move Items > Containers (Area)`
+-- or `Vehicles (Area) > <destination>`): collect from several source containers,
+-- filling carried inventory, then walk to the destination once, instead of
+-- delivering after every source.
 --
 -- How, without touching Area Tasks files:
---   * `collectTargets` for that route returns one target PER container, each
---     with its own `phase`/`sources`. We merge them into one target that keeps
---     `carried` across endpoints.
---   * `queueTarget` is wrapped. Just before the built-in code would deliver an
---     exhausted endpoint, we switch `target.endpoint` to the next container and
---     re-enter its own "discover" phase, keeping the carried items.
---   * If the built-in code completes while endpoints remain (an empty container),
---     the wrapper starts the next endpoint and returns "defer".
+--   * `collectTargets` for an area source returns one target PER container.
+--     They are merged into one target that keeps `carried`, and that keeps the
+--     `sources` records of every container visited so far.
+--   * `queueTarget` is wrapped. When the built-in code has drained every
+--     known container and carried inventory still has room, the wrapper starts
+--     the next container's discovery phase, keeping the carried items and the
+--     previous containers' records (including items deferred for lack of
+--     destination space). Only a full inventory (or no container left) lets the
+--     built-in delivery run, which is what recycles the deferred items.
+--   * `sources` is a union because the built-in discovery replaces the list and
+--     its delivery step only recycles leftovers that are still in it.
 --
--- The guard is deliberately narrow: only `sourceMode == "containers"` to
--- `toMode == "container"`, only when there is more than one endpoint, and never
--- while a source still has deferred items (the built-in recycler only restores
--- those on delivery). Missing API/fields leaves the route exactly as upstream.
+-- The guard is narrow: only area sources (containers, vehicles) whose
+-- destination actually needs a trip, only when there is more than one
+-- endpoint, and only when the player still has carried capacity. Missing
+-- API/fields leaves the route exactly as upstream.
 
 require "PZAreaTasksBatchMove/batching"
 
@@ -32,6 +36,10 @@ local function log(message)
     print("[PZAreaTasksBatchMove] " .. tostring(message))
 end
 
+-- Move the aggregate on to another container. `target.sources` is kept: it is
+-- the union of every container discovered so far, and the built-in collector
+-- must still be able to reach leftovers from a container it already visited.
+-- Only the per-endpoint discovery state is reset.
 local function beginEndpoint(target, endpoint)
     target.endpoint = endpoint
     target.x, target.y, target.z = endpoint.x, endpoint.y, endpoint.z
@@ -42,7 +50,7 @@ local function beginEndpoint(target, endpoint)
     target.discoveryDeadline = nil
     target.floorReady = nil
     target.active = { }
-    target.sources = { }
+    target.sources = target.sources or { }
     target.total = 1
     target.remaining = 1
     target.guardLogged = nil
@@ -79,6 +87,28 @@ local function aggregate(playerObj, targets)
     return { target }
 end
 
+-- The built-in route replaces `target.sources` with the records of the endpoint
+-- it just discovered. Keep every earlier endpoint's records too: the deferred
+-- items a full destination or a full pocket left behind live there, and the
+-- native delivery path only recycles them from `target.sources`. Without the
+-- union, leaving an endpoint would strand its leftovers and the guard below
+-- would have to deliver after every container.
+local function mergeSources(target)
+    target.retained = target.retained or target.sources or { }
+    local retained = target.retained
+    if target.sources ~= retained then
+        for _, source in ipairs(target.sources or { }) do
+            local known = false
+            for _, existing in ipairs(retained) do
+                if existing == source then known = true; break end
+            end
+            if not known then table.insert(retained, source) end
+        end
+        target.sources = retained
+    end
+    return retained
+end
+
 local function wrap(task, Sources, Core)
     local nativeCollect = task.collectTargets
     local nativeQueue = task.queueTarget
@@ -92,36 +122,41 @@ local function wrap(task, Sources, Core)
     task.queueTarget = function(job, target, resolved)
         if not target.endpoints then return nativeQueue(job, target, resolved) end
 
-        -- Leave the finished endpoint only when the next one can be reached and
-        -- there is room left; otherwise let the built-in code deliver, which is
-        -- what frees capacity and recycles deferred items.
-        if target.phase == "collect" and #target.carried > 0 then
-            local sourcesLeft = Batching.hasRemainingSources(target.sources)
-            local deferred = Batching.hasDeferred(target.sources)
-            if not sourcesLeft and not deferred then
-                local limit = Core.getGroundItemCarryLimit(job.playerObj)
-                local weight = job.playerObj:getInventory():getCapacityWeight()
-                local buffer = math.min(2, limit * 0.05)
-                local endpoint = nil
-                if weight < limit - buffer then
-                    endpoint = nextEndpoint(job.playerObj, target, Sources)
-                end
+        local sources = mergeSources(target)
+        -- Progress is the outcome count of the whole trip, not of one container.
+        target.remaining = Batching.outstanding(sources, target.carried)
+
+        -- Leave a drained endpoint as soon as carried inventory has room. The
+        -- previous version also refused whenever an item had been deferred for
+        -- lack of destination space, which forced a destination trip per
+        -- container even with empty pockets. Deferred items are safe now: the
+        -- union above keeps them reachable and native delivery recycles them.
+        if target.phase == "collect" then
+            local limit = Core.getGroundItemCarryLimit(job.playerObj)
+            local weight = job.playerObj:getInventory():getCapacityWeight()
+            local buffer = math.min(2, limit * 0.05)
+            local room = weight < limit - buffer
+            if not Batching.hasRemainingSources(sources) then
+                local endpoint = room and nextEndpoint(job.playerObj, target, Sources) or nil
+                if endpoint then beginEndpoint(target, endpoint) end
                 if not target.guardLogged then
                     target.guardLogged = true
                     log(string.format(
-                        "endpoint drained: carried=%d weight=%.2f limit=%.2f next=%d/%d switched=%s",
-                        #target.carried, weight, limit, target.nextEndpoint or -1,
-                        #(target.endpoints or { }), tostring(endpoint ~= nil)))
+                        "endpoint drained: carried=%d deferred=%d weight=%.2f limit=%.2f next=%d/%d switched=%s",
+                        #target.carried, Batching.deferredCount(sources), weight, limit,
+                        target.nextEndpoint or -1, #(target.endpoints or { }), tostring(endpoint ~= nil)))
                 end
-                if endpoint then beginEndpoint(target, endpoint) end
             end
         end
 
         local queued, status, message, count = nativeQueue(job, target, resolved)
+        mergeSources(target)
 
-        -- An empty container makes the built-in code complete a one-endpoint
-        -- target. Keep the aggregate alive and move to the next endpoint.
-        if status == "completed" then
+        -- An empty container makes the built-in discovery report completion.
+        -- Keep the aggregate alive and move to the next endpoint. A completion
+        -- from the collection phase is a real one (full destination, nothing
+        -- left) and must end the trip.
+        if status == "completed" and target.phase == "discover" then
             local endpoint = nextEndpoint(job.playerObj, target, Sources)
             if endpoint then
                 beginEndpoint(target, endpoint)
@@ -134,6 +169,14 @@ local function wrap(task, Sources, Core)
     Hooks.wrapped[task] = true
     return true
 end
+
+-- Batching only pays off when there is a delivery trip to save. `bag` deposits
+-- straight into a worn container on each pickup, and `container` sources have a
+-- single square, so neither is wrapped.
+local BATCHED_SOURCES = { containers = true, vehicles = true }
+local BATCHED_DESTINATIONS = {
+    container = true, containers = true, vehicle = true, vehicles = true, ground = true,
+}
 
 function Hooks.install()
     local ok = pcall(require, "AreaTasks/API")
@@ -161,19 +204,23 @@ function Hooks.install()
         return false
     end
 
-    local installed = false
+    local installed, names = false, { }
     for _, task in ipairs(Registry.getAll()) do
-        if task.sourceMode == "containers" and task.toMode == "container"
+        if BATCHED_SOURCES[task.sourceMode] and BATCHED_DESTINATIONS[task.toMode]
                 and type(task.collectTargets) == "function"
                 and type(task.queueTarget) == "function"
                 and not Hooks.wrapped[task] then
-            installed = wrap(task, Sources, Core) or installed
+            if wrap(task, Sources, Core) then
+                installed = true
+                names[#names + 1] = tostring(task.id)
+            end
         end
     end
 
     Hooks.ready = installed or Hooks.ready
     if installed then
-        log("hooks installed: containers -> container route batched")
+        table.sort(names)
+        log("hooks installed: area sources batched for " .. table.concat(names, ", "))
     end
     return Hooks.ready
 end
