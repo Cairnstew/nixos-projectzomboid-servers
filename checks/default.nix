@@ -1900,6 +1900,14 @@ in
           --workshop-id 4242 --force > /dev/null || fail "updating an existing item failed"
         grep -qx 'id=4242' "$TMPDIR/update/workshop.txt" || fail "the workshop id was not written"
 
+        # Regenerating a published folder without --workshop-id must not reset it
+        # to a new, private item: the recorded id is what updates the real one.
+        if python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack test --out-dir "$TMPDIR/update" \
+            --force > /dev/null 2> err; then
+          fail "a published item folder was reset to a new item"
+        fi
+        grep -q '4242' err || fail "the published-id refusal did not name the id"
+
         # Refuse to clobber an edited staging folder without --force.
         if python3 "$SCRIPT" --catalogue "$CATALOGUE" --pack test --out-dir "$stage" > /dev/null 2> err; then
           fail "an existing staging folder was overwritten without --force"

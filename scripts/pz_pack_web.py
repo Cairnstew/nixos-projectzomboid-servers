@@ -869,9 +869,28 @@ def make_writable(path):
         pass
 
 
+def published_id(target):
+    """The `id=` a previous run recorded in `workshop.txt`, or None."""
+    try:
+        with open(os.path.join(target, "workshop.txt"), encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("id="):
+                    return line[3:].strip() or None
+    except OSError:
+        return None
+    return None
+
+
 def build_tree(pack, pack_data, target, args, links=None):
     """Write the upload tree into a fresh temp dir, then move it into place."""
     links = links or {}
+    existing = published_id(target)
+    if existing and not args.workshop_id:
+        raise SystemExit(
+            f"pz-pack-web: {target} already publishes Workshop item {existing}; "
+            f"pass --workshop-id {existing} --visibility <v> to update it, or "
+            "delete the folder to create a different item"
+        )
     mods = [check_value("mod id", m) for m in (pack_data.get("mods") or [])]
     if not mods:
         raise SystemExit(f"pz-pack-web: pack {pack!r} has no mods to link")

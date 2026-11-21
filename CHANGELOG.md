@@ -178,6 +178,13 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **`pz-pack-web` no longer silently turns a published item into a new one.**
+  Regenerating an existing item folder with `--force` but without
+  `--workshop-id` used to drop the recorded `id=` and write
+  `visibility=private`, so the next upload would have created a second Workshop
+  item and left the subscribers on the old one. It now refuses and names the id
+  to pass.
+
 - **The Area Tasks item filter no longer spams a Lua error on every right
   click.** The world context-menu hook asked *every* object under the cursor for
   `getItem()`, but that list also holds walls, doors and water pipes, which have
