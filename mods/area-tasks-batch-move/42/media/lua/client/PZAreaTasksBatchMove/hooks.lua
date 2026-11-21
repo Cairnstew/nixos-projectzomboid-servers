@@ -56,6 +56,36 @@ local function beginEndpoint(target, endpoint)
     target.guardLogged = nil
 end
 
+-- Why `Sources.containers` rejected a container endpoint, in the same order its
+-- own checks run. Area Tasks collapses all of these into "the selected item
+-- source moved, disappeared, or cannot be accessed", which is true of a locked
+-- cupboard, an unloaded chunk and a changed object alike - so report which one
+-- it actually was. Container endpoints only; a vehicle endpoint has already
+-- been described by `VehicleStorage.reportUnavailable`.
+local function unavailableReason(playerObj, endpoint)
+    if type(endpoint) ~= "table" or endpoint.kind ~= "container" then return nil end
+    local container, object = endpoint.container, endpoint.object
+    if not container or not object then return "endpoint has no container" end
+    local ok, reason = pcall(function()
+        if container:getParent() ~= object then return "parent object changed" end
+        local square = object:getSquare()
+        if not square then return "object square not loaded" end
+        if square:getX() ~= endpoint.x or square:getY() ~= endpoint.y
+                or square:getZ() ~= endpoint.z then
+            return "container moved"
+        end
+        local Destinations = AreaTasks and AreaTasks.GroundItemDestinations
+        if type(Destinations) ~= "table" or type(Destinations.storageAvailable) ~= "function" then
+            return "storage lookup unavailable"
+        end
+        if not Destinations.storageAvailable(playerObj, container) then
+            return "storage unavailable (removed, locked, or no loot permission)"
+        end
+        return "available, but Sources.containers still rejected it"
+    end)
+    return ok and reason or ("probe failed: " .. tostring(reason))
+end
+
 local function nextEndpoint(playerObj, target, Sources)
     if not target.endpoints then return nil end
     while target.nextEndpoint <= #target.endpoints do
@@ -64,8 +94,10 @@ local function nextEndpoint(playerObj, target, Sources)
         -- Skip containers that were removed since the rectangle was drawn, and
         -- say so: a jump in the `next=` count is otherwise unattributable.
         if Sources.containers(playerObj, endpoint, false) then return endpoint end
-        log(string.format("source %d/%d is no longer available; skipped",
-            target.nextEndpoint - 1, #target.endpoints))
+        local reason = unavailableReason(playerObj, endpoint)
+        log(string.format("source %d/%d is no longer available; skipped%s",
+            target.nextEndpoint - 1, #target.endpoints,
+            reason and (" (" .. reason .. ")") or ""))
     end
     return nil
 end
