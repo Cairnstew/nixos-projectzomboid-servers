@@ -1420,6 +1420,10 @@ in
           || fail "an overlapping source/destination is not handled"
         grep -q 'isDestinationValid' "$hooks" \
           || fail "the destination predicate is not wrapped"
+        grep -q 'trip ended with %d/%d containers left' "$hooks" \
+          || fail "no end-of-trip diagnostic (a silent stop cannot be told from a finish)"
+        grep -q 'no longer available; skipped' "$hooks" \
+          || fail "skipped endpoints are not reported (next= jumps are unattributable)"
 
         test_lua="$PWD/batching-test.lua"
         cat > "$test_lua" <<'LUA'

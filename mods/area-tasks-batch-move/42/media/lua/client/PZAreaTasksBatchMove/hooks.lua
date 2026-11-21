@@ -61,8 +61,11 @@ local function nextEndpoint(playerObj, target, Sources)
     while target.nextEndpoint <= #target.endpoints do
         local endpoint = target.endpoints[target.nextEndpoint]
         target.nextEndpoint = target.nextEndpoint + 1
-        -- Skip containers that were removed since the rectangle was drawn.
+        -- Skip containers that were removed since the rectangle was drawn, and
+        -- say so: a jump in the `next=` count is otherwise unattributable.
         if Sources.containers(playerObj, endpoint, false) then return endpoint end
+        log(string.format("source %d/%d is no longer available; skipped",
+            target.nextEndpoint - 1, #target.endpoints))
     end
     return nil
 end
@@ -242,6 +245,22 @@ local function wrap(task, AreaTasks)
                 return false, "defer"
             end
         end
+
+        -- Trip-end diagnostic. Until now this route logged only the switches, so
+        -- "it stopped early" and "it finished" produced the same silent log —
+        -- there was no way to tell a blocked delivery, a full destination and a
+        -- stall apart. One line per job, and only when containers were left.
+        if not target.endLogged and (target.nextEndpoint or 1) <= #(target.endpoints or { })
+                and (status == "blocked" or status == "completed") then
+            target.endLogged = true
+            log(string.format(
+                "trip ended with %d/%d containers left: status=%s phase=%s carried=%d deferred=%d remaining=%d%s",
+                (target.nextEndpoint or 1) - 1, #target.endpoints, tostring(status),
+                tostring(target.phase), #target.carried, Batching.deferredCount(sources),
+                target.remaining or -1,
+                message and (" message=" .. tostring(message)) or ""))
+        end
+
         return queued, status, message, count
     end
 
