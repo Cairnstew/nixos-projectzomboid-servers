@@ -233,6 +233,34 @@ local function wrap(task, AreaTasks)
         return aggregate(playerObj, collected)
     end
 
+    -- A cancelled walk to a source is fatal upstream: the classifier reports
+    -- "blocked" with IGUI_AreaTasks_ItemSourceUnavailable ("the selected item
+    -- source moved, disappeared, or cannot be accessed"), and the whole job
+    -- ends. That is defensible when one target IS one container, but the
+    -- aggregate still has containers queued - one unreachable cupboard used to
+    -- end a 27-container trip at container four. Drop that endpoint, keep the
+    -- trip, and let the next one be walked to instead. Each skip consumes an
+    -- endpoint, so this is bounded by the size of the area.
+    local nativeClassify = task.classifyCancellation
+    if type(nativeClassify) == "function" then
+        task.classifyCancellation = function(job, target, action, cancellation)
+            local decision, detail, completed =
+                nativeClassify(job, target, action, cancellation)
+            if decision == "blocked" and target.endpoints
+                    and (target.phase == "sourceApproach" or target.phase == "approach") then
+                local endpoint = nextEndpoint(job.playerObj, target, Sources)
+                if endpoint then
+                    log(string.format(
+                        "source walk cancelled; continuing with %d/%d: %s",
+                        target.nextEndpoint - 1, #target.endpoints, tostring(detail)))
+                    beginEndpoint(target, endpoint)
+                    return "retry", detail, completed
+                end
+            end
+            return decision, detail, completed
+        end
+    end
+
     task.queueTarget = function(job, target, resolved)
         if not target.endpoints then return nativeQueue(job, target, resolved) end
 
@@ -265,6 +293,21 @@ local function wrap(task, AreaTasks)
 
         local queued, status, message, count = nativeQueue(job, target, resolved)
         mergeSources(target)
+
+        -- The same rule for a source the route could not even resolve: the
+        -- native discovery phase reports "blocked" (phase "discover") for an
+        -- unreachable square, an unloaded container or a vanished one. With
+        -- containers still queued, that is one dud source, not the end of the
+        -- trip.
+        if status == "blocked" and target.phase == "discover" then
+            local endpoint = nextEndpoint(job.playerObj, target, Sources)
+            if endpoint then
+                log(string.format("source unavailable; continuing with %d/%d: %s",
+                    target.nextEndpoint - 1, #target.endpoints, tostring(message)))
+                beginEndpoint(target, endpoint)
+                return false, "defer"
+            end
+        end
 
         -- An empty container makes the built-in discovery report completion.
         -- Keep the aggregate alive and move to the next endpoint. A completion

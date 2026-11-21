@@ -1424,6 +1424,10 @@ in
           || fail "no end-of-trip diagnostic (a silent stop cannot be told from a finish)"
         grep -q 'no longer available; skipped' "$hooks" \
           || fail "skipped endpoints are not reported (next= jumps are unattributable)"
+        grep -q 'classifyCancellation' "$hooks" \
+          || fail "a cancelled source walk ends the whole trip instead of one endpoint"
+        grep -q 'source walk cancelled; continuing with' "$hooks" \
+          || fail "no log line for a source walk that is skipped"
 
         test_lua="$PWD/batching-test.lua"
         cat > "$test_lua" <<'LUA'
