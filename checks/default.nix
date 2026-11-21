@@ -1302,7 +1302,10 @@ in
           || fail "no category shortcut in the item context menu"
         grep -q 'Events.AreaTaskStarted' "$client/init.lua" \
           || fail "no start confirmation hook"
-        grep -q 'OnFillInventoryObjectContextMenu' "$client/menu.lua" \
+        grep -q 'State.itemCategories' "$client/state.lua" \
+          || fail "a category is matched on the live item only, not the script too"
+        grep -q 'filter excluded %s' "$client/state.lua" \
+          || fail "no confirmation that a container source was actually filtered"        grep -q 'OnFillInventoryObjectContextMenu' "$client/menu.lua" \
           || fail "no inventory context-menu entry"
         grep -q 'OnFillWorldObjectContextMenu' "$client/menu.lua" \
           || fail "no world context-menu entry"
@@ -1346,6 +1349,20 @@ in
         F.setMode(cat, "except")
         assert(not F.matches(cat, "Base.Axe", "Weapon"), "a listed category was allowed by except")
         assert(F.matches(cat, "Base.Food", "Food"), "an unlisted category was rejected by except")
+
+        -- The editor lists a category from the item's SCRIPT while matching
+        -- reads the live item, so one item can answer to two names. A rule the
+        -- editor offered has to fire for either of them.
+        F.setMode(cat, "only")
+        assert(F.matches(cat, "Base.Axe", { "Junk", "Weapon" }),
+          "a listed category was missed in a category list")
+        assert(not F.matches(cat, "Base.Axe", { "Junk", "Food" }),
+          "an unlisted item matched through a category list")
+        F.setMode(cat, "except")
+        assert(not F.matches(cat, "Base.Axe", { "Food", "Weapon" }),
+          "except ignored a listed category inside a list")
+        assert(F.matches(cat, "Base.Bandage", { "Food", "Junk" }),
+          "except rejected an item whose categories are all unlisted")
         assert(F.count(cat) == 1 and F.countCategories(cat) == 1, "category count is wrong")
         local roundCat = F.parse(F.serialize(cat))
         assert(roundCat.categories["Weapon"], "category did not round-trip")
@@ -1426,7 +1443,7 @@ in
           || fail "skipped endpoints are not reported (next= jumps are unattributable)"
         grep -q 'classifyCancellation' "$hooks" \
           || fail "a cancelled source walk ends the whole trip instead of one endpoint"
-        grep -q 'source walk cancelled; continuing with' "$hooks" \
+        grep -q 'source walk cancelled' "$hooks" \
           || fail "no log line for a source walk that is skipped"
 
         test_lua="$PWD/batching-test.lua"

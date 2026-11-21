@@ -85,8 +85,28 @@ function Filter.matches(state, fullType, category)
     state = state or Filter.new()
     if state.mode == "off" then return true end
     if not isKey(fullType) then return false end
-    local listed = state.types[fullType] == true or
-        (isKey(category) and state.categories[category] == true)
+    -- `category` may be a single string (the original caller) or a list of the
+    -- categories an item answers to. One item can legitimately classify two
+    -- ways - the live `getDisplayCategory()` (what the inventory tabs show) and
+    -- the category its script declares - and the editor lists both, so the
+    -- predicate has to consult both or a rule the editor offered never fires.
+    local categories
+    if type(category) == "table" then
+        categories = category
+    elseif isKey(category) then
+        categories = { category }
+    else
+        categories = { }
+    end
+    local listed = state.types[fullType] == true
+    if not listed then
+        for _, entry in ipairs(categories) do
+            if isKey(entry) and state.categories[entry] == true then
+                listed = true
+                break
+            end
+        end
+    end
     if state.mode == "only" then return listed end
     return not listed
 end

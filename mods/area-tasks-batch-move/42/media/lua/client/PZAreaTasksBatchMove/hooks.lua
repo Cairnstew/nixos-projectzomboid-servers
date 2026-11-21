@@ -251,7 +251,9 @@ local function wrap(task, AreaTasks)
                 local endpoint = nextEndpoint(job.playerObj, target, Sources)
                 if endpoint then
                     log(string.format(
-                        "source walk cancelled; continuing with %d/%d: %s",
+                        "source walk cancelled%s; continuing with %d/%d: %s",
+                        (cancellation and cancellation.pathFailed == true)
+                            and " (path failed)" or "",
                         target.nextEndpoint - 1, #target.endpoints, tostring(detail)))
                     beginEndpoint(target, endpoint)
                     return "retry", detail, completed

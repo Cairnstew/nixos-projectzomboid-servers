@@ -83,6 +83,51 @@ function State.itemCategory(item)
     return category
 end
 
+-- Every category an item answers to, deduplicated: the live instance's
+-- `getDisplayCategory()`, the live instance's `getCategory()`, and what the
+-- item's script declares for the same two methods. The editor enumerates
+-- categories from SCRIPT items, so matching on the live display category alone
+-- silently ignored any category the editor offered that only the script
+-- declares - a live `except FoodP` rule then never excluded anything. Script
+-- lookups are cached per full type; the live halves are read every call because
+-- an instance's category can follow its state (perishable food).
+State.scriptCategories = State.scriptCategories or { }
+
+local function scriptCategories(fullType)
+    local cached = State.scriptCategories[fullType]
+    if cached then return cached end
+    local out = { }
+    local ok, script = pcall(function() return getScriptManager():FindItem(fullType) end)
+    if ok and script then
+        pcall(function()
+            local category = script:getDisplayCategory()
+            if type(category) == "string" and category ~= "" then out[#out + 1] = category end
+        end)
+        pcall(function()
+            local category = script:getCategory()
+            if type(category) == "string" and category ~= "" then out[#out + 1] = category end
+        end)
+    end
+    State.scriptCategories[fullType] = out
+    return out
+end
+
+function State.itemCategories(item, fullType)
+    local seen, out = { }, { }
+    local function add(category)
+        if type(category) ~= "string" or category == "" then return end
+        if seen[category] then return end
+        seen[category] = true
+        out[#out + 1] = category
+    end
+    pcall(function() add(item:getDisplayCategory()) end)
+    pcall(function() add(item:getCategory()) end)
+    if type(fullType) == "string" then
+        for _, category in ipairs(scriptCategories(fullType)) do add(category) end
+    end
+    return out
+end
+
 function State.matchesItem(item)
     if not item then return false end
     local state = State.get()
@@ -91,7 +136,23 @@ function State.matchesItem(item)
     local fullType = nil
     local ok = pcall(function() fullType = item:getFullType() end)
     if not ok then return false end
-    return Filter.matches(state, fullType, State.itemCategory(item))
+    local categories = State.itemCategories(item, fullType)
+    local matched = Filter.matches(state, fullType, categories)
+    if not matched then
+        -- Confirmation that the filter actually reached a container source, and
+        -- what it classified the item as. Capped: the first few distinct
+        -- (type, categories) pairs per session are enough to prove a rule
+        -- works, and a long haul would otherwise flood the log.
+        State.excludedSeen = State.excludedSeen or { }
+        State.excludedLogged = State.excludedLogged or 0
+        local key = fullType .. "|" .. table.concat(categories, ",")
+        if not State.excludedSeen[key] and State.excludedLogged < 8 then
+            State.excludedSeen[key] = true
+            State.excludedLogged = State.excludedLogged + 1
+            log(string.format("filter excluded %s [%s]",
+                fullType, table.concat(categories, ",")))        end
+    end
+    return matched
 end
 
 -- Ground-source targets arrive already collected: one aggregate target whose
