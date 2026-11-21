@@ -26,13 +26,15 @@ All notable changes to this project. Format follows
 
 - **`PZAreaTasksFilter`: a whitelist/blacklist for Area Tasks item routes.**
   A bundled in-repo adapter for the `viewpoint` pack's Area Tasks items. It adds
-  a persistent, searchable item-type filter (off / only listed / exclude listed)
-  and per-item "only this type" / "exclude this type" menu actions. It wraps
-  Area Tasks' `ItemSources.eligible` predicate (containers, vehicles) and each
-  ground route's `collectTargets` (ground, bag, ground to container/vehicle), so
-  both pickup and move routes are filtered without copying or overriding any
-  Area Tasks file; a missing API version leaves the routes untouched and the
-  menu says so. The editor is stock ISUI, and the filter is per client in
+  a persistent, searchable filter (off / only listed / exclude listed) over item
+  **types** and item **categories**, plus per-item "only/exclude this type" and
+  "only/exclude this category" menu actions — so one `Weapon` row covers the
+  whole family instead of listing every item. It wraps Area Tasks'
+  `ItemSources.eligible` predicate (containers, vehicles) and each ground
+  route's `collectTargets` (ground, bag, ground to container/vehicle), so both
+  pickup and move routes are filtered without copying or overriding any Area
+  Tasks file; a missing API version leaves the routes untouched and the menu
+  says so. The editor is stock ISUI, and the filter is per client in
   `Zomboid/Lua/PZAreaTasksFilter.txt`.
 
 - **`viewpoint`: Area Tasks selection limits doubled and declared.** The pack

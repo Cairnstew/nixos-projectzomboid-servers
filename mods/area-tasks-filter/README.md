@@ -3,8 +3,9 @@
 A small, additive Project Zomboid Build 42 client mod that adds a persistent
 **whitelist / blacklist** to
 [Area Tasks](https://steamcommunity.com/sharedfiles/filedetails/?id=3793163745)
-(`AreaTasks`) item routes. Filtering is by **item full type** (`Base.Bandage`),
-so it covers every modded and vanilla item the pack defines.
+(`AreaTasks`) item routes. Filtering is by **item full type** (`Base.Bandage`)
+or by **inventory category** (`Weapon`, `Food`, `Clothing`, …), so one entry can
+cover every modded and vanilla item in a family.
 
 It is a separate adapter, not a patch: it overrides no Area Tasks file and
 copies none of its code. Area Tasks' permissions block altering the mod, and
@@ -35,13 +36,15 @@ the failure is visible rather than silent.
    The submenu shows the current mode and how many types are listed, plus
    **Edit filter...** and **Clear filter**.
 2. In the editor choose **Off**, **Only listed** (whitelist) or **Exclude
-   listed** (blacklist). Type to search; click a row to toggle a type.
-   **Select results** / **Clear results** bulk-toggle the current search, which
-   is how you whitelist a category (search `ammo`, select results).
-3. With an empty search the list shows the types you have listed, so reviewing
-   or removing entries is one click each.
-4. For a single item, right-click it and use **Only this item type** or
-   **Exclude this item type**; that is the one-click "only pick up this" path.
+   listed** (blacklist). Type to search; click a row to toggle it. **Categories**
+   appear at the top of the list (tinted, `[category]`) and cover every item in
+   that inventory category, so `Weapon` is one row instead of hundreds.
+   **Select results** / **Clear results** bulk-toggle the current search.
+3. With an empty search the list shows what you have listed (categories first),
+   so reviewing or removing entries is one click each.
+4. For a single item, right-click it and use **Only this item type** /
+   **Exclude this item type**, or the coarser **Only this category** /
+   **Exclude this category**; that is the one-click "only pick up weapons" path.
 
 The filter is per client and persists in `Zomboid/Lua/PZAreaTasksFilter.txt`
 (survives restarts, single-player and multiplayer). It is applied when an Area
@@ -85,8 +88,11 @@ After changing this mod:
 
 ```console
 $ nix run .#pz-pack-web -- --pack viewpoint --workshop-id 3839932016 \
-    --preview ~/Zomboid/Workshop/PZPackWeb-viewpoint/preview.png --force
+    --visibility public --force
 ```
+
+`--workshop-id` and `--visibility` are not optional on a re-run: without the id
+the tool now refuses, and without the visibility it would write `private`.
 
 Then re-upload from the in-game Workshop menu. A dedicated server does not
 re-fetch a changed item on its own — remove its directory and restart the

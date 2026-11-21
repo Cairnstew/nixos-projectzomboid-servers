@@ -55,6 +55,17 @@ local function itemLabel(item, fullType)
     return name
 end
 
+-- The inventory tab label for a category (`Weapon` -> "Weapons"), falling back
+-- to the raw key when the translation is missing.
+local function categoryName(category)
+    local text = nil
+    pcall(function() text = getText("IGUI_ItemCat_" .. category) end)
+    if type(text) ~= "string" or text == "" or text == "IGUI_ItemCat_" .. category then
+        return category
+    end
+    return text
+end
+
 local function addFilters(playerNum, context, item)
     if type(_G.AreaTasks) ~= "table" then return end
 
@@ -83,6 +94,17 @@ local function addFilters(playerNum, context, item)
             nil, function() State.onlyType(fullType) end)
         sub:addOption(T("UI_AreaTasksFilter_ExceptItem", "Exclude this item type") .. ": " .. label,
             nil, function() State.excludeType(fullType) end)
+    end
+
+    -- The coarser shortcut: one entry covers every item in the same inventory
+    -- category, which is what "filter out the weapons" actually means.
+    local category = State.itemCategory(item)
+    if category then
+        local label = categoryName(category)
+        sub:addOption(T("UI_AreaTasksFilter_OnlyCategory", "Only this category") .. ": " .. label,
+            nil, function() State.onlyCategory(category) end)
+        sub:addOption(T("UI_AreaTasksFilter_ExceptCategory", "Exclude this category") .. ": " .. label,
+            nil, function() State.excludeCategory(category) end)
     end
 end
 

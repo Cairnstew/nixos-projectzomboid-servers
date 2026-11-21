@@ -67,6 +67,22 @@ function State.modeActive()
     return State.get().mode ~= "off"
 end
 
+-- The inventory category of a live item (`Weapon`, `Food`, `Clothing`, …), the
+-- same grouping the inventory filter tabs use. `getDisplayCategory` is the
+-- instance method; a script item does not expose it, so fall back to
+-- `getCategory`. Anything unexpected yields nil, which means "item type only".
+function State.itemCategory(item)
+    if not item then return nil end
+    local category = nil
+    pcall(function() category = item:getDisplayCategory() end)
+    if type(category) ~= "string" or category == "" then
+        category = nil
+        pcall(function() category = item:getCategory() end)
+    end
+    if type(category) ~= "string" or category == "" then return nil end
+    return category
+end
+
 function State.matchesItem(item)
     if not item then return false end
     local state = State.get()
@@ -75,7 +91,7 @@ function State.matchesItem(item)
     local fullType = nil
     local ok = pcall(function() fullType = item:getFullType() end)
     if not ok then return false end
-    return Filter.matches(state, fullType)
+    return Filter.matches(state, fullType, State.itemCategory(item))
 end
 
 -- Ground-source targets arrive already collected: one aggregate target whose
@@ -134,18 +150,26 @@ function State.toggle(fullType)
     State.save()
 end
 
+function State.toggleCategory(category)
+    Filter.toggleCategory(State.get(), category)
+    State.save()
+end
+
 function State.clear()
     Filter.clear(State.get())
     State.save()
 end
 
--- Quick actions from the item context menus: "only this type" replaces the set
--- with one entry; "exclude this type" keeps the existing set and adds one.
+-- Quick actions from the item context menus: "only this ..." replaces the set
+-- with one entry; "exclude this ..." keeps the existing set and adds one.
+-- Replacing clears the other list, so a stale category cannot widen an
+-- "only this type" selection (and vice versa).
 function State.onlyType(fullType)
     if type(fullType) ~= "string" or fullType == "" then return end
     local state = State.get()
     state.mode = "only"
     state.types = { [fullType] = true }
+    state.categories = { }
     State.save()
 end
 
@@ -154,5 +178,22 @@ function State.excludeType(fullType)
     local state = State.get()
     state.mode = "except"
     state.types[fullType] = true
+    State.save()
+end
+
+function State.onlyCategory(category)
+    if type(category) ~= "string" or category == "" then return end
+    local state = State.get()
+    state.mode = "only"
+    state.types = { }
+    state.categories = { [category] = true }
+    State.save()
+end
+
+function State.excludeCategory(category)
+    if type(category) ~= "string" or category == "" then return end
+    local state = State.get()
+    state.mode = "except"
+    state.categories[category] = true
     State.save()
 end

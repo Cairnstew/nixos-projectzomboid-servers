@@ -109,9 +109,88 @@ local function mergeSources(target)
     return retained
 end
 
-local function wrap(task, Sources, Core)
+-- A source rectangle can contain the destination container. Upstream refuses
+-- that job outright ("same item container"), which for an area source is wrong:
+-- the other containers are still perfectly movable. Drop just that endpoint
+-- before the built-in conflict check, so the route starts and `collectTargets`
+-- never offers the destination as a source. The selection object belongs to
+-- this job, so the removal is permanent and the task sees the same list.
+local function dropDestinationEndpoint(destination, source)
+    if type(source) ~= "table" or source.kind ~= "area" or destination == nil then
+        return false
+    end
+    local endpoints = source.endpoints
+    if type(endpoints) ~= "table" then return false end
+
+    local removed, kept = false, { }
+    for _, endpoint in ipairs(endpoints) do
+        if endpoint.kind == "container" and endpoint.container == destination then
+            removed = true
+        elseif endpoint.kind == "vehicle" and type(endpoint.location) == "table"
+                and type(endpoint.location.parts) == "table" then
+            -- A vehicle is a group of containers: drop only the offending part.
+            local parts = { }
+            for _, part in ipairs(endpoint.location.parts) do
+                if part.container == destination then
+                    removed = true
+                else
+                    parts[#parts + 1] = part
+                end
+            end
+            if #parts > 0 then
+                endpoint.location.parts = parts
+                kept[#kept + 1] = endpoint
+            end
+        else
+            kept[#kept + 1] = endpoint
+        end
+    end
+    if not removed then return false end
+    source.endpoints = kept
+    return true
+end
+
+local function wrap(task, AreaTasks)
+    local Sources = AreaTasks.ItemSources
+    local Core = AreaTasks.Core
     local nativeCollect = task.collectTargets
     local nativeQueue = task.queueTarget
+
+    -- Only the single-container destination refuses an overlap. Area and
+    -- vehicle destinations are already filtered by `destinationSelection`.
+    if task.toMode == "container" then
+        local nativeSelected = task.onSelected
+        if type(nativeSelected) == "function" then
+            task.onSelected = function(playerObj, bounds, destinationSquare,
+                    destinationTarget, sourceTarget)
+                if dropDestinationEndpoint(destinationTarget, sourceTarget) then
+                    log("destination container removed from the source area")
+                end
+                return nativeSelected(playerObj, bounds, destinationSquare,
+                    destinationTarget, sourceTarget)
+            end
+        end
+
+        -- And let the player pick it: the built-in predicate hides a container
+        -- that is also a source, which is the only reason the overlap could not
+        -- be used at all.
+        local nativeValid = task.isDestinationValid
+        local Destinations = AreaTasks.GroundItemDestinations
+        if type(nativeValid) == "function" and type(Destinations) == "table"
+                and type(Destinations.storageAvailable) == "function" then
+            task.isDestinationValid = function(playerObj, square, bounds, target, source)
+                local valid, reason = nativeValid(playerObj, square, bounds, target, source)
+                if valid or target == nil or type(source) ~= "table"
+                        or type(Sources.contains) ~= "function" then
+                    return valid, reason
+                end
+                if Sources.contains(source, target) then
+                    return Destinations.storageAvailable(playerObj, target), reason
+                end
+                return valid, reason
+            end
+        end
+    end
 
     task.collectTargets = function(playerObj, bounds, destination, selectedTask)
         local collected = nativeCollect(playerObj, bounds, destination, selectedTask)
@@ -210,7 +289,7 @@ function Hooks.install()
                 and type(task.collectTargets) == "function"
                 and type(task.queueTarget) == "function"
                 and not Hooks.wrapped[task] then
-            if wrap(task, Sources, Core) then
+            if wrap(task, AreaTasks) then
                 installed = true
                 names[#names + 1] = tostring(task.id)
             end

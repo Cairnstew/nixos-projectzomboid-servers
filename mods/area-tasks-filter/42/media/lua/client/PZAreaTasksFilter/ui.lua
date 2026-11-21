@@ -30,8 +30,26 @@ local PAD = 12
 local ROW_H = 22
 local MAX_RESULTS = 250
 
+local function addCategory(categories, seen, category)
+    if type(category) ~= "string" or category == "" or seen[category] then return end
+    seen[category] = true
+    local name = nil
+    pcall(function() name = getText("IGUI_ItemCat_" .. category) end)
+    if type(name) ~= "string" or name == "" or name == "IGUI_ItemCat_" .. category then
+        name = category
+    end
+    categories[#categories + 1] = {
+        kind = "category",
+        category = category,
+        name = name,
+        nameLower = name:lower(),
+        keyLower = category:lower(),
+    }
+end
+
 local function buildCatalog()
-    local catalog = { }
+    local catalog, categories = { }, { }
+    local seenCategories = { }
     local ok = pcall(function()
         local scripts = nil
         pcall(function() scripts = getScriptManager():getAllItems() end)
@@ -49,20 +67,31 @@ local function buildCatalog()
                 end
                 if type(name) ~= "string" or name == "" then name = fullType end
                 catalog[#catalog + 1] = {
+                    kind = "item",
                     fullType = fullType,
                     name = name,
                     nameLower = name:lower(),
                     fullTypeLower = fullType:lower(),
                 }
+                -- Categories come from the scripts for the same reason the game
+                -- does it that way: no instance has to be created.
+                local category = nil
+                pcall(function() category = script:getDisplayCategory() end)
+                if type(category) ~= "string" or category == "" then
+                    category = nil
+                    pcall(function() category = script:getCategory() end)
+                end
+                addCategory(categories, seenCategories, category)
             end
         end
     end)
-    if not ok then return { } end
+    if not ok then return { items = { }, categories = { } } end
     table.sort(catalog, function(a, b)
         if a.nameLower == b.nameLower then return a.fullTypeLower < b.fullTypeLower end
         return a.nameLower < b.nameLower
     end)
-    return catalog
+    table.sort(categories, function(a, b) return a.nameLower < b.nameLower end)
+    return { items = catalog, categories = categories }
 end
 
 local Panel = ISPanel:derive("PZAreaTasksFilterPanel")
@@ -167,22 +196,39 @@ function Panel:doDrawItem(y, item, alt)
         self:drawRect(0, y, self:getWidth(), height - 1, 0.06, 1, 1, 1)
     end
 
+    local isCategory = entry.kind == "category"
     local box = 12
     local boxX = 8
     local boxY = y + math.floor((height - box) / 2)
     self:drawRect(boxX, boxY, box, box, 0.5, 0.03, 0.03, 0.03)
     self:drawRectBorder(boxX, boxY, box, box, 0.75, 0.4, 0.42, 0.46)
-    if Filter.isListed(self.filterState, entry.fullType) then
+    local listed = false
+    if isCategory then
+        listed = Filter.isCategoryListed(self.filterState, entry.category)
+    else
+        listed = Filter.isListed(self.filterState, entry.fullType)
+    end
+    if listed then
         self:drawRect(boxX + 3, boxY + 3, box - 6, box - 6, 0.95, 0.88, 0.66, 0.16)
     end
 
-    self:drawText(entry.name, boxX + box + 8, y + 4, 0.92, 0.92, 0.92, 1, UIFont.Small)
-    local typeWidth = entry.typeWidth
-    if not typeWidth then
-        typeWidth = getTextManager():MeasureStringX(UIFont.Small, entry.fullType)
-        entry.typeWidth = typeWidth
+    local textX = boxX + box + 8
+    local nameR, nameG, nameB = 0.92, 0.92, 0.92
+    if isCategory then
+        -- Categories are the coarse entries; a tint keeps them visually apart
+        -- from the thousands of item types below them.
+        nameR, nameG, nameB = 1.0, 0.87, 0.62
+        self:drawText("[category]", textX, y + 4, 0.65, 0.55, 0.35, 1, UIFont.Small)
+        textX = textX + getTextManager():MeasureStringX(UIFont.Small, "[category]") + 8
     end
-    self:drawText(entry.fullType, self:getWidth() - typeWidth - 10, y + 4,
+    self:drawText(entry.name, textX, y + 4, nameR, nameG, nameB, 1, UIFont.Small)
+    local key = entry.fullType or entry.category
+    local keyWidth = entry.typeWidth
+    if not keyWidth then
+        keyWidth = getTextManager():MeasureStringX(UIFont.Small, key)
+        entry.typeWidth = keyWidth
+    end
+    self:drawText(key, self:getWidth() - keyWidth - 10, y + 4,
         0.5, 0.52, 0.58, 1, UIFont.Small)
     return y + height
 end
@@ -199,9 +245,34 @@ function Panel:refresh(query)
     query = (query or self.search:getText() or ""):lower()
     self.shown = 0
 
+    local categories = self.categories or { }
+    local catalog = self.catalog or { }
+
     if query == "" then
+        -- Categories first: a short, stable list that is always worth seeing.
+        local listedCategories = { }
+        local seenCategory = { }
+        for _, entry in ipairs(categories) do
+            seenCategory[entry.category] = true
+            if state.categories[entry.category] then
+                list:addItem(entry.name, entry)
+                listedCategories[#listedCategories + 1] = entry.category
+                self.shown = self.shown + 1
+            end
+        end
+        -- Categories saved from a previous mod set stay removable.
+        local staleCategories = { }
+        for category in pairs(state.categories) do
+            if not seenCategory[category] then staleCategories[#staleCategories + 1] = category end
+        end
+        table.sort(staleCategories)
+        for _, category in ipairs(staleCategories) do
+            list:addItem(category, { kind = "category", category = category, name = category })
+            self.shown = self.shown + 1
+        end
+
         local seen = { }
-        for _, entry in ipairs(self.catalog) do
+        for _, entry in ipairs(catalog) do
             if state.types[entry.fullType] then
                 list:addItem(entry.name, entry)
                 seen[entry.fullType] = true
@@ -217,16 +288,25 @@ function Panel:refresh(query)
         end
         table.sort(stale)
         for _, fullType in ipairs(stale) do
-            list:addItem(fullType, { fullType = fullType, name = fullType })
+            list:addItem(fullType, { kind = "item", fullType = fullType, name = fullType })
             self.shown = self.shown + 1
         end
     else
-        for _, entry in ipairs(self.catalog) do
-            if entry.nameLower:find(query, 1, true)
-                    or entry.fullTypeLower:find(query, 1, true) then
+        for _, entry in ipairs(categories) do
+            if entry.nameLower:find(query, 1, true) or entry.keyLower:find(query, 1, true) then
                 list:addItem(entry.name, entry)
                 self.shown = self.shown + 1
                 if self.shown >= MAX_RESULTS then break end
+            end
+        end
+        if self.shown < MAX_RESULTS then
+            for _, entry in ipairs(catalog) do
+                if entry.nameLower:find(query, 1, true)
+                        or entry.fullTypeLower:find(query, 1, true) then
+                    list:addItem(entry.name, entry)
+                    self.shown = self.shown + 1
+                    if self.shown >= MAX_RESULTS then break end
+                end
             end
         end
     end
@@ -282,23 +362,33 @@ end
 
 function Panel:onRowClick(entry)
     if not entry then return end
-    State.toggle(entry.fullType)
+    if entry.kind == "category" then
+        State.toggleCategory(entry.category)
+    else
+        State.toggle(entry.fullType)
+    end
     self:refresh()
 end
 
+local function setRowListed(entry, listed)
+    if entry.kind == "category" then
+        Filter.setCategoryListed(State.get(), entry.category, listed)
+    elseif entry.fullType then
+        Filter.setListed(State.get(), entry.fullType, listed)
+    end
+end
+
 function Panel:onSelectResults()
-    local state = State.get()
     for _, row in ipairs(self.list.items) do
-        Filter.setListed(state, row.item.fullType, true)
+        setRowListed(row.item, true)
     end
     State.save()
     self:refresh()
 end
 
 function Panel:onDeselectResults()
-    local state = State.get()
     for _, row in ipairs(self.list.items) do
-        Filter.setListed(state, row.item.fullType, false)
+        setRowListed(row.item, false)
     end
     State.save()
     self:refresh()
@@ -317,6 +407,8 @@ function UI.open(playerNum)
         local y = math.floor((getCore():getScreenHeight() - height) / 2)
         panel = Panel:new(x, y, width, height, playerNum)
         panel.catalog = buildCatalog()
+        panel.categories = panel.catalog.categories
+        panel.catalog = panel.catalog.items
         panel:initialise()
         panel:addToUIManager()
         UI.panels[playerNum] = panel

@@ -1,13 +1,18 @@
 -- PZAreaTasksFilter/Filter.lua
 --
--- Pure filter state: mode, the type set, matching, and the on-disk format.
--- Deliberately free of PZ globals so `checks/default.nix` can exercise it with
--- plain Lua 5.1 (the game's Lua) and no running client.
+-- Pure filter state: mode, the listed item types and item categories,
+-- matching, and the on-disk format. Deliberately free of PZ globals so
+-- `checks/default.nix` can exercise it with plain Lua 5.1 (the game's Lua) and
+-- no running client.
 --
--- A filter is `{ mode = "off" | "only" | "except", types = { [fullType] = true } }`.
+-- A filter is
+--   `{ mode = "off" | "only" | "except",
+--      types = { [fullType] = true }, categories = { [category] = true } }`.
 -- "only" is the whitelist, "except" the blacklist. Full types are the
 -- `module.id` strings Area Tasks already keys its item records on
--- (`Base.Bandage`), never display names.
+-- (`Base.Bandage`), never display names. Categories are the item's inventory
+-- category (`InventoryItem:getDisplayCategory()`, e.g. `Weapon`), which is what
+-- the inventory filter tabs use, so one entry covers a whole family of items.
 
 PZAreaTasksFilter = PZAreaTasksFilter or { }
 if PZAreaTasksFilter.Filter then return end
@@ -15,7 +20,7 @@ if PZAreaTasksFilter.Filter then return end
 local Filter = { }
 PZAreaTasksFilter.Filter = Filter
 
-Filter.FILE_VERSION = 1
+Filter.FILE_VERSION = 2
 Filter.MODES = { off = "off", only = "only", except = "except" }
 
 local function isMode(mode)
@@ -23,11 +28,15 @@ local function isMode(mode)
 end
 Filter.isMode = isMode
 
-function Filter.new()
-    return { mode = "off", types = { } }
+local function isKey(value)
+    return type(value) == "string" and value ~= ""
 end
 
--- Copy only the fields and type entries the rest of the code understands, so a
+function Filter.new()
+    return { mode = "off", types = { }, categories = { } }
+end
+
+-- Copy only the fields and entries the rest of the code understands, so a
 -- hand-edited or older file cannot put the filter into a mode it never handles.
 function Filter.normalize(state)
     local result = Filter.new()
@@ -35,33 +44,49 @@ function Filter.normalize(state)
     if isMode(state.mode) then result.mode = state.mode end
     if type(state.types) == "table" then
         for fullType, listed in pairs(state.types) do
-            if listed and type(fullType) == "string" and fullType ~= "" then
-                result.types[fullType] = true
-            end
+            if listed and isKey(fullType) then result.types[fullType] = true end
+        end
+    end
+    if type(state.categories) == "table" then
+        for category, listed in pairs(state.categories) do
+            if listed and isKey(category) then result.categories[category] = true end
         end
     end
     return result
 end
 
 function Filter.isListed(state, fullType)
-    return type(fullType) == "string" and state.types[fullType] == true
+    return isKey(fullType) and state.types[fullType] == true
+end
+
+function Filter.isCategoryListed(state, category)
+    return isKey(category) and state.categories[category] == true
 end
 
 function Filter.count(state)
     local count = 0
     for _ in pairs(state.types) do count = count + 1 end
+    for _ in pairs(state.categories) do count = count + 1 end
     return count
 end
 
--- The predicate Area Tasks hook points call. `off` matches everything, a listed
--- type matches in `only` mode, and everything not listed matches in `except`
--- mode. A missing/unknown full type is never allowed through while a filter is
--- active: the source data is not what the player asked for.
-function Filter.matches(state, fullType)
+function Filter.countCategories(state)
+    local count = 0
+    for _ in pairs(state.categories) do count = count + 1 end
+    return count
+end
+
+-- The predicate Area Tasks hook points call. `off` matches everything, a
+-- listed type or category matches in `only` mode, and everything not listed
+-- matches in `except` mode. A missing/unknown full type is never allowed
+-- through while a filter is active: the source data is not what the player
+-- asked for. `category` is optional, so an older caller keeps working.
+function Filter.matches(state, fullType, category)
     state = state or Filter.new()
     if state.mode == "off" then return true end
-    if type(fullType) ~= "string" or fullType == "" then return false end
-    local listed = state.types[fullType] == true
+    if not isKey(fullType) then return false end
+    local listed = state.types[fullType] == true or
+        (isKey(category) and state.categories[category] == true)
     if state.mode == "only" then return listed end
     return not listed
 end
@@ -71,7 +96,7 @@ function Filter.setMode(state, mode)
 end
 
 function Filter.setListed(state, fullType, listed)
-    if type(fullType) ~= "string" or fullType == "" then return end
+    if not isKey(fullType) then return end
     if listed then
         state.types[fullType] = true
     else
@@ -79,28 +104,47 @@ function Filter.setListed(state, fullType, listed)
     end
 end
 
+function Filter.setCategoryListed(state, category, listed)
+    if not isKey(category) then return end
+    if listed then
+        state.categories[category] = true
+    else
+        state.categories[category] = nil
+    end
+end
+
 function Filter.toggle(state, fullType)
     Filter.setListed(state, fullType, not Filter.isListed(state, fullType))
+end
+
+function Filter.toggleCategory(state, category)
+    Filter.setCategoryListed(state, category, not Filter.isCategoryListed(state, category))
 end
 
 function Filter.clear(state)
     state.mode = "off"
     state.types = { }
+    state.categories = { }
 end
 
--- The persisted form. One `key=value` per line, `type=` repeated, and a version
--- comment first so a future format can be recognised instead of guessed at.
--- Sorting makes the file stable, which keeps it readable and testable.
+-- The persisted form. One `key=value` per line, `type=` and `category=`
+-- repeated, and a version comment first so a future format can be recognised
+-- instead of guessed at. Sorting makes the file stable and testable.
 function Filter.serialize(state)
     state = Filter.normalize(state)
-    local types = { }
+    local types, categories = { }, { }
     for fullType in pairs(state.types) do types[#types + 1] = fullType end
+    for category in pairs(state.categories) do categories[#categories + 1] = category end
     table.sort(types)
+    table.sort(categories)
 
     local lines = {
         "# PZAreaTasksFilter " .. tostring(Filter.FILE_VERSION),
         "mode=" .. state.mode,
     }
+    for _, category in ipairs(categories) do
+        lines[#lines + 1] = "category=" .. category
+    end
     for _, fullType in ipairs(types) do
         lines[#lines + 1] = "type=" .. fullType
     end
@@ -119,6 +163,8 @@ function Filter.parse(text)
                 state.mode = value
             elseif key == "type" and value ~= "" then
                 state.types[value] = true
+            elseif key == "category" and value ~= "" then
+                state.categories[value] = true
             end
         end
     end

@@ -36,6 +36,12 @@ areas do not.
   stranding those items.
 - If the built-in discovery completes early (an empty container), the wrapper
   starts the next endpoint and returns `defer` instead of retiring the job.
+- **A source area may contain the destination.** Upstream refuses that job
+  outright (`IGUI_AreaTasks_SameItemContainer`) and hides the container in the
+  destination picker. The wrapper lets it be picked and drops that one endpoint
+  from the source selection before the built-in conflict check runs, so the
+  other containers in the area are still moved (for a vehicle source, only the
+  matching cargo part is dropped).
 
 No Area Tasks file is copied, read or overridden. The wrapper is guarded on
 `AreaTasks.API_VERSION == 1`, `ItemSources`, `Core.getGroundItemCarryLimit` and

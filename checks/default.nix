@@ -1296,6 +1296,10 @@ in
         client="$SRC/42/media/lua/client/PZAreaTasksFilter"
         grep -q 'getFileWriter' "$client/state.lua" || fail "the filter is not persisted"
         grep -q 'getFullType' "$client/state.lua" || fail "items are not matched by full type"
+        grep -q 'getDisplayCategory' "$client/state.lua" \
+          || fail "items are not matched by category"
+        grep -q 'OnlyCategory' "$client/menu.lua" \
+          || fail "no category shortcut in the item context menu"
         grep -q 'Events.AreaTaskStarted' "$client/init.lua" \
           || fail "no start confirmation hook"
         grep -q 'OnFillInventoryObjectContextMenu' "$client/menu.lua" \
@@ -1330,6 +1334,27 @@ in
         F.toggle(state, "Base.Axe")
         assert(F.isListed(state, "Base.Axe"), "toggle did not add")
         assert(F.count(state) == 1, "count is wrong")
+
+        -- Categories are the coarse half of the filter: one entry covers every
+        -- item in that inventory category.
+        local cat = F.new()
+        F.setMode(cat, "only")
+        F.setCategoryListed(cat, "Weapon", true)
+        assert(F.matches(cat, "Base.Axe", "Weapon"), "a listed category was rejected by only")
+        assert(not F.matches(cat, "Base.Food", "Food"), "an unlisted category was allowed")
+        assert(not F.matches(cat, "Base.Hammer"), "an unlisted type was allowed by only")
+        F.setMode(cat, "except")
+        assert(not F.matches(cat, "Base.Axe", "Weapon"), "a listed category was allowed by except")
+        assert(F.matches(cat, "Base.Food", "Food"), "an unlisted category was rejected by except")
+        assert(F.count(cat) == 1 and F.countCategories(cat) == 1, "category count is wrong")
+        local roundCat = F.parse(F.serialize(cat))
+        assert(roundCat.categories["Weapon"], "category did not round-trip")
+        assert(roundCat.mode == "except", "category mode did not round-trip")
+        assert(F.count(roundCat) == 1, "category round-trip count is wrong")
+        F.toggleCategory(cat, "Weapon")
+        assert(not F.isCategoryListed(cat, "Weapon"), "category toggle did not remove")
+        F.toggleCategory(cat, "Weapon")
+        assert(F.isCategoryListed(cat, "Weapon"), "category toggle did not add")
 
         local text = F.serialize(state)
         local round = F.parse(text)
@@ -1391,6 +1416,10 @@ in
         grep -q 'queueTarget' "$hooks" || fail "queueTarget is not wrapped"
         grep -q 'hooks installed' "$hooks" || fail "no install confirmation line to verify from the log"
         grep -q 'batching %d containers' "$hooks" || fail "no batching confirmation line to verify from the log"
+        grep -q 'dropDestinationEndpoint' "$hooks" \
+          || fail "an overlapping source/destination is not handled"
+        grep -q 'isDestinationValid' "$hooks" \
+          || fail "the destination predicate is not wrapped"
 
         test_lua="$PWD/batching-test.lua"
         cat > "$test_lua" <<'LUA'
