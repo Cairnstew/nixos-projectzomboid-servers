@@ -8,6 +8,22 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **`PZBandageGuard`: stops the multiplayer bandage crash and returns the
+  replaced dressing.** Vanilla `ISApplyBandage:complete()` dereferences
+  `self.item` without a check, while on a client `start()` re-resolves the item
+  by id and assigns `nil` when it no longer exists — and `isValid()` only reports
+  whether the item existed when the action was built. The client therefore runs
+  the action to 100%, the server throws
+  `attempted index: getBandagePower of non-table: null`
+  (`ISApplyBandage.lua:112`) and no bandage is applied, so the wound keeps
+  bleeding and the player retries. The bundled guard drops the action as soon as
+  `start()` loses the item and fails closed in `complete()`. It also adds
+  **Replace Bandage** to the health panel's body-part menu (dirty coverings,
+  self-treatment) using vanilla's own action with the old bandage type carried in
+  a plain string field, and returns the old bandage through
+  `sendAddItemToContainer()` where `complete()` runs on the server. See
+  `mods/bandage-guard/README.md`.
+
 - **`PZAreaTasksBatchMove`: area-source pickup now fills inventory before
   returning to the destination.** Area Tasks builds one target per source
   container on its area routes, so it walked to the destination after every
@@ -155,6 +171,15 @@ All notable changes to this project. Format follows
   completeness-checked reference.
 
 ### Removed
+
+- **Replace Dirty Bandages (`3782220648`) from the `viewpoint` pack.** Its
+  replace action put the old bandage back in `perform()`, which only runs on the
+  client, so the item existed locally but never on the server; using that copy
+  later is one way to trigger the vanilla `ISApplyBandage` crash above. Its
+  function on the action instance is also exactly what a networked timed action
+  cannot carry. The bundled `PZBandageGuard` ships the same menu entry with the
+  old bandage returned server-side, and switches off the superseded mod's entry
+  if a client still has it enabled from an older sync.
 
 - **Helicopter Fix - Project Viewpoint (`3812896812`) from the `viewpoint`
   pack.** Steam returns `result: 9` (FileNotFound) from

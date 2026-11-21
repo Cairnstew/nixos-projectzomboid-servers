@@ -1,0 +1,6 @@
+name=Bandage Guard
+id=PZBandageGuard
+author=nixos-projectzomboid-servers
+modversion=1.0.0
+description=Adds a working Replace Bandage action and stops vanilla bandaging from throwing on a dedicated server when the bandage item is gone. Additive hook: it wraps public ISApplyBandage methods and overrides no file.
+versionMin=42.20

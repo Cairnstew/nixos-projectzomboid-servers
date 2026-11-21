@@ -85,6 +85,7 @@ BUNDLED_MODS = {
     "PZButcherAll": os.path.join("mods", "butcher-all"),
     "PZAreaTasksFilter": os.path.join("mods", "area-tasks-filter"),
     "PZAreaTasksBatchMove": os.path.join("mods", "area-tasks-batch-move"),
+    "PZBandageGuard": os.path.join("mods", "bandage-guard"),
 }
 
 

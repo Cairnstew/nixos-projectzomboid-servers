@@ -12,8 +12,10 @@
   # "Butcher All Nearby" hook for Zombie Butchery; see mods/butcher-all/.
   # `PZAreaTasksFilter` and `PZAreaTasksBatchMove` are the additive adapters for
   # the two Area Tasks items below; see mods/area-tasks-filter/ and
-  # mods/area-tasks-batch-move/.
-  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" ];
+  # mods/area-tasks-batch-move/. `PZBandageGuard` stops vanilla bandaging from
+  # throwing on the server and replaces Replace Dirty Bandages (removed below);
+  # see mods/bandage-guard/.
+  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZBandageGuard" ];
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
@@ -576,7 +578,13 @@
     { id = "3818514049"; title = "Show Healing Progress"; } # PZShowHealingProgress
     { id = "3774553126"; title = "Extended Burn Treatment [B42 - SP/MP]"; } # ExtendedBurnTreatment
     { id = "3632795534"; title = "zRe Bandaged Status Info [b42.13+]"; } # zReBandagedStatusInfo
-    { id = "3782220648"; title = "[B42/MP] Replace Dirty Bandages"; } # ReplaceDirtyBandages
+    # Replace Dirty Bandages (3782220648) is deliberately absent. Its replace
+    # action added the old bandage back inside perform(), which only runs on the
+    # client, so the item existed locally but not on the server; using that copy
+    # later made the server throw inside vanilla ISApplyBandage:complete
+    # ("attempted index: getBandagePower of non-table: null", 2026-11-21). The
+    # bundled PZBandageGuard ships the same menu entry with the old bandage
+    # returned server-side. See mods/bandage-guard/README.md.
 
     # ── Farming / agriculture ──────────────────────────────────────────────
     # Build 42 + multiplayer, verified from each mod.info. One rebalance mod
@@ -1324,12 +1332,15 @@
 
     # ── Medical / first aid ────────────────────────────────────────────────
     # All client-side or context-menu actions; none declares a dependency.
-    # Show Healing Progress and Replace Dirty Bandages both read the wound
-    # state, so they are placed after the infection rebalance in Difficulty.
+    # Show Healing Progress reads the wound state, so it is placed after the
+    # infection rebalance in Difficulty. PZBandageGuard is our bundled fix for
+    # vanilla's nil-item bandage crash and for replacing a dirty bandage; it is
+    # shared Lua as well, because the crash is in complete() on the server.
     "PZShowHealingProgress"
     "ExtendedBurnTreatment"
     "zReBandagedStatusInfo"
-    "ReplaceDirtyBandages"
+    # Replaces the removed Replace Dirty Bandages; bundles inside the connector.
+    "PZBandageGuard"
 
     # ── Farming / agriculture ──────────────────────────────────────────────
     # Rebalance first, then fixes, crop packs, irrigation, and finally the

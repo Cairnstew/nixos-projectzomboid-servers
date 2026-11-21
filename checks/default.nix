@@ -1468,6 +1468,207 @@ in
         touch "$out"
       '';
 
+  # ── PZBandageGuard: the nil-item crash guard + Replace Bandage ───────
+  # guard.lua is shared (the server is where complete() throws), menu.lua is
+  # client-only. The check runs the three ISApplyBandage wrappers against a fake
+  # action class that reproduces vanilla's two hazards: start() nulling the item
+  # by a failed re-lookup, and complete() dereferencing it. It also drives the
+  # covering scan and the server-side return of the replaced bandage.
+  bandage-guard =
+    pkgs.runCommand "pz-bandage-guard-check"
+      {
+        nativeBuildInputs = [
+          pkgs.lua5_1
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        SRC = ../mods/bandage-guard;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+
+        info="$SRC/42/mod.info"
+        [ -f "$info" ] || fail "no 42/mod.info (B42 layout)"
+        grep -qx 'id=PZBandageGuard' "$info" || fail "mod.info id is not PZBandageGuard"
+        grep -qx 'versionMin=42.20' "$info" || fail "wrong versionMin"
+        ! grep -q '^require=' "$info" || fail "the guard must not hard-require a mod"
+
+        for f in "$SRC"/42/media/lua/client/PZBandageGuard/*.lua \
+                 "$SRC"/42/media/lua/shared/PZBandageGuard/*.lua; do
+          lua -e "assert(loadfile('$f'))" || fail "Lua does not parse: $f"
+        done
+
+        guard="$SRC/42/media/lua/shared/PZBandageGuard/guard.lua"
+        grep -q 'ISApplyBandage.complete' "$guard" || fail "complete() is not wrapped"
+        grep -q 'ISApplyBandage.start' "$guard" || fail "start() is not wrapped"
+        grep -q 'ISApplyBandage.isValid' "$guard" || fail "isValid() is not wrapped"
+        grep -q 'sendAddItemToContainer' "$guard" \
+          || fail "the replaced bandage is not synced to clients"
+        grep -q 'Events.OnServerStarted' "$guard" \
+          || fail "no dedicated-server install retry (OnGameStart never fires there)"
+
+        menu="$SRC/42/media/lua/client/PZBandageGuard/menu.lua"
+        grep -q 'doBodyPartContextMenu' "$menu" || fail "no health-panel hook"
+        grep -q 'ISTimedActionQueue.addAfter' "$menu" \
+          || fail "the replacement does not queue behind the item transfer"
+        grep -q 'isBandageDirty' "$menu" || fail "the entry is not limited to a dirty covering"
+        grep -q 'getBandageType' "$menu" || fail "the old bandage type is not recorded"
+        grep -q 'DirtyBandageReplacement' "$menu" \
+          || fail "the superseded mod's entry is not switched off"
+
+        test_lua="$PWD/guard-test.lua"
+        cat > "$test_lua" <<'LUA'
+        -- A fake action class with vanilla's two hazards: start() can lose the
+        -- item (the client's failed getItemById), and complete() dereferences it
+        -- unconditionally. If the guard is wrong, the second one raises.
+        ISApplyBandage = {
+          start = function(self)
+            if self.loseItemAtStart then self.item = nil end
+          end,
+          isValid = function(self) return true end,
+          complete = function(self)
+            if self.doIt then
+              self.appliedPower = self.item:getBandagePower()
+              self.item = nil
+            end
+            return true
+          end,
+        }
+
+        local sent = nil
+        isServer = function() return true end
+        sendAddItemToContainer = function(_, item) sent = item end
+        instanceItem = function(fullType)
+          return { fullType = fullType, added = 0 }
+        end
+
+        dofile("shared/PZBandageGuard/guard.lua")
+        local G = PZBandageGuard
+        assert(G.installed, "the guard did not install over ISApplyBandage")
+
+        assert(not G.cannotApply({ doIt = true, item = { } }), "a live item was rejected")
+        assert(G.cannotApply({ doIt = true }), "a missing item was not detected")
+        assert(not G.cannotApply({ doIt = false }), "remove-bandage was treated as broken")
+        assert(not G.cannotApply("nonsense"), "a non-table was treated as an action")
+
+        -- Bug 1, client side: start() loses the item, isValid() must drop it so
+        -- complete() is never reached.
+        local lost = { doIt = true, item = { }, loseItemAtStart = true }
+        ISApplyBandage.start(lost)
+        assert(lost.pzBandageGuardLostItem, "the lost item was not noticed")
+        assert(not ISApplyBandage.isValid(lost), "an action with no item is still valid")
+
+        -- Bug 1, server side: a broken action that still reaches complete() must
+        -- fail closed instead of indexing nil.
+        local broken = { doIt = true }
+        local okBroken, resultBroken = pcall(ISApplyBandage.complete, broken)
+        assert(okBroken, "complete() threw on a missing item: " .. tostring(resultBroken))
+        assert(resultBroken == false, "a broken action did not report failure")
+
+        -- A normal bandage still applies.
+        local item = { getBandagePower = function() return 4 end }
+        local normal = { doIt = true, item = item }
+        assert(ISApplyBandage.complete(normal) == true, "a normal bandage was rejected")
+        assert(normal.appliedPower == 4, "the normal bandage was not applied")
+
+        -- Bug 2: the replaced dirty bandage is returned on the server.
+        local inventory = { }
+        function inventory:AddItem(obj) self.added = obj end
+        local replaceItem = { getBandagePower = function() return 2 end }
+        local replace = {
+          doIt = true,
+          item = replaceItem,
+          character = { getInventory = function() return inventory end },
+          pzBandageGuardReplaceType = "Base.BandageDirty",
+        }
+        sent = nil
+        assert(ISApplyBandage.complete(replace) == true, "the replacement was rejected")
+        assert(inventory.added and inventory.added.fullType == "Base.BandageDirty",
+          "the old bandage was not returned to the inventory")
+        assert(sent == inventory.added, "the returned bandage was not sent to clients")
+
+        -- A plain bandage must not conjure one.
+        inventory.added = nil
+        sent = nil
+        ISApplyBandage.complete({ doIt = true, item = item,
+          character = { getInventory = function() return inventory end } })
+        assert(inventory.added == nil and sent == nil,
+          "a plain bandage returned a phantom bandage")
+
+        -- Replace Dirty Bandages used functions on the action instance. The
+        -- guard must work with plain fields only.
+        assert(type(replace.pzBandageGuardReplaceType) == "string",
+          "the replacement marker is not a plain string")
+
+        print("guard ok")
+        LUA
+        ( cd "$SRC/42/media/lua" && lua "$test_lua" ) \
+          || fail "the bandage guard unit test failed"
+
+        scan_lua="$PWD/scan-test.lua"
+        cat > "$scan_lua" <<'LUA'
+        PZBandageGuard = { }
+        Events = {
+          OnGameStart = { Add = function() end },
+          OnCreateUI = { Add = function() end },
+        }
+        dofile("client/PZBandageGuard/menu.lua")
+        local G = PZBandageGuard
+
+        local function item(fullType, power, canBandage, inner)
+          return {
+            getFullType = function() return fullType end,
+            getBandagePower = function() return power end,
+            isCanBandage = function() return canBandage end,
+            IsInventoryContainer = function() return inner ~= nil end,
+            getItemContainer = function() return inner end,
+          }
+        end
+        local function container(list)
+          return {
+            getItems = function()
+              return {
+                size = function() return #list end,
+                get = function(_, i) return list[i + 1] end,
+              }
+            end,
+          }
+        end
+
+        local dirty = item("Base.BandageDirty", 0, false)
+        local clean = item("Base.Bandage", 2, true)
+        local weak = item("Base.Bandage", 0, true)
+        local cleanDup = item("Base.Bandage", 3, true)
+        local bag = item("Base.FirstAidKit", 0, false,
+          container({ item("Base.Bandaid", 1, true) }))
+
+        local found = G.collectCoverings(
+          container({ dirty, clean, weak, cleanDup, bag }))
+        assert(#found == 2, "expected Base.Bandage and Base.Bandaid, got " .. #found)
+        assert(found[1] == clean, "the main-inventory covering is missing")
+        assert(found[2]:getFullType() == "Base.Bandaid", "the nested covering is missing")
+
+        -- A covering nested past MAX_DEPTH is not offered, so a bag inside a
+        -- bag inside a bag cannot queue a walk to the wrong container.
+        local function nest(levels)
+          local inner = container({ item("Base.Sheet", 1, true) })
+          for _ = 2, levels do
+            inner = container({ item("Base.Bandaid", 0, false, inner) })
+          end
+          return inner
+        end
+        assert(#G.collectCoverings(nest(3)) == 1, "a reachable nested covering was dropped")
+        assert(#G.collectCoverings(nest(6)) == 0, "the depth cap is missing")
+
+        print("scan ok")
+        LUA
+        ( cd "$SRC/42/media/lua" && lua "$scan_lua" ) \
+          || fail "the covering scan unit test failed"
+
+        echo "pz-bandage-guard ok"
+        touch "$out"
+      '';
+
   # ── pz-pack-web: the ready-to-upload connector tree ─────────────────
   # The artefact is what a human uploads to the Workshop, so the check is
   # structural: workshop.txt fields, the B42 mod layout, no hard `require=`, a
@@ -1533,11 +1734,13 @@ in
               "PZButcherAll"
               "PZAreaTasksFilter"
               "PZAreaTasksBatchMove"
+              "PZBandageGuard"
             ];
             bundledMods = [
               "PZButcherAll"
               "PZAreaTasksFilter"
               "PZAreaTasksBatchMove"
+              "PZBandageGuard"
             ];
             defaultSettings = { };
             defaultSandbox = { };
@@ -1690,6 +1893,7 @@ in
             "PZButcherAll",
             "PZAreaTasksFilter",
             "PZAreaTasksBatchMove",
+            "PZBandageGuard",
         ], summary
         base = os.path.join(root, "Contents", "mods", "PZButcherAll", "42")
         info = os.path.join(base, "mod.info")
@@ -1732,13 +1936,26 @@ in
         ):
             assert os.path.isfile(os.path.join(batch_base, rel)), rel
 
+        guard_base = os.path.join(root, "Contents", "mods", "PZBandageGuard", "42")
+        guard_info = os.path.join(guard_base, "mod.info")
+        assert os.path.isfile(guard_info), guard_info
+        guard_text = open(guard_info).read()
+        assert "id=PZBandageGuard" in guard_text, guard_text
+        assert "require=" not in guard_text, guard_text
+        for rel in (
+            "media/lua/client/PZBandageGuard/menu.lua",
+            "media/lua/shared/PZBandageGuard/guard.lua",
+            "media/lua/shared/Translate/EN/IG_UI.json",
+        ):
+            assert os.path.isfile(os.path.join(guard_base, rel)), rel
+
         assert os.path.isfile(
             os.path.join(root, "Contents", "mods", "PZPackWebBundled",
                          "42", "media", "lua", "shared", "PZPackWeb", "manifest.lua")
         ), "the connector mod is missing"
         txt = open(os.path.join(root, "workshop.txt")).read()
         assert ("bundles our own in-repo helper mod(s): PZButcherAll, PZAreaTasksFilter, "
-                "PZAreaTasksBatchMove") in txt, txt
+                "PZAreaTasksBatchMove, PZBandageGuard") in txt, txt
         PY
         ( cd "$TMPDIR/bundled/Contents/mods/PZButcherAll/42/media/lua" \
           && lua -e "assert(loadfile('client/PZButcherAll/ButcherAll.lua')); assert(loadfile('shared/PZButcherAll/scan.lua'))" ) \
@@ -1749,7 +1966,10 @@ in
         ( cd "$TMPDIR/bundled/Contents/mods/PZAreaTasksBatchMove/42/media/lua" \
           && lua -e "assert(loadfile('client/PZAreaTasksBatchMove/hooks.lua')); assert(loadfile('client/PZAreaTasksBatchMove/init.lua')); assert(loadfile('shared/PZAreaTasksBatchMove/batching.lua'))" ) \
           || fail "the bundled batch-move mod Lua does not parse"
-        grep -qx 'loadModAfter=ZombieButchery,AreaTasks,PZButcherAll,PZAreaTasksFilter,PZAreaTasksBatchMove' \
+        ( cd "$TMPDIR/bundled/Contents/mods/PZBandageGuard/42/media/lua" \
+          && lua -e "assert(loadfile('client/PZBandageGuard/menu.lua')); assert(loadfile('shared/PZBandageGuard/guard.lua'))" ) \
+          || fail "the bundled bandage guard Lua does not parse"
+        grep -qx 'loadModAfter=ZombieButchery,AreaTasks,PZButcherAll,PZAreaTasksFilter,PZAreaTasksBatchMove,PZBandageGuard' \
           "$TMPDIR/bundled/Contents/mods/PZPackWebBundled/42/mod.info" \
           || fail "the connector does not order itself after the bundled mods"
 
