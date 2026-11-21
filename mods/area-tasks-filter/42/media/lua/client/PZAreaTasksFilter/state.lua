@@ -23,6 +23,22 @@ local function log(message)
     print("[PZAreaTasksFilter] " .. tostring(message))
 end
 
+-- Call an optional method and return a non-empty string, or nil.
+--
+-- The method is looked up before it is called. A script item has no
+-- `getCategory`, and `pcall(function() return script:getCategory() end)` still
+-- makes the engine log "Object tried to call nil in pcall" once per call -
+-- roughly once per item script each time the editor opened. Probing the field
+-- first means a missing method is simply absent instead of an error.
+function State.textOf(object, method)
+    if object == nil then return nil end
+    local ok, fn = pcall(function() return object[method] end)
+    if not ok or type(fn) ~= "function" then return nil end
+    local called, value = pcall(fn, object)
+    if not called or type(value) ~= "string" or value == "" then return nil end
+    return value
+end
+
 function State.load()
     local text = nil
     pcall(function()
@@ -73,14 +89,7 @@ end
 -- `getCategory`. Anything unexpected yields nil, which means "item type only".
 function State.itemCategory(item)
     if not item then return nil end
-    local category = nil
-    pcall(function() category = item:getDisplayCategory() end)
-    if type(category) ~= "string" or category == "" then
-        category = nil
-        pcall(function() category = item:getCategory() end)
-    end
-    if type(category) ~= "string" or category == "" then return nil end
-    return category
+    return State.textOf(item, "getDisplayCategory") or State.textOf(item, "getCategory")
 end
 
 -- Every category an item answers to, deduplicated: the live instance's
@@ -99,14 +108,10 @@ local function scriptCategories(fullType)
     local out = { }
     local ok, script = pcall(function() return getScriptManager():FindItem(fullType) end)
     if ok and script then
-        pcall(function()
-            local category = script:getDisplayCategory()
-            if type(category) == "string" and category ~= "" then out[#out + 1] = category end
-        end)
-        pcall(function()
-            local category = script:getCategory()
-            if type(category) == "string" and category ~= "" then out[#out + 1] = category end
-        end)
+        local category = State.textOf(script, "getDisplayCategory")
+        if category then out[#out + 1] = category end
+        category = State.textOf(script, "getCategory")
+        if category then out[#out + 1] = category end
     end
     State.scriptCategories[fullType] = out
     return out
@@ -120,8 +125,8 @@ function State.itemCategories(item, fullType)
         seen[category] = true
         out[#out + 1] = category
     end
-    pcall(function() add(item:getDisplayCategory()) end)
-    pcall(function() add(item:getCategory()) end)
+    add(State.textOf(item, "getDisplayCategory"))
+    add(State.textOf(item, "getCategory"))
     if type(fullType) == "string" then
         for _, category in ipairs(scriptCategories(fullType)) do add(category) end
     end

@@ -75,12 +75,8 @@ local function buildCatalog()
                 }
                 -- Categories come from the scripts for the same reason the game
                 -- does it that way: no instance has to be created.
-                local category = nil
-                pcall(function() category = script:getDisplayCategory() end)
-                if type(category) ~= "string" or category == "" then
-                    category = nil
-                    pcall(function() category = script:getCategory() end)
-                end
+                local category = State.textOf(script, "getDisplayCategory")
+                    or State.textOf(script, "getCategory")
                 addCategory(categories, seenCategories, category)
             end
         end

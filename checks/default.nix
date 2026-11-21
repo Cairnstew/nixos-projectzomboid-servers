@@ -1304,6 +1304,12 @@ in
           || fail "no start confirmation hook"
         grep -q 'State.itemCategories' "$client/state.lua" \
           || fail "a category is matched on the live item only, not the script too"
+        grep -q 'State.textOf' "$client/state.lua" \
+          || fail "optional category methods are called unprobed (logs a pcall error per item)"
+        grep -q 'State.textOf(script' "$client/ui.lua" \
+          || fail "the editor calls a script method that does not exist"
+        ! grep -q 'script:getCategory()' "$client/ui.lua" \
+          || fail "the editor still calls script:getCategory() directly"
         grep -q 'filter excluded %s' "$client/state.lua" \
           || fail "no confirmation that a container source was actually filtered"        grep -q 'OnFillInventoryObjectContextMenu' "$client/menu.lua" \
           || fail "no inventory context-menu entry"
