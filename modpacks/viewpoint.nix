@@ -573,6 +573,14 @@
     { id = "3790089095"; title = "Better Corpse Burning"; }
     { id = "3684602722"; title = "Corpse Dumper"; }
     { id = "3812132807"; title = "[B42] MP Vanilla Zombie Corpse Fix"; }
+    # The stable root only: the item also ships `StarvingZombiesWIP`, and the
+    # two declare each other incompatible. MP-tagged, with the smell pass on an
+    # O(1) rotating index per the mod's own comment, and MP guards on every path.
+    # Its defaults delete half a corpse's items as it is eaten
+    # (`ItemDestroyChance = 50`) and let zombies smell players from 50 tiles; the
+    # first competes with the butchery economy above and the second with DEZ, so
+    # both are the levers to pin if the pack's balance should be kept.
+    { id = "3396867685"; title = "Starving Zombies [B42]"; } # StarvingZombies only, not StarvingZombiesWIP
     { id = "3818966539"; title = "Viewpoint 42.21 Corpse Menu Fix"; }
 
     # Additional, non-overlapping corpse mechanics: chipper/compost, vehicle
@@ -1398,6 +1406,11 @@
     "BetterCorpseBurning"
     "CorpseDumper"
     "B42MPZombieCorpseFix"
+    # Stable root only; the WIP sibling in the same item is mutually
+    # incompatible. No require=/loadModAfter=, so its position here is the
+    # corpse group. Its own audience is the corpse list, capped at three
+    # zombies per body.
+    "StarvingZombies"
     "Viewpoint 42.21 Corpse Menu Fix"
     "Mulch"
     "CorpseTowing"

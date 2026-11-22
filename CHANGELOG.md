@@ -8,6 +8,25 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Starving Zombies in the `viewpoint` pack.** `modpacks/viewpoint.nix` adds
+  **Starving Zombies** (`3396867685`, Mod ID `StarvingZombies`); the pack is now
+  443 Workshop items / 488 mods. It is a smell model, not a spawner: corpses and
+  players emit a cone that follows wind direction and speed plus a
+  wind-independent circle, and idle zombies with no current target are pathed to
+  it, capped at three per body. The item also ships `StarvingZombiesWIP`, which
+  declares `incompatible=StarvingZombies`, so only the stable root is enabled.
+  Cost model is a rotating index over the loaded cell's corpse list, one O(1)
+  slice per zombie update, so it does not scan; MP guards (`isRemoteZombie`,
+  `isServer`/`isCoopHost` around corpse replacement, a server-side
+  `OnClientCommand` eat handler) are present and deliberate. Every engine call
+  it makes exists in 42.22 (`setEatBodyTarget`, `getDeadBodys`,
+  `IsoDeadBody.removeDeadBody`/`getEatingZombies`, the B42 13-argument
+  `addZombiesInOutfit`), and `OnZombieUpdate` is registered in
+  `LuaEventManager`. Two defaults are balance levers left at the mod's values:
+  `ItemDestroyChance = 50` deletes half a corpse's items as it is eaten, which
+  competes with the butchery economy, and `CanSmellPlayer = true` at 50 tiles
+  stacks on Dynamic Evolution Z.
+
 - **Two custom skills in the `viewpoint` pack: Efficiency and Toughness.**
   `modpacks/viewpoint.nix` adds **Efficiency Skill Mod 2** (`3374408921`, Mod ID
   `efficiencySkillMod2`) and **[B41/B42] Toughness Skill** (`3545533939`, Mod ID
