@@ -741,6 +741,33 @@
     # one is active.
     { id = "3738738086"; title = "MP Fast Forward"; } # MPFastForward
 
+    # ── Skill books / progression across death ─────────────────────────────
+    # Skill Journal writes a survivor's reading state into a crafted journal and
+    # lets the next character read it back. It is here for its sandbox split,
+    # pinned in `defaultSandbox` below: `RecoveryPercentage = 0` refuses the
+    # skill-XP payout, while `RecoverSkillBookProgress` hands back the skill
+    # books and the XP multiplier they were worth, so a death costs the levels
+    # and not five re-reads of the same book ladder. The mod re-derives the
+    # boost from the restored page count the same way ISReadABook does
+    # (`SkillJournal.skillBookMultiplier`, matching maxMultiplier1..5), and when
+    # the engine has already dropped a multiplier the reader levelled out of, the
+    # recorded page count still carries it.
+    # Chosen over every other journal, because each of them bundles book state
+    # with XP and cannot be pinned to the reading half alone:
+    #   Skill Recovery Journal (2503622437) - recovery % and a one-time-use
+    #     toggle, but no option for books without skills; needs errorMagnifier
+    #     (already loaded for Interactive Tailoring) and declares Burd's
+    #     Survival Journals, Jeeve's Journals and its own Roy patch incompatible.
+    #   Liquid's Survival Journals (3741565717) - records "read progress and XP
+    #     multipliers", but pays skill XP in the same read; author states B42.20
+    #     only, unverified on 42.22.
+    #   LG Skill Journal (3779162647) - book bonus restored inside the same
+    #     notebook that pays XP totals, so the two cannot be separated.
+    #   Burd's Survival Journals (3639628777) - Full Recovery is the default and
+    #     balance is opt-in via diminishing returns; 23 MB of extra systems.
+    # One owner for reading: do not also enable any of the four above.
+    { id = "3776641628"; title = "Skill Journal"; } # SkillJournal
+
     # ── Plumbing / water supply ────────────────────────────────────────────
     # Carthon's Water Pipes is the maintained network here, with its Viewpoint
     # add-on in the same Workshop item. Slayer's original Water Pipes
@@ -1449,6 +1476,11 @@
     "SimpleReadWhileWalkingUpdated"
     "TrueSleep"
     "MPFastForward"
+    # Skill Journal ships client Lua (write/read actions, journal window) and
+    # server Lua (the recorded entry and the restore), so it must load on both
+    # sides. No require=/loadModAfter=, so its position here is just the pack's
+    # reading group. Its options are pinned in `defaultSandbox`.
+    "SkillJournal"
 
     # ── Plumbing / water supply ────────────────────────────────────────────
     # waterpipes -> its Viewpoint add-on -> the NoCollision add-on. Take A Bath
@@ -1633,7 +1665,9 @@
   # Area Tasks declares its seven options the same way (`AreaTasks.*`); the two
   # pinned below are its hard ceilings, so doubling them is the largest area and
   # destination distance the mod itself allows (25 -> 50 tiles, 50 -> 100).
-  sandboxNamespaces = [ "AutoAll" "AreaTasks" ];
+  # Skill Journal declares `SkillJournal.*` (one integer percentage, twelve
+  # booleans) and is the only one of these three whose values are booleans.
+  sandboxNamespaces = [ "AutoAll" "AreaTasks" "SkillJournal" ];
 
   # -1 = leave the player's Mod Options choice, 0 = force off for everyone,
   # 1 = force on. One owner per niche: Rip All Clothing owns ripping (it covers
@@ -1647,5 +1681,28 @@
     # Server-wide in multiplayer: every player's selection limit is this value.
     "AreaTasks.MaximumAreaDimension" = 50;
     "AreaTasks.MaximumDestinationDistance" = 100;
+
+    # Skill Journal as a reading ledger and nothing else. `RecoveryPercentage = 0`
+    # stops the skill-XP payout (`restore()` skips restoreSkills entirely, so no
+    # level is handed back and every one is earned again), while
+    # `RecoverSkillBookProgress` restores read books, page counts and the XP
+    # multiplier they were worth. Recipes travel with it: they are learned
+    # knowledge rather than XP, and the pack's crafting content is deep enough
+    # that re-finding a magazine gate is a chore, not a challenge. The remaining
+    # progression-bearing switches are forced off so the item stays small; flip
+    # any to `true` to let it carry that state too:
+    #   RecoverKills - zombie kill count
+    #   RecoverExerciseRegularity - the Fitness/Strength routine rhythm
+    #   RecoverFishRecords - the right-click-water species log
+    # Left at their own defaults: `RecoverWeight` (off) and `RecoverPreferences`
+    # (favourites/unwanted marks) carry no progression, and
+    # `MatchReaderLearningRate` / `CompoundingLoss` only matter to a non-zero XP
+    # payout.
+    "SkillJournal.RecoveryPercentage" = 0;
+    "SkillJournal.RecoverSkillBookProgress" = true;
+    "SkillJournal.RecoverKills" = false;
+    "SkillJournal.RecoverRecipes" = true;
+    "SkillJournal.RecoverExerciseRegularity" = false;
+    "SkillJournal.RecoverFishRecords" = false;
   };
 }

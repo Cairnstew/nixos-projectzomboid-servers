@@ -3,8 +3,8 @@
 This document tracks what each mod in the `viewpoint` pack adds in terms of progression avenues - skills, recipes, items, vehicles, mechanics, etc. Use this to understand the full scope of content and plan gameplay progression.
 
 **Pack:** `viewpoint` (Project Viewpoint Vanilla+)  
-**Last Updated:** 2026-11-07  
-**Total Mods:** 329 Workshop items + extras
+**Last Updated:** 2026-11-22  
+**Total Mods:** 437 Workshop items, 482 Mod IDs (4 bundled in-repo)
 
 ## Progression Categories
 
@@ -146,6 +146,16 @@ LiuDing_Tiles (3736154771), TryHonesty's Tiles (2844685624) and Erika's tiles
 | [B42.20] Detailed Descriptions for Occupations and Traits | 3387957272 | Info/QoL | Character planning help | Shows more details about occupations/traits for build planning. |
 | LG Tape XP Indicator | 3777587577 | UI/QoL | XP visibility | Shows XP gains clearly. |
 | Neat Crafting & Neat Building - XP & Mod Display | 3540503606 | UI/QoL | XP visibility for recipes | Shows XP per recipe/build and which skill. |
+| Skill Journal | 3776641628 | Skills/Death | Reading state survives death | Craft a journal, write your reading into it, read it back after death. The pack pins it to a reading ledger (`RecoveryPercentage = 0`, `RecoverSkillBookProgress = true`, `RecoverRecipes = true`): skill XP is **not** recovered, but the skill books, the XP multiplier they were worth and the learned recipes come back, so a new character does not re-read five volumes per skill or re-find a magazine gate. Kills, exercise regularity and fish records are forced off. |
+
+`viewpoint` deliberately keeps one owner for cross-death progression. Skill
+Journal is the only recovery mod in the pack, and the four alternatives were
+rejected because each bundles skill XP with the book state: Skill Recovery
+Journal (2503622437), Liquid's Survival Journals (3741565717), LG Skill Journal
+(3779162647) and Burd's Survival Journals (3639628777). Do not stack any of them
+with it — the reading restore is additive and two mods would both hand the
+multiplier back.
+
 
 ---
 

@@ -8,6 +8,29 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Skill Journal: skill-book multipliers survive death, XP does not.**
+  `modpacks/viewpoint.nix` adds **Skill Journal** (`3776641628`, Mod ID
+  `SkillJournal`). The pack pins it to a reading ledger rather than a recovery
+  mod: `SkillJournal.RecoveryPercentage = 0` refuses the skill-XP payout
+  (`restore()` skips `restoreSkills` entirely, so every level is earned again),
+  while `SkillJournal.RecoverSkillBookProgress = true` returns the skill books,
+  their page counts and the XP multiplier they were worth; `RecoverRecipes =
+  true` brings learned recipes along too, since they are known knowledge rather
+  than XP and the pack's magazine gates are numerous. A death therefore costs
+  the levels but not five re-reads of the same 1-2/3-4/5-6/7-8/9-10 ladder. The
+  mod re-derives the boost from the restored page count the way vanilla
+  `ISReadABook` does (`SkillJournal.skillBookMultiplier` mirrors
+  `maxMultiplier1..5`), so it still works after the engine has dropped a
+  multiplier the writer levelled out of. Kills, exercise regularity and fishing
+  records are forced off.
+  Writing is a timed action (150 s + 15 s per skill, capped at 600 s) and the
+  journal must be written before death and stashed or recovered from the corpse.
+  Chosen over Skill Recovery Journal (2503622437), Liquid's Survival Journals
+  (3741565717), LG Skill Journal (3779162647) and Burd's Survival Journals
+  (3639628777), each of which bundles book state with XP recovery and therefore
+  cannot be configured to do only this. No new bundled mod, so the connector
+  item does not need republishing.
+
 - **`PZBandageGuard`: stops the multiplayer bandage crash and returns the
   replaced dressing.** Vanilla `ISApplyBandage:complete()` dereferences
   `self.item` without a check, while on a client `start()` re-resolves the item
