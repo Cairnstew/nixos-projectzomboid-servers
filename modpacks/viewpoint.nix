@@ -470,6 +470,28 @@
     { id = "3793407081"; title = "Remove Debris (Tree Stumps & Boulders) / Delete Trash Tiles"; }
     { id = "3779330500"; title = "VRO Salvage Condition Lock"; }
 
+    # ── Metalworking / powered workstations ────────────────────────────────
+    # Nothing else in this pack owns the station niche: Machinery adds three
+    # table saws, a drill press, bench grinder, lathe, hydraulic press, bandsaw
+    # and bulk propane storage, each with serviceable parts, power/fuel and its
+    # own window. MP-tagged, with both client and server Lua; it defines its own
+    # `entity` scripts and overwrites no vanilla file. Constructed through the
+    # vanilla Building Menu via a CraftRecipe component, so Knox Buildworks is
+    # not needed (it is deliberately excluded above and Machinery's own
+    # `media/KnoxBuildworks/` definitions stay inert without it). Neat Building
+    # only replaces the window and still exposes the original Build menu, but
+    # confirm the new entities are listed in its catalogue. These stations ship
+    # no Viewpoint 3D models — Workstations Overhaul is decorative and does not
+    # cover them, so expect flat sprites in first person.
+    { id = "3780027195"; title = "[B42] Machinery"; } # Machinery
+    # Add-on, not a dependency of the base mod: `loadModAfter=Machinery` only,
+    # with no `require=`, so it is enabled solely alongside Machinery above.
+    # It fully replaces ISTableSawMachineWindow methods (buildOperationRequirements,
+    # refreshControlsInner) against the current Machinery build, so treat every
+    # Machinery update as a possible recipe-UI break. It also moves forging onto
+    # the lathe/press without charcoal or blacksmith tools.
+    { id = "3807360837"; title = "More Machinery Recipes"; } # Rebbart_MachineryMoreRecipes
+
     # ── Construction / carpentry ───────────────────────────────────────────
     # Neat Building replaces the vanilla Build UI and adds railings/extra
     # buildables; NeatUI Framework (Beekeeping section) must load before it.
@@ -617,6 +639,11 @@
     # only) that gives vanilla herbs and wild plants more uses. BADLANDS
     # Mycology already owns the mushroom niche, so no second mycology mod.
     { id = "3507997225"; title = "Foraging Tooltip Extended [B42]"; }
+    # Same author as the tooltip above, MP-tagged and tested on 42.20.2 MP.
+    # Vanilla dropped forage-icon discard in 42.13; this restores the 42.12
+    # implementation on a mouse binding. Client-only UI, and the discard itself
+    # is written back through zone data so it syncs instead of ghosting an icon.
+    { id = "3593442524"; title = "Quick Forage Icon Discard [B42]"; } # Ivmakk_QuickForageIconDiscard
     { id = "2618566294"; title = "Wild Fruits"; }
     { id = "3753259986"; title = "Ethnobotany Vanilla [B42]"; }
 
@@ -1326,6 +1353,13 @@
     "KentuckyWorkstationSalvage"
     "TFC_RemoveDebrisMod"
 
+    # ── Metalworking / powered workstations ────────────────────────────────
+    # Machinery owns the stations; More Machinery Recipes patches its saw
+    # window functions, so `loadModAfter=Machinery` is load order, not a
+    # dependency, and the add-on must follow the base mod.
+    "Machinery"
+    "Rebbart_MachineryMoreRecipes"
+
     # ── Lockpicking / entry / locks ────────────────────────────────────────
     # Standalone (no require=/loadModAfter=); its own server unit handles all
     # state, so it has no dependency on any other mod in the pack.
@@ -1391,6 +1425,7 @@
     # ── Foraging / wild food ───────────────────────────────────────────────
     # UI first, then the forage definitions, then the recipe-only mod.
     "Ivmakk_ForagingTooltipExtended"
+    "Ivmakk_QuickForageIconDiscard"
     "MattSimpleAddonsFriuts"
     "EthnobotanyVanillaB42"
 

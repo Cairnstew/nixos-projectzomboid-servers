@@ -8,6 +8,47 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Metalworking workstations and forage-icon discard in the `viewpoint` pack.**
+  `modpacks/viewpoint.nix` adds **[B42] Machinery** (`3780027195`, Mod ID
+  `Machinery`) with **More Machinery Recipes** (`3807360837`, Mod ID
+  `Rebbart_MachineryMoreRecipes`) and **Quick Forage Icon Discard** (`3593442524`,
+  Mod ID `Ivmakk_QuickForageIconDiscard`); the pack is now 440 Workshop items /
+  485 mods.
+  Machinery owns a niche nothing else in the pack covers: three table saws, a
+  standing drill press, bench grinder, metalwork lathe, hydraulic press, metal
+  bandsaw and bulk propane storage, each with serviceable parts, grid/generator
+  power or gasoline, server-authoritative Metalworking XP and its own window. It
+  is MP-tagged with both client and server Lua, ships its own `entity` scripts
+  and overwrites no vanilla file, so it is safe next to the rest of the pack. It
+  constructs through the vanilla Building Menu's `CraftRecipe` component, which
+  means Knox Buildworks is not required (it stays excluded; Machinery's own
+  `media/KnoxBuildworks/` definitions are inert without it) and Neat Building,
+  which still exposes the original Build menu, is the fallback if its catalogue
+  does not list the new entities. Two caveats recorded in the pack: the machines
+  ship no Viewpoint 3D models (Workstations Overhaul is decorative and does not
+  cover them), and `Machinery.Service` calls `IsoGridSquare:getObjects()` from
+  Lua, the API 42.22 changed for Java mods — verified by a server boot rather
+  than assumed.
+  More Machinery Recipes is additive, not required: it declares
+  `loadModAfter=Machinery` but no `require=`, so it must never be enabled
+  without the base mod. It replaces `ISTableSawMachineWindow` methods wholesale,
+  so a Machinery update can break its recipe UI, and it removes charcoal and
+  blacksmith tools from forging — enabled deliberately, drop it if that reads as
+  a shortcut.
+  Quick Forage Icon Discard restores the forage-icon discard vanilla removed in
+  42.13 (B42.12 implementation, right mouse by default), is client-only and
+  writes the discard through zone data so it syncs in multiplayer. It is from
+  the author of Foraging Tooltip Extended, already in the pack.
+  Deliberately not added: **[B42] Water Pipes** (`3546314080`). It ships Mod ID
+  `Waterpipes`, while the pack already runs `waterpipes` + `waterpipesviewpoint`
+  from `3739595559` (`modpacks/viewpoint.nix` plumbing block); two providers of
+  the same build entities and the same `WaterpipesRemoved` safe-uninstall stub
+  would collide, and the item under use is the one with the Viewpoint add-on.
+  **Viewpoint Foraging** (`3814994364`) is also held back: it is built for
+  42.21 against Viewpoint before 0.1.7, is the same Java-add-on class as the
+  Surface Fix/Door Fix removals, and its author states multiplayer is untested;
+  restore it only after a 42.22 client test.
+
 - **Skill Journal: skill-book multipliers survive death, XP does not.**
   `modpacks/viewpoint.nix` adds **Skill Journal** (`3776641628`, Mod ID
   `SkillJournal`). The pack pins it to a reading ledger rather than a recovery
