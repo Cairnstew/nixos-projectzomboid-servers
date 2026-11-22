@@ -795,6 +795,25 @@
     # One owner for reading: do not also enable any of the four above.
     { id = "3776641628"; title = "Skill Journal"; } # SkillJournal
 
+    # ── New skills ─────────────────────────────────────────────────────────
+    # Both perks use the standard B42 path (`media/perks.txt` plus
+    # `media/registries.lua`), the same files Project Parkour and Horse Mod
+    # already load here, and neither declares require= or loadModAfter=.
+    # Efficiency ships three mod roots: `efficiencySkillMod2` is the B42 build,
+    # while the original and the Legacy root define the same Efficiency perk and
+    # traits, so enabling more than one duplicates them. Its page lists B42
+    # multiplayer as untested; the XP path is client command -> server with a
+    # server-side cap, and the action-speed hook is client-side. It also adds a
+    # profession and two traits, namespaced `effskill:*` so they cannot collide
+    # with This Is Me / Kentucky / Hephas.
+    { id = "3374408921"; title = "Efficiency Skill Mod 2"; } # efficiencySkillMod2 only, not the legacy/original roots
+    # Toughness is the gradual alternative to Become Desensitized: panic, pain
+    # and discomfort fall as the perk levels from zombie kills. MP-tagged, and
+    # XP is guarded by `isLocalPlayer`, so a dedicated server never double
+    # grants. It rewrites those three stats from a cached baseline on every
+    # player update, so no second mod may touch panic/pain/discomfort.
+    { id = "3545533939"; title = "[B41/B42] Toughness Skill"; } # ToughnessSkill
+
     # ── Plumbing / water supply ────────────────────────────────────────────
     # Carthon's Water Pipes is the maintained network here, with its Viewpoint
     # add-on in the same Workshop item. Slayer's original Water Pipes
@@ -1547,6 +1566,17 @@
     "BetterGeneratorInfo"
     "Battery Drain Multiplier"
     "GeneratorHose"
+
+    # ── New skills ─────────────────────────────────────────────────────────
+    # Custom perks (`Efficiency`, `Toughness`) from media/perks.txt plus a B42
+    # registries.lua, the mechanism Project Parkour and Horse Mod already use.
+    # Efficiency replaces ISBaseTimedAction:adjustMaxTime and wraps
+    # ISTimedActionQueue.add/addAfter for every timed action, so it loads after
+    # the mods whose actions it wraps and captures their final hooks; Toughness
+    # only reads the local player's stats, so its position is free and it
+    # follows Efficiency to keep the group together.
+    "efficiencySkillMod2" # only root in item 3374408921 that targets 42.13+
+    "ToughnessSkill"
 
     # ── Difficulty / threat escalation ─────────────────────────────────────
     # Loaded last so their Lua hooks see the full mod set. DEZ and The Horde Is

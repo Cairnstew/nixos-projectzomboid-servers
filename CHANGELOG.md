@@ -8,6 +8,37 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Two custom skills in the `viewpoint` pack: Efficiency and Toughness.**
+  `modpacks/viewpoint.nix` adds **Efficiency Skill Mod 2** (`3374408921`, Mod ID
+  `efficiencySkillMod2`) and **[B41/B42] Toughness Skill** (`3545533939`, Mod ID
+  `ToughnessSkill`); the pack is now 442 Workshop items / 487 mods.
+  Both register through the standard B42 path (`media/perks.txt` plus
+  `media/registries.lua`), the same files Project Parkour and Horse Mod already
+  load on this server, so the mechanism is proven on 42.22 rather than assumed.
+  Efficiency is a global action-speed perk: it replaces
+  `ISBaseTimedAction:adjustMaxTime` and wraps `ISTimedActionQueue.add/addAfter`,
+  scaling every timed action by 1.4x at level 2, 1.0x at 3 and 0.3x at 10, so it
+  is placed after the mods whose actions it wraps and it also speeds up
+  Machinery's station jobs, Area Tasks moves and Auto All. XP is
+  client-authoritative via `sendClientCommand` with a server-side cap of 1000
+  per command; the item ships three mod roots and only `efficiencySkillMod2`
+  targets 42.13+, while the original and the Legacy root define the same perk
+  and traits, so they must never be enabled alongside it. Its author lists B42
+  multiplayer as untested, which is the one property the other entries in this
+  pack usually carry. Toughness is the gradual alternative to Become
+  Desensitized: each level cuts panic, pain and discomfort, XP comes from zombie
+  kills, and it is MP-tagged with `isLocalPlayer` guards on every XP grant, so a
+  dedicated server never double-pays. It rewrites those three stats from a
+  cached baseline on every player update, so it owns panic/pain/discomfort and
+  no second mod may touch them. Both are sandbox-tunable
+  (`MultiplierConfig.Efficiency`/`Toughness` for XP, plus per-level time
+  multipliers and per-stat reduction switches) and neither option is pinned.
+  **Here Goes the Sun** (`3618557184`) was reviewed and rejected: its dawn/dusk
+  palettes and storm mood write the same `ClimateManager` values that Project
+  Viewpoint: True Weathers already grades via `vptw/Ambient.java` and `Skies.java`,
+  and its god rays are a fixed screen-space overlay that cannot track the sun
+  under Viewpoint's camera.
+
 - **Metalworking workstations and forage-icon discard in the `viewpoint` pack.**
   `modpacks/viewpoint.nix` adds **[B42] Machinery** (`3780027195`, Mod ID
   `Machinery`) with **More Machinery Recipes** (`3807360837`, Mod ID
