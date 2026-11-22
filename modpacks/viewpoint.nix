@@ -199,6 +199,17 @@
     { id = "3812616893"; title = "Viewpoint - Interface"; } # ViewpointUI
     { id = "3818941548"; title = "Viewpoint - Proper Roofs"; }
     { id = "3828755546"; title = "Viewpoint's Workstations Overhaul"; }
+    # Viewpoint replaces IsoCell.render, and the vanilla placement/build cursor
+    # is driven from inside that render, so the Rotate Building key reaches a
+    # cursor that is never advanced. This replays the game's own DoBuilding with
+    # Viewpoint's 3D hit (rotate included, plus Shift+Rotate for the reverse
+    # facing) and draws the ghost in the 3D scene; validity, materials, the timed
+    # action and the final object stay vanilla. Client Lua + Java under
+    # ZombieBuddy, and it runs from the Java companion on a server that does not
+    # list it. Load after Viewpoint and every model pack. Published 2026-10-26,
+    # before Viewpoint 0.1.7, and it drives the same cursors ViewpointUI's own
+    # Build/Cursor modes drive, so the pair needs one client test.
+    { id = "3816521966"; title = "Viewpoint Placement Fix"; } # ViewpointPlacementFix
     { id = "3806955469"; title = "True Cargo - Project Full HD"; }
     { id = "3781616141"; title = "[B42.20+] Vehicle Aim Roof Fix"; }
     { id = "3785695033"; title = "[B42.20+] Vehicle Enter/Exit Fix"; }
@@ -1112,6 +1123,10 @@
     "ViewpointProperRoofs"
     "ViewpointUI"
     "ViewpointWorkstations3D"
+    # Placement Fix replays the vanilla build cursor (rotation included) and
+    # must come after Viewpoint and the model packs above; it is the fix for the
+    # build cursor never being driven while Viewpoint draws the world.
+    "ViewpointPlacementFix"
     "PFHDTrueCargo"
     "CarRoofFix"
     "CarEnterExitFix"

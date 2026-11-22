@@ -8,6 +8,26 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Viewpoint Placement Fix in the `viewpoint` pack.** `modpacks/viewpoint.nix`
+  adds **Viewpoint Placement Fix** (`3816521966`, Mod ID
+  `ViewpointPlacementFix`); the pack is now 444 Workshop items / 489 mods. The
+  build cursor is advanced from inside `IsoCell.render`, which Viewpoint
+  replaces, so the Rotate Building key reached a cursor whose `nSprite` was never
+  turned into a face and the 3D ghost never lined up with the world. The mod
+  replays the game's own `DoBuilding` against Viewpoint's 3D hit and renders the
+  ghost inside the scene, so rotation (and Shift+Rotate for the reverse facing)
+  works, while validity, materials, the timed action and the final object stay
+  vanilla. It is client Lua plus a Java companion loaded by ZombieBuddy, runs
+  from that companion on a server that does not list it, and must load after
+  Viewpoint and every model pack, which is where it sits. Published
+  2026-10-26, i.e. before Viewpoint 0.1.7, and it drives the same cursors
+  ViewpointUI's Build/Cursor modes drive, so the pair needs one client test.
+  Isometric rotation is a separate question: no mod in this pack overrides
+  `ISBuildingObject`/`ISBuildIsoEntity`, replaces those files wholly, or
+  rebinds `ROTATE_BUILDING`, so if the key fails outside Viewpoint's view the
+  remaining suspects are ViewpointUI's build mode (it renders a rotate hint but
+  has no rotate handler) and the keybinding itself.
+
 - **Starving Zombies in the `viewpoint` pack.** `modpacks/viewpoint.nix` adds
   **Starving Zombies** (`3396867685`, Mod ID `StarvingZombies`); the pack is now
   443 Workshop items / 488 mods. It is a smell model, not a spawner: corpses and
