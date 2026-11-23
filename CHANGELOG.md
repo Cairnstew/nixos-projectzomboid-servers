@@ -8,6 +8,21 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Eat Stack Button in the `viewpoint` pack.** `modpacks/viewpoint.nix` adds
+  **[42] Eat Stack Button** (`3657973935`, Mod ID `UnclearEatStackButton`); the
+  pack is now 445 Workshop items / 491 mods. Eating a stack of berries,
+  vegetables or sodas meant one right-click per item. The mod adds a single
+  "Eat Stack" line to a stack's context menu and queues the vanilla eat action
+  once per item, so the character still eats at the normal rate. It also has a
+  server half (`media/lua/server/UnclearEatStackCommands.lua`): the client sends
+  `EatStack.FinishEat` and the server re-validates the item — still in that
+  player's inventory, `Food`, not `isCantEat`, moodle `FOOD_EATEN` below 3 —
+  before calling `player:Eat`, so the stack cannot be consumed twice or out of
+  another player's inventory. No sandbox options, no
+  `require=`/`loadModAfter=`. Eat All Stack (`3692272647`) was deliberately not
+  stacked with it: it adds the same line plus "Drink All (Stack)", and two
+  handlers would each queue the same stack.
+
 - **Container routing for Area Tasks in the `viewpoint` pack**
   (`PZAreaTasksContainerRouting`, `mods/area-tasks-container-routing/`). Area
   Tasks picks, per item, the first destination container with room; Manage

@@ -3,8 +3,8 @@
 This document tracks what each mod in the `viewpoint` pack adds in terms of progression avenues - skills, recipes, items, vehicles, mechanics, etc. Use this to understand the full scope of content and plan gameplay progression.
 
 **Pack:** `viewpoint` (Project Viewpoint Vanilla+)  
-**Last Updated:** 2026-11-22  
-**Total Mods:** 437 Workshop items, 482 Mod IDs (4 bundled in-repo)
+**Last Updated:** 2026-11-23  
+**Total Mods:** 445 Workshop items, 491 Mod IDs (5 bundled in-repo)
 
 ## Progression Categories
 
@@ -261,6 +261,7 @@ These improve UX but don't add new content/progression paths:
 | [B41/42] Minimal Sidebar (Auto Hide) | 3642084851 | UI clutter reduction |
 | [B42.20] Carry Visible Items In Hands [WIP] | 3749026793 | Visual feedback |
 | Quick Actions | 3082160142 | Quick context actions |
+| [42] Eat Stack Button | 3657973935 | Eats a whole food stack from one right-click |
 | [B42] More Item Information | 3494474677 | Enhanced item tooltips |
 
 Fuel Side Indicator is deliberately not in the pack: its Workshop id no longer

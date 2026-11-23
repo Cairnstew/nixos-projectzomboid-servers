@@ -395,6 +395,20 @@
     # this pack's inventory mods).
     { id = "3777237134"; title = "[B42.20] Auto All - Cook, Medicine, Read, Clean, Rip, Tailoring, Mechanics, Exercise, Reload, Open & Dismantle"; } # AutoAll
 
+    # ── Eating convenience ─────────────────────────────────────────────────
+    # Eat Stack Button adds one "Eat Stack" line to a food stack's context
+    # menu and queues the vanilla eat action once per item. It ships a client
+    # and a server half: the client sends `EatStack.FinishEat`, and the server
+    # re-checks each item (still in that player's inventory, `Food`, not
+    # `isCantEat`, moodle FOOD_EATEN below 3) before calling `player:Eat`, so
+    # consumption stays server-authoritative at the vanilla pace. One context
+    # line only; no sandbox options, no require=/loadModAfter=.
+    # Deliberately not stacked with Eat All Stack (3692272647): that adds the
+    # same line plus "Drink All (Stack)", and two handlers would each queue the
+    # same stack. This build is kept because it carries the Workshop
+    # `Multiplayer` tag and has the server half Eat All Stack lacks.
+    { id = "3657973935"; title = "[42] Eat Stack Button"; } # UnclearEatStackButton
+
     # ── Sewing / tailoring progression ──────────────────────────────────────
     # All Build 42 and multiplayer-safe (Workshop `Multiplayer` tag, or verified
     # from the download: items/recipes/shared Lua only). Dependencies first:
@@ -1306,6 +1320,10 @@
     # One mod id; no require=/loadModAfter=, so position is free. Rip and
     # farming are forced off here via SandboxVars.AutoAll (see defaultSandbox).
     "AutoAll"
+
+    # ── Eating convenience ─────────────────────────────────────────────────
+    # Client + server halves of one mod; no require=/loadModAfter=.
+    "UnclearEatStackButton"
 
     # ── Sewing / tailoring progression ──────────────────────────────────────
     # Load order: dependencies before dependents; AdvancedFabricsMP last.
