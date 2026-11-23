@@ -129,7 +129,11 @@ end
 
 local notices = { }
 
-local function notice(playerObj, item, fullType)
+-- The category is the value the preset test actually compares against, so it
+-- belongs in the message: it is what tells the player which Manage Containers
+-- category is missing (e.g. an item that reads "ClothLeg" against a container
+-- configured for the vanilla "Clothing").
+local function notice(playerObj, item, fullType, category)
     local now = getTimestampMs and getTimestampMs() or 0
     local key = fullType or "?"
     if notices[key] and now - notices[key] < NOTICE_INTERVAL_MS then return end
@@ -137,8 +141,9 @@ local function notice(playerObj, item, fullType)
 
     local okName, name = pcall(function() return item:getName() end)
     local text = "Area Tasks: no configured container accepts " ..
-        tostring(okName and name or "that item")
-    log(text .. " (" .. tostring(key) .. ")")
+        tostring(okName and name or "that item") ..
+        " (" .. tostring(category or "no category") .. ")"
+    log(text .. " [" .. tostring(key) .. "]")
     if HaloTextHelper and HaloTextHelper.addText then
         pcall(HaloTextHelper.addText, playerObj, text, 1.0, 0.55, 0.2)
     end
@@ -168,7 +173,7 @@ local function wrapped(playerObj, containers, item, reservations)
     -- former is this adapter's doing, and only when the item would have fitted
     -- somewhere. The throwaway reservations table is not the caller's.
     if rejectedByPreset and original(playerObj, containers, item, { }) then
-        notice(playerObj, item, fullType)
+        notice(playerObj, item, fullType, category)
     end
     return nil
 end

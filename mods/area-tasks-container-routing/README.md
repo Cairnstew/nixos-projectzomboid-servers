@@ -28,11 +28,23 @@ to the pantry, axes to the tool crate, and neither ends up in the other.
 
 **Fails cleanly.** An item that no selected destination container accepts (or
 that cannot fit anywhere) stays where it is; the route continues with the rest
-and one line names the item (`Area Tasks: no configured container accepts
-<item>`, once per item type per 15 s). Nothing is dropped into an arbitrary
+and one line names the item *and the category the preset test compared*
+(`Area Tasks: no configured container accepts Trousers_Fireman (ClothLeg)`,
+once per item type per 15 s). The category is the useful part: it says which
+Manage Containers category is missing. Nothing is dropped into an arbitrary
 container and the job does not stop with items in hand. Capacity failures keep
 upstream's own message, because the notice fires only when the item would
 otherwise have fitted.
+
+**Categories come from the item list, not from the script name.** Better Sort
+(`BetterSortCC`) rewrites `DisplayCategory`, so vanilla `Clothing` becomes
+`ClothBody` / `ClothLeg` / `ClothFeet` / `ClothAcc` / `ClothBack` / `ClothBag`,
+and tools become `ToolC` / `ToolM`. A container configured with the vanilla
+`Clothing` category therefore accepts nothing that Better Sort has re-tagged —
+the same thing happens with Manage Containers' own "Put in assigned
+containers". If a whole family is left behind, configure the container with the
+`Cloth*` categories (Manage Containers' "Set Categories From Container" with
+one sample of each in it does this in one click) and not with `Clothing`.
 
 Not touched, deliberately:
 

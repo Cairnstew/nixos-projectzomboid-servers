@@ -36,8 +36,14 @@ All notable changes to this project. Format follows
   across `Containers (Area)`, `Vehicles (Area)` and vehicle-storage
   destinations, including the ground-item pickup decision that uses the same
   call. An item no destination accepts is never picked up, the route continues
-  with the rest, and one line names the item ("no configured container accepts
-  …"), throttled per type; capacity stops keep upstream's message. It is inert
+  with the rest, and one line names the item *and its category* ("no configured
+  container accepts Trousers_Fireman (ClothLeg)"), throttled per type; capacity
+  stops keep upstream's message. The category matters because Better Sort
+  rewrites `DisplayCategory` — vanilla `Clothing` becomes `ClothBody` /
+  `ClothLeg` / `ClothFeet` / `ClothAcc` / `ClothBack` / `ClothBag` (and tools
+  `ToolC` / `ToolM`), so a container configured for `Clothing` accepts none of
+  the re-tagged items, exactly as with Manage Containers' own "Put in assigned
+  containers". It is inert
   without Area Tasks API 1 or without Manage Containers, reads container config
   through `ISConfigureContainerWindow.getContainerData` (legacy per-player
   configs read-only, never created), and treats an emptied rule as
