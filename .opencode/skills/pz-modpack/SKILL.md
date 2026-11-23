@@ -237,6 +237,16 @@ A real file patch is possible (same `42/media/…` relative path, loaded after t
 target) but is a maintenance cost: a stale override silently shadows the
 upstream fix. See `docs/plans/pack-web.md`.
 
+## Deploying an update to the hosts
+
+A pack change is only live once it is pushed: the consumer (`nixos-config`)
+pins this repo by branch, so `git push` is the release. The `/pz-deploy`
+command (the `pz-deploy` skill) commits and pushes the catalogue change, then
+on each host bumps the `project-zomboid-servers` input in `~/nixos-config`,
+activates it with `nix run`, and verifies the dedicated server loaded the pack.
+Use it for `desktop` and `server` rather than repeating the steps by hand. The
+full runbook is `.opencode/skills/pz-deploy/SKILL.md`.
+
 ## Without a NixOS host
 
 ```bash
