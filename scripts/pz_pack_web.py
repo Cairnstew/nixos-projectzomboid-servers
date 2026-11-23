@@ -77,16 +77,13 @@ REPO_ROOT = os.environ.get("PZ_REPO_ROOT") or os.path.dirname(
 
 # In-repo mods the connector item can carry as SIBLING mod roots. A pack opts in
 # with `bundledMods = [ "<mod id>" ]`, and each id must also be in `mods`, so the
-# game loads it. Paths are relative to the repository root; `PZ_REPO_ROOT` makes
-# the same lookup work when Nix runs the script from a store path.
-# This is transport, not a patch: each bundled mod is our own code and overrides
-# nothing in the connector or in another author's mod.
-BUNDLED_MODS = {
-    "PZButcherAll": os.path.join("mods", "butcher-all"),
-    "PZAreaTasksFilter": os.path.join("mods", "area-tasks-filter"),
-    "PZAreaTasksBatchMove": os.path.join("mods", "area-tasks-batch-move"),
-    "PZBandageGuard": os.path.join("mods", "bandage-guard"),
-}
+# game loads it. This is transport, not a patch: each bundled mod is our own code
+# and overrides nothing in the connector or in another author's mod.
+#
+# The map is derived from `mods/*/<version>/mod.info`, not kept by hand. A table
+# had to be edited in a second commit for every new bundled mod, and forgetting
+# it made the connector un-regenerable ("no in-repo source") long after the pack
+# already declared the mod. The tree is the single source of truth for a Mod ID.
 
 
 def read_mod_id(path):
@@ -99,6 +96,35 @@ def read_mod_id(path):
     except OSError:
         return ""
     return ""
+
+
+def bundled_mod_sources():
+    """Map each in-repo mod's declared Mod ID to its folder under `mods/`.
+
+    B42 helper mods keep their metadata in `<version>/mod.info`, so the first
+    version folder that has one decides the id. `PZ_REPO_ROOT` makes the scan
+    work when Nix runs the script from a store path.
+    """
+    sources = {}
+    mods_dir = os.path.join(REPO_ROOT, "mods")
+    try:
+        slugs = sorted(os.listdir(mods_dir))
+    except OSError:
+        return sources
+    for slug in slugs:
+        root = os.path.join(mods_dir, slug)
+        if not os.path.isdir(root):
+            continue
+        for version_dir in ("42", "common", "41"):
+            info = os.path.join(root, version_dir, "mod.info")
+            if os.path.isfile(info):
+                mod_id = read_mod_id(info)
+                # Duplicate ids would be a catalogue bug; first slug wins so the
+                # result stays deterministic across filesystems.
+                if mod_id:
+                    sources.setdefault(mod_id, os.path.join("mods", slug))
+                break
+    return sources
 
 
 def copy_bundled_mods(pack_data, item):
@@ -114,15 +140,19 @@ def copy_bundled_mods(pack_data, item):
     mods = pack_data.get("mods") or []
 
     copied = []
+    sources = bundled_mod_sources()
     for mod_id in bundled:
         if mod_id not in mods:
             raise SystemExit(
                 f"pz-pack-web: bundledMod {mod_id!r} is not in the pack's mods list; "
                 "the item would ship it and the game would never load it"
             )
-        relative = BUNDLED_MODS.get(mod_id)
+        relative = sources.get(mod_id)
         if not relative:
-            raise SystemExit(f"pz-pack-web: no in-repo source for bundled mod {mod_id!r}")
+            raise SystemExit(
+                f"pz-pack-web: no in-repo source for bundled mod {mod_id!r} "
+                f"(no mods/*/<version>/mod.info declares that id under {REPO_ROOT!r})"
+            )
         source = os.path.join(REPO_ROOT, relative)
         if not os.path.isdir(source):
             raise SystemExit(

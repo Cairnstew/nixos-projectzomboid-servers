@@ -67,6 +67,17 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **The connector item could not be regenerated after a bundled mod was
+  added.** `scripts/pz_pack_web.py` kept a hand-written `BUNDLED_MODS` table
+  mapping each in-repo Mod ID to its `mods/<slug>/` folder. `69b9bba` added
+  `PZAreaTasksContainerRouting` to `bundledMods` but not to that table, so
+  `pz-pack-web` exited with `no in-repo source for bundled mod` and the
+  `viewpoint` connector could not be re-published. The published item therefore
+  predates the adapter, and the next server boot — whose `Mods=` names that id —
+  fails on a missing mod (`pz-pack-doctor`: 490/491 Mod IDs). The map is now
+  derived from `mods/*/<version>/mod.info`, the file that already declares each
+  id, so adding a bundled mod is a one-commit change and cannot drift again.
+
 - **Placing any item threw a Lua stack overflow in the `viewpoint` pack.**
   Viewpoint Placement Fix and **Viewpoint Hands: Loot & Inventory**
   (`DGVViewpointQoL`) both replace `ISInventoryPaneContextMenu
