@@ -1,0 +1,8 @@
+name=Area Tasks Menu Guard
+id=PZAreaTasksMenuGuard
+author=nixos-projectzomboid-servers
+modversion=1.0.0
+description=Keeps Area Tasks' context menu whole when one task's dynamic choices fail. A task that throws while building its choice list or availability is shown as a disabled option with the reason in the tooltip, and the real Lua error is printed once, instead of aborting the menu and removing every category added after it (Items / Move Items included). Additive patch: it wraps two Area Tasks registry calls, overrides no file, and changes nothing when every task works.
+require=AreaTasks
+loadModAfter=AreaTasks
+versionMin=42.20

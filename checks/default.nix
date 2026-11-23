@@ -1592,6 +1592,84 @@ in
         touch "$out"
       '';
 
+  # ── PZAreaTasksMenuGuard: one bad task must not empty the menu ───────
+  # The guard logic is pure, so the unit test below covers the wrap contract
+  # (healthy values pass through untouched; a failure hands the message and the
+  # original arguments to the fallback); the greps pin the two registry seams
+  # that Area Tasks' context menu actually calls.
+  area-tasks-menu-guard =
+    pkgs.runCommand "pz-area-tasks-menu-guard-check"
+      {
+        nativeBuildInputs = [
+          pkgs.lua5_1
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        SRC = ../mods/area-tasks-menu-guard;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+
+        info="$SRC/42/mod.info"
+        [ -f "$info" ] || fail "no 42/mod.info (B42 layout)"
+        grep -qx 'id=PZAreaTasksMenuGuard' "$info" || fail "mod.info id is wrong"
+        grep -qx 'require=AreaTasks' "$info" || fail "Area Tasks is not a hard dependency"
+        grep -q 'loadModAfter=.*AreaTasks' "$info" || fail "no loadModAfter hint"
+        grep -qx 'versionMin=42.20' "$info" || fail "wrong versionMin"
+
+        for f in "$SRC"/42/media/lua/client/PZAreaTasksMenuGuard/*.lua \
+                 "$SRC"/42/media/lua/shared/PZAreaTasksMenuGuard/*.lua; do
+          lua -e "assert(loadfile('$f'))" || fail "Lua does not parse: $f"
+        done
+
+        hooks="$SRC/42/media/lua/client/PZAreaTasksMenuGuard/hooks.lua"
+        grep -q 'Registry.getChoices' "$hooks" || fail "getChoices is not wrapped"
+        grep -q 'getAvailability' "$hooks" || fail "getAvailability is not wrapped"
+        grep -q 'Guard.protect' "$hooks" || fail "the calls are not protected"
+        grep -q 'API_VERSION ~= 1' "$hooks" || fail "the API version is not checked"
+        grep -q 'Events.OnGameStart' "$hooks" || fail "no reinstall on game start"
+        ! grep -q 'function Registry\.' "$hooks" \
+          || fail "the registry is redefined instead of wrapped"
+
+        test_lua="$PWD/guard-test.lua"
+        cat > "$test_lua" <<'LUA'
+        dofile("shared/PZAreaTasksMenuGuard/guard.lua")
+        local Guard = PZAreaTasksMenuGuard.Guard
+
+        -- A healthy call reaches the original and keeps its values.
+        local healthy = Guard.protect(function(a, b) return a .. b, "reason" end,
+          function() error("the fallback ran for a healthy task") end)
+        local joined, reason = healthy("x", "|y")
+        assert(joined == "x|y" and reason == "reason", "a healthy call was changed")
+
+        -- A failure runs the fallback with the message and the original arguments.
+        local seen, seenTask
+        local guarded = Guard.protect(function(task) error("boom") end,
+          function(message, task)
+              seen, seenTask = message, task
+              return false, "fallback"
+          end)
+        local available, fallbackReason = guarded({ id = "animals.bait" })
+        assert(available == false and fallbackReason == "fallback",
+          "the fallback values were not returned")
+        assert(tostring(seen):find("boom"), "the error message was not passed on")
+        assert(type(seenTask) == "table" and seenTask.id == "animals.bait",
+          "the original arguments were not passed on")
+
+        -- Only two values pass through, which is all either seam returns.
+        local single = Guard.protect(function() return "only" end, function() end)
+        local first = single()
+        assert(first == "only", "a single return value was lost")
+
+        print("guard ok")
+        LUA
+        ( cd "$SRC/42/media/lua" && lua "$test_lua" ) \
+          || fail "the guard unit test failed"
+
+        echo "pz-area-tasks-menu-guard ok"
+        touch "$out"
+      '';
+
   # ── PZBandageGuard: the nil-item crash guard + Replace Bandage ───────
   # guard.lua is shared (the server is where complete() throws), menu.lua is
   # client-only. The check runs the three ISApplyBandage wrappers against a fake

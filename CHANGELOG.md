@@ -67,6 +67,25 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **A failing Area Tasks task could remove every item route from its menu**
+  (`PZAreaTasksMenuGuard`, `mods/area-tasks-menu-guard/`). Area Tasks builds its
+  context submenu in one `OnFillWorldObjectContextMenu` handler, walking the
+  registry in `order` and calling `Registry.getChoices` and
+  `Registry.getAvailability` unprotected. One task that throws aborts the walk,
+  and every category after it is never added; `moveItems` is order 310 and
+  `animals` is 220, so the casualty is **Items** — Move Items, Move Items →
+  Containers (Area) and every other item route — which reads as "Area Tasks has
+  no item options any more". The trap-baiting task is a real trigger: its
+  `getChoices` runs an inventory predicate through `getAllEvalRecurse`, and a
+  predicate error crosses the Java boundary as Kahlua's
+  `NullPointerException: Cannot assign field "callFrame" ... ReturnValues.put`,
+  losing the Lua message. The adapter wraps those two registry calls, so a
+  failing task becomes a disabled option whose tooltip carries the reason, and
+  the real error is printed once per task id and message
+  (`[PZAreaTasksMenuGuard] task '<id>' getChoices failed: <message>`). Healthy
+  tasks take exactly their original code path; no Area Tasks file is overridden
+  and the guard is inert without Area Tasks API 1.
+
 - **The connector item could not be regenerated after a bundled mod was
   added.** `scripts/pz_pack_web.py` kept a hand-written `BUNDLED_MODS` table
   mapping each in-repo Mod ID to its `mods/<slug>/` folder. `69b9bba` added

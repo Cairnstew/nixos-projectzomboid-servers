@@ -10,12 +10,15 @@
   # connector item (3839932016). Each id must also be in `mods`, or the item
   # downloads it and the game never loads it. `PZButcherAll` is the additive
   # "Butcher All Nearby" hook for Zombie Butchery; see mods/butcher-all/.
-  # `PZAreaTasksFilter` and `PZAreaTasksBatchMove` are the additive adapters for
-  # the two Area Tasks items below; see mods/area-tasks-filter/ and
-  # mods/area-tasks-batch-move/. `PZBandageGuard` stops vanilla bandaging from
+  # `PZAreaTasksFilter`, `PZAreaTasksBatchMove` and
+  # `PZAreaTasksContainerRouting` are the additive adapters for the two Area
+  # Tasks items below; see mods/area-tasks-filter/,
+  # mods/area-tasks-batch-move/ and mods/area-tasks-container-routing/.
+  # `PZAreaTasksMenuGuard` keeps one broken task from emptying that menu; see
+  # mods/area-tasks-menu-guard/. `PZBandageGuard` stops vanilla bandaging from
   # throwing on the server and replaces Replace Dirty Bandages (removed below);
   # see mods/bandage-guard/.
-  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZAreaTasksContainerRouting" "PZBandageGuard" ];
+  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZAreaTasksContainerRouting" "PZAreaTasksMenuGuard" "PZBandageGuard" ];
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
@@ -1391,6 +1394,11 @@
     # See mods/area-tasks-container-routing/README.md. Loads after Area Tasks
     # and after manageContainers, which is where it sits relative to both.
     "PZAreaTasksContainerRouting"
+    # Keeps the Area Tasks submenu whole when one task's dynamic choices throw:
+    # a failing task becomes a disabled option instead of aborting the fill,
+    # which used to remove every later category (Items / Move Items).
+    # See mods/area-tasks-menu-guard/README.md. Inert without Area Tasks.
+    "PZAreaTasksMenuGuard"
     "MechanicsEye"
     "GarageWorks"
     "VehicleArmorCrafting"
