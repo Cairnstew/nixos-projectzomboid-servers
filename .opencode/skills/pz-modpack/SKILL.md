@@ -244,8 +244,11 @@ pins this repo by branch, so `git push` is the release. The `/pz-deploy`
 command (the `pz-deploy` skill) commits and pushes the catalogue change, then
 on each host bumps the `project-zomboid-servers` input in `~/nixos-config`,
 activates it with `nix run`, and verifies the dedicated server loaded the pack.
-Use it for `desktop` and `server` rather than repeating the steps by hand. The
-full runbook is `.opencode/skills/pz-deploy/SKILL.md`.
+Use it for `desktop` and `server` rather than repeating the steps by hand. If
+the release touches `mods/**` or the connector, the workflow stops for the
+manual Workshop re-publish before the server starts: the connector item carries
+the `bundledMods` sources, and an upload alone does not refresh the server's
+cached copy. The full runbook is `.opencode/skills/pz-deploy/SKILL.md`.
 
 ## Without a NixOS host
 

@@ -1,6 +1,6 @@
 ---
 name: pz-deploy
-description: Use when deploying an updated Project Zomboid modpack from this repo to the user's NixOS hosts (desktop, server) — commit and push the catalogue change, then on each host bump the `project-zomboid-servers` flake input, `nix run` to activate, and verify the dedicated server actually loaded the new pack.
+description: Use when deploying an updated Project Zomboid modpack from this repo to the user's NixOS hosts (desktop, server) — commit and push the catalogue change, re-publish the connector Workshop item from desktop when the connector or a bundled patch changes, then on each host bump the `project-zomboid-servers` flake input, `nix run` to activate, and verify the dedicated server actually loaded the new pack.
 ---
 
 # Deploy a Project Zomboid modpack update
@@ -12,8 +12,11 @@ End-to-end rollout for a change in `modpacks/` (or `mods/`). It touches three
 places in this order:
 
 1. **This repo** (`nixos-projectzomboid-servers`) — commit and push the pack.
-2. **`~/nixos-config` on `desktop`** — bump the pz input, activate, verify.
-3. **`~/nixos-config` on `server`** — bump the pz input, activate, verify the
+2. **Connector/custom-patch changes (conditional)** — from desktop, regenerate
+   and manually re-publish the connector Workshop item, then force the server to
+   re-download it. **This blocks the server activation.**
+3. **`~/nixos-config` on `desktop`** — bump the pz input, activate, verify.
+4. **`~/nixos-config` on `server`** — bump the pz input, activate, verify the
    dedicated `viewpoint` server.
 
 Both hosts consume this repo as a flake input:
@@ -183,6 +186,144 @@ echo "$rev  $short"
 Do not continue unless `git rev-parse origin/master` equals `$rev` — the push
 must have landed before any host can resolve the new input. Keep `$rev` and
 `$short` for the host lock-bump commits and verification.
+
+## Phase 1.5 — connector / bundled-mod re-publish (conditional)
+
+Run this **after the push and before any host activation** whenever the release
+touches the connector or an in-repo patch. The server downloads the connector as
+a Workshop item; its `manifest.lua`, `workshop.lua` and the `bundledMods`
+sources all live inside that item, so re-publishing is part of the release. The
+install script only downloads an item whose directory is missing or empty, so an
+upload alone does not refresh the server.
+
+Trigger it when the diff being deployed touches any of:
+
+```bash
+base=<older host pin from Phase 0>          # e.g. 71864af7588...
+git diff --name-only "$base"..HEAD -- mods/ scripts/pz_pack_web.py
+git diff "$base"..HEAD -- modpacks/viewpoint.nix flake.nix |
+  grep -E 'bundledMods|PZPackWeb|PZ Pack Web|pz-pack-web' || true
+```
+
+- `mods/**` — the in-repo patch sources (`PZButcherAll`, `PZAreaTasks*`,
+  `PZBandageGuard`, …).
+- a pack's `bundledMods` list, the `PZPackWeb<Pack>` Mod ID, or the connector
+  Workshop id in `modpacks/<pack>.nix`.
+- `scripts/pz_pack_web.py` or the connector app wiring in `flake.nix`.
+
+A plain `workshopMods`/`mods` addition also changes the connector's generated
+manifest, but it does not block a boot. Re-upload it when you want the audit and
+the client prompt to match; the steps below are the same.
+
+**Do not trust the diff alone.** A previous deploy may already have moved the
+hosts while the connector item stayed old. Compare the declared bundled mods to
+what is actually installed on the server (and staged on desktop):
+
+```bash
+grep -n 'bundledMods' modpacks/viewpoint.nix
+ls ~/Zomboid/Workshop/PZPackWeb-viewpoint/Contents/mods
+# The downloaded item strips the `Contents` prefix:
+ssh seanc@server 'ls /mnt/data/project-zomboid/server/steamapps/workshop/content/108600/3839932016/mods'
+```
+
+If a declared bundled mod is absent from either tree, the connector is stale —
+run this phase even when the diff range is empty. This is the failure mode that
+matters: `Mods=` names a bundled id, the old item does not ship it, and
+`failOnMissingMods` refuses the boot.
+
+### Regenerate without losing the published preview
+
+`--force` replaces the staging folder, and without `--preview` the generator
+writes a placeholder PNG. Preserve the published preview first, then pass the
+same id and visibility you published with:
+
+```bash
+STAGE=~/Zomboid/Workshop/PZPackWeb-viewpoint
+cp "$STAGE/preview.png" /tmp/opencode/PZPackWeb-viewpoint-preview.png
+# Only if you hand-edited it; the description is otherwise generated:
+cp "$STAGE/workshop.txt" /tmp/opencode/PZPackWeb-viewpoint-workshop.txt
+
+nix run .#pz-pack-web -- --pack viewpoint \
+  --out-dir "$STAGE" \
+  --workshop-id 3839932016 \
+  --visibility public \
+  --preview /tmp/opencode/PZPackWeb-viewpoint-preview.png \
+  --force
+```
+
+Check the generator's `linked mods` and `client prompt: N/M` lines; a sudden
+drop means it could not find the installed Workshop tree — pass
+`--workshop-root <dir>`.
+
+Use the connector id declared on the `PZ Pack Web` line in
+`modpacks/viewpoint.nix` (currently `3839932016`) and the visibility already in
+`$STAGE/workshop.txt` (currently `public`). For another pack, substitute its
+name, id and Mod ID. If you backed up a hand-edited `workshop.txt`, restore your
+description lines after regeneration.
+
+If `$STAGE` does not exist yet (first publish), skip the backup and `--force`,
+run without `--workshop-id`, upload the new item, then add its Workshop id to
+the pack and make a follow-up commit/push before the host phases — the hosts
+must resolve a commit that contains the new id.
+
+### Upload manually, then wait
+
+The agent cannot click the in-game uploader. Tell the user to:
+
+1. Start Project Zomboid.
+2. **Main Menu → Workshop → Create/Update**.
+3. Select `PZPackWeb-viewpoint`, review the page, and **Upload**.
+4. For a new item, copy the new Workshop id from the item URL and add it to the
+   pack; for an update, the id stays the same.
+
+Confirm the publish from Steam's log:
+
+```bash
+tail -n 40 ~/.local/share/Steam/logs/workshop_log.txt |
+  grep -i "Uploaded new content" || true
+```
+
+**Stop and wait for the user to confirm the upload succeeded.** Do not proceed
+to Phase 3 on the assumption that it did. A pack that names a new bundled Mod ID
+before the item ships it will fail `failOnMissingMods` at boot.
+
+### Force the server to re-download the item
+
+The install script skips a present, non-empty item directory. If the game server
+is active, treat this as a maintenance action and confirm first. Then remove the
+connector's directory and restart the install unit (a completed oneshot with
+`RemainAfterExit`, so `start` is a no-op and `restart` is required):
+
+```bash
+CONNECTOR=3839932016
+ssh seanc@server "
+  sudo -n rm -rf /mnt/data/project-zomboid/server/steamapps/workshop/content/108600/$CONNECTOR &&
+  sudo -n systemctl restart project-zomboid-install.service
+"
+```
+
+Confirm it came back:
+
+```bash
+ssh seanc@server "
+  ls -ld /mnt/data/project-zomboid/server/steamapps/workshop/content/108600/$CONNECTOR
+  sudo -n journalctl -u project-zomboid-install.service -n 40 --no-pager
+"
+```
+
+The directory must exist again with a fresh timestamp and the install log must
+reach `Workshop content ready`. If it still lacks the new bundled mod, Steam's
+CDN may not have the new manifest yet — wait a moment and repeat the
+remove/restart.
+
+If the connector's Workshop id **changed** (a new item), the old install list
+cannot fetch it. Remove the new id's directory if present and repeat the restart
+after the host bump in Phase 3, or let that activation's install fetch it because
+the directory is absent.
+
+Only now proceed to Phase 2 and Phase 3. If the user cannot upload the item
+now, stop the deploy before Phase 3 — activating the server with a stale
+connector is the failure this phase exists to prevent.
 
 ## Phase 2 — desktop (local)
 
