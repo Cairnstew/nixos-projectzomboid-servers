@@ -1,0 +1,8 @@
+name=Area Tasks Container Routing
+id=PZAreaTasksContainerRouting
+author=nixos-projectzomboid-servers
+modversion=1.0.0
+description=Routes Area Tasks' container destinations (Containers (Area), Vehicles (Area) and vehicle storage) by Manage Containers presets: each item goes only into a container configured to accept it, and an item no destination accepts is left where it is with one line naming it instead of being dropped into the wrong container. Additive patch: it wraps Area Tasks' registered route callbacks and overrides no file of either mod. Works with Manage Containers absent (then it does nothing).
+require=AreaTasks
+loadModAfter=AreaTasks;manageContainers
+versionMin=42.20

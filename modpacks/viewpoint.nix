@@ -15,7 +15,7 @@
   # mods/area-tasks-batch-move/. `PZBandageGuard` stops vanilla bandaging from
   # throwing on the server and replaces Replace Dirty Bandages (removed below);
   # see mods/bandage-guard/.
-  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZBandageGuard" ];
+  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZAreaTasksContainerRouting" "PZBandageGuard" ];
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
@@ -1366,6 +1366,13 @@
     # Batches the area-container -> single-container route so it fills carried
     # inventory before walking to the destination; see mods/area-tasks-batch-move/.
     "PZAreaTasksBatchMove"
+    # Routes container destinations by Manage Containers presets: an item is
+    # only collected (or delivered) into a container configured to accept it,
+    # and an item no destination accepts is left where it is with one line
+    # naming it. Wraps VehicleStorage.reserve; inert without Manage Containers.
+    # See mods/area-tasks-container-routing/README.md. Loads after Area Tasks
+    # and after manageContainers, which is where it sits relative to both.
+    "PZAreaTasksContainerRouting"
     "MechanicsEye"
     "GarageWorks"
     "VehicleArmorCrafting"

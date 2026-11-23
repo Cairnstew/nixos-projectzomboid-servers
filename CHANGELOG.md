@@ -8,6 +8,28 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Container routing for Area Tasks in the `viewpoint` pack**
+  (`PZAreaTasksContainerRouting`, `mods/area-tasks-container-routing/`). Area
+  Tasks picks, per item, the first destination container with room; Manage
+  Containers says what each container is *for*. Nothing connected the two, so a
+  route dropped axes into the container configured for food because it came
+  first. The adapter wraps `AreaTasks.VehicleStorage.reserve` — the single
+  function that decides whether an item fits one of a list of containers — and
+  asks Manage Containers' rule for each container before delegating to the
+  original one container at a time, which leaves capacity maths and the
+  per-container reservation weights untouched. Items are now split by preset
+  across `Containers (Area)`, `Vehicles (Area)` and vehicle-storage
+  destinations, including the ground-item pickup decision that uses the same
+  call. An item no destination accepts is never picked up, the route continues
+  with the rest, and one line names the item ("no configured container accepts
+  …"), throttled per type; capacity stops keep upstream's message. It is inert
+  without Area Tasks API 1 or without Manage Containers, reads container config
+  through `ISConfigureContainerWindow.getContainerData` (legacy per-player
+  configs read-only, never created), and treats an emptied rule as
+  unconfigured so a renamed container cannot swallow a route. Single-container,
+  bag and ground destinations are untouched by design — one destination chosen
+  by the player has nothing to sort.
+
 - **Viewpoint Placement Fix in the `viewpoint` pack.** `modpacks/viewpoint.nix`
   adds **Viewpoint Placement Fix** (`3816521966`, Mod ID
   `ViewpointPlacementFix`); the pack is now 444 Workshop items / 489 mods. The

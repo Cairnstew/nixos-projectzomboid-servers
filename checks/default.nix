@@ -1499,6 +1499,99 @@ in
         touch "$out"
       '';
 
+  # ── PZAreaTasksContainerRouting: container destinations follow presets ──────
+  # The routing rule is pure, so the unit test below covers the acceptance
+  # semantics against Manage Containers' own test; the grep assertions pin the
+  # one seam the hook wraps and the fail-closed guards around it.
+  area-tasks-container-routing =
+    pkgs.runCommand "pz-area-tasks-container-routing-check"
+      {
+        nativeBuildInputs = [
+          pkgs.lua5_1
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        SRC = ../mods/area-tasks-container-routing;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+
+        info="$SRC/42/mod.info"
+        [ -f "$info" ] || fail "no 42/mod.info (B42 layout)"
+        grep -qx 'id=PZAreaTasksContainerRouting' "$info" || fail "mod.info id is wrong"
+        grep -qx 'require=AreaTasks' "$info" || fail "Area Tasks is not a hard dependency"
+        grep -q 'loadModAfter=.*manageContainers' "$info" \
+          || fail "the adapter must load after Manage Containers"
+        grep -qx 'versionMin=42.20' "$info" || fail "wrong versionMin"
+
+        for f in "$SRC"/42/media/lua/client/PZAreaTasksContainerRouting/*.lua \
+                 "$SRC"/42/media/lua/shared/PZAreaTasksContainerRouting/*.lua; do
+          lua -e "assert(loadfile('$f'))" || fail "Lua does not parse: $f"
+        done
+
+        hooks="$SRC/42/media/lua/client/PZAreaTasksContainerRouting/hooks.lua"
+        grep -q 'VehicleStorage' "$hooks" || fail "the routing seam is not VehicleStorage"
+        grep -q 'storage.reserve = wrapped' "$hooks" || fail "reserve is not wrapped"
+        grep -q "API_VERSION ~= 1" "$hooks" || fail "the API version is not checked"
+        grep -q 'getContainerData' "$hooks" || fail "Manage Containers' config is never read"
+        grep -q 'MCContainerDataKey' "$hooks" || fail "the shared modData key is not used"
+        grep -q 'getStoredUUID' "$hooks" || fail "legacy per-player configs are not consulted"
+        grep -q 'HaloTextHelper' "$hooks" || fail "the clean-failure notice is missing"
+        grep -q 'Events.OnGameStart' "$hooks" || fail "no reinstall on game start"
+        ! grep -q 'ISInventoryTransferAction' "$hooks" \
+          || fail "transfers are intercepted instead of the destination choice"
+
+        test_lua="$PWD/routing-test.lua"
+        cat > "$test_lua" <<'LUA'
+        dofile("shared/PZAreaTasksContainerRouting/routing.lua")
+        local R = PZAreaTasksContainerRouting.Routing
+
+        -- Unconfigured containers accept everything: renamed-but-empty rules,
+        -- missing tables, and indexes that were never written.
+        assert(R.rule(nil, nil, 1) == nil, "a container with no config must be unconfigured")
+        assert(R.rule({ }, { }, 1) == nil, "empty tables must be unconfigured")
+        assert(R.rule({ [1] = { } }, { [1] = { Include = { }, Exclude = { } } }, 1) == nil,
+          "an emptied rule must not become a black hole")
+        assert(R.accepts(nil, "Weapon", "Base.Axe"), "unconfigured must accept everything")
+        assert(R.accepts(nil, nil, nil), "unconfigured must accept an item with no script")
+
+        -- Category rule: one entry covers the whole family.
+        local cats = { [1] = { "Food" } }
+        local sel = { [1] = { Include = { }, Exclude = { } } }
+        local rule = R.rule(cats, sel, 1)
+        assert(rule ~= nil, "a category rule was not built")
+        assert(R.accepts(rule, "Food", "Base.Beans"), "a listed category was rejected")
+        assert(not R.accepts(rule, "Weapon", "Base.Axe"), "an unlisted category was accepted")
+
+        -- Per-type exclude wins over the category, matching Manage Containers.
+        local ex = { [1] = { Include = { }, Exclude = { "Base.Beans" } } }
+        local exRule = R.rule(cats, ex, 1)
+        assert(not R.accepts(exRule, "Food", "Base.Beans"), "an excluded type was accepted")
+        assert(R.accepts(exRule, "Food", "Base.Soup"), "the category stopped working")
+
+        -- Explicit include works without any category.
+        local inc = { [1] = { Include = { "Base.Axe" }, Exclude = { } } }
+        local incRule = R.rule({ [1] = { } }, inc, 1)
+        assert(incRule ~= nil, "an include-only rule was not built")
+        assert(R.accepts(incRule, "Weapon", "Base.Axe"), "an included type was rejected")
+        assert(R.accepts(incRule, nil, "Base.Axe"), "include must not need a category")
+        assert(not R.accepts(incRule, "Weapon", "Base.Hammer"), "an unlisted type was accepted")
+        assert(not R.accepts(incRule, nil, nil), "a typeless item matched an include-only rule")
+
+        -- Indexes are 1-based and independent.
+        local multi = R.rule({ [1] = { "Food" }, [2] = { } },
+          { [1] = { Include = { }, Exclude = { } }, [2] = { Include = { }, Exclude = { } } }, 2)
+        assert(multi == nil, "the second container inherited the first one's rule")
+
+        print("routing ok")
+        LUA
+        ( cd "$SRC/42/media/lua" && lua "$test_lua" ) \
+          || fail "the routing unit test failed"
+
+        echo "pz-area-tasks-container-routing ok"
+        touch "$out"
+      '';
+
   # ── PZBandageGuard: the nil-item crash guard + Replace Bandage ───────
   # guard.lua is shared (the server is where complete() throws), menu.lua is
   # client-only. The check runs the three ISApplyBandage wrappers against a fake
