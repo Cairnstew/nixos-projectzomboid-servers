@@ -206,9 +206,12 @@
     # facing) and draws the ghost in the 3D scene; validity, materials, the timed
     # action and the final object stay vanilla. Client Lua + Java under
     # ZombieBuddy, and it runs from the Java companion on a server that does not
-    # list it. Load after Viewpoint and every model pack. Published 2026-10-26,
-    # before Viewpoint 0.1.7, and it drives the same cursors ViewpointUI's own
-    # Build/Cursor modes drive, so the pair needs one client test.
+    # list it. Load after Viewpoint and every model pack, and *before*
+    # DGVViewpointQoL: both replace ISInventoryPaneContextMenu.onPlaceItemOnGround
+    # and DGV re-captures the top wrapper on every OnGameStart, so this order is
+    # what keeps the two from calling each other (see the `mods` list). Published
+    # 2026-10-26, before Viewpoint 0.1.7, and it drives the same cursors
+    # ViewpointUI's own Build/Cursor modes drive.
     { id = "3816521966"; title = "Viewpoint Placement Fix"; } # ViewpointPlacementFix
     { id = "3806955469"; title = "True Cargo - Project Full HD"; }
     { id = "3781616141"; title = "[B42.20+] Vehicle Aim Roof Fix"; }
@@ -1073,9 +1076,9 @@
     # ── Inventory & loot management ────────────────────────────────────────
     # Client-side inventory UI; all of it loads before ImmersiveLootingB42
     # (last, in the difficulty section) which has explicit support for
-    # ProximityInventory's "proxInv" container type. DGVViewpointQoL requires
-    # ZombieBuddy + Viewpoint and declares loadModAfter for them; both are at
-    # the top of this list.
+    # ProximityInventory's "proxInv" container type. DGVViewpointQoL is in the
+    # Viewpoint 3D group further down, not here: its placement takeover must
+    # load *after* ViewpointPlacementFix (see the comment there).
     "ProximityInventory"
     "manageContainers"
     "ContainerCapacityIndicator"
@@ -1083,7 +1086,6 @@
     "InventoryItemPins"
     "PingItemsFriends"              # core; the wheel below requires it
     "PingItemsFriendsDefaultWheel"  # only one wheel may be enabled
-    "DGVViewpointQoL"
 
     # ── Interface / HUD / tooltips ─────────────────────────────────────────
     # Read-only UI. MinimalDisplayBarsB4220 is the standalone B42.21 build and
@@ -1127,6 +1129,18 @@
     # must come after Viewpoint and the model packs above; it is the fix for the
     # build cursor never being driven while Viewpoint draws the world.
     "ViewpointPlacementFix"
+    # DGVViewpointQoL also takes ISInventoryPaneContextMenu.onPlaceItemOnGround
+    # over, and re-installs its wrapper on every OnGameStart. That pass captures
+    # whatever is on top at the time (`P.before`) unless it is already its own
+    # wrapper, so it has to be the *last* of the two: loaded before Placement
+    # Fix the chain stays Placement Fix -> DGV -> vanilla, while loaded after it
+    # DGV's older wrapper reads the re-pointed `P.before`, which is Placement
+    # Fix, which calls the older wrapper back. Every Place click then recursed
+    # ~1000 deep and overflowed the Lua stack (ViewpointPlacementFix.lua:1038
+    # alternating through DGVQ_Place.lua:828, reported by DGVQ's `pcall` as
+    # "placing: Stack overflow"). DGVViewpointQoL requires ZombieBuddy +
+    # Viewpoint only, both at the top of this list.
+    "DGVViewpointQoL"
     "PFHDTrueCargo"
     "CarRoofFix"
     "CarEnterExitFix"

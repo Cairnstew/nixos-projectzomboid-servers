@@ -21,12 +21,32 @@ All notable changes to this project. Format follows
   from that companion on a server that does not list it, and must load after
   Viewpoint and every model pack, which is where it sits. Published
   2026-10-26, i.e. before Viewpoint 0.1.7, and it drives the same cursors
-  ViewpointUI's Build/Cursor modes drive, so the pair needs one client test.
-  Isometric rotation is a separate question: no mod in this pack overrides
+  ViewpointUI's Build/Cursor modes drive. Isometric rotation is a separate
+  question: no mod in this pack overrides
   `ISBuildingObject`/`ISBuildIsoEntity`, replaces those files wholly, or
   rebinds `ROTATE_BUILDING`, so if the key fails outside Viewpoint's view the
   remaining suspects are ViewpointUI's build mode (it renders a rotate hint but
   has no rotate handler) and the keybinding itself.
+
+### Fixed
+
+- **Placing any item threw a Lua stack overflow in the `viewpoint` pack.**
+  Viewpoint Placement Fix and **Viewpoint Hands: Loot & Inventory**
+  (`DGVViewpointQoL`) both replace `ISInventoryPaneContextMenu
+  .onPlaceItemOnGround`. DGV re-installs its wrapper on every `OnGameStart` and
+  keeps the function it delegates to in a shared, mutable field (`P.before`),
+  re-capturing whatever is on top unless it is already its own wrapper. With
+  Placement Fix loaded *after* DGV, that pass pointed `P.before` at Placement
+  Fix, whose wrapper still held DGV's older wrapper — the two called each other,
+  and because DGV's delegation is a tail call only the Placement Fix frames
+  stacked: ~1000 deep, ending in
+  `RuntimeException: Stack overflow at Coroutine.ensureStacksize` on every
+  "Place item" click, reported by DGV as `placing: Stack overflow`
+  (`ViewpointPlacementFix.lua:1038` / `DGVQ_Place.lua:828`). `mods` now lists
+  `ViewpointPlacementFix` before `DGVViewpointQoL`, which leaves DGV's
+  `OnGameStart` pass seeing its own wrapper and the chain acyclic
+  (Placement Fix -> DGV -> vanilla).
+
 
 - **Starving Zombies in the `viewpoint` pack.** `modpacks/viewpoint.nix` adds
   **Starving Zombies** (`3396867685`, Mod ID `StarvingZombies`); the pack is now
