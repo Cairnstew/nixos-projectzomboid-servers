@@ -98,6 +98,14 @@
     # Per-container item-category assignment plus bulk "transfer to assigned
     # containers"; explicitly documented as compatible with Better Sorting.
     { id = "2650547917"; title = "Manage Containers"; } # manageContainers
+    # Bulk packing: one box or carton holds 6-270 of an already-stackable item
+    # and cuts the load by a sixth (12 kg -> 10 kg), so a base's consumables and
+    # materials are a few crates instead of a wall of shelves. Items and
+    # `craftRecipe`s only — no UI, no rendering hook, nothing Viewpoint replaces
+    # — MP-tagged, and the author states it is safe to add mid-save, which is
+    # what an existing world needs. Its boxes do not spawn in vanilla loot, so
+    # loot balance is unchanged.
+    { id = "3626823538"; title = "Hoarder's Delight - Box & Carton Bulk Packing [42.22 Stable]"; } # OCsPacking
     # Fill bars on container buttons and magazine load indicators. Client-side
     # UI only: it changes no capacity, contents or saved data.
     { id = "3789660055"; title = "Container Capacity Indicator [B42]"; } # ContainerCapacityIndicator
@@ -474,7 +482,14 @@
     { id = "2757712197"; title = "Vehicle Repair Overhaul"; }
     { id = "3744391882"; title = "Consistent Vehicle Repairs"; }
     { id = "3543612325"; title = "Restore Engine Quality [B42]"; }
-    { id = "3464551542"; title = "Functional Car Lift"; }
+    # Functional Car Lift removes the Jack requirement near a lift and can turn
+    # the vanilla tiles into movable ones. `FunctionalCarLift.ConvertVanilla` is
+    # pinned in `defaultSandbox` below: it converts each vanilla
+    # `location_business_machinery_01_*` lift tile into the mod's movable
+    # `car_lift_01_*` tile from `Events.LoadGridsquare`, so a car shop in an
+    # already-explored chunk is converted the next time that chunk loads. No
+    # world wipe and no new loot: the mod only rewrites tiles on load.
+    { id = "3464551542"; title = "Functional Car Lift"; } # FunctionalCarLift
     { id = "3793163745"; title = "Area Tasks - Select an area for vanilla tasks [B42]"; }
     { id = "3801094884"; title = "Area Tasks: Auto Mechanics"; }
     { id = "3677886085"; title = "Mechanics Eye"; }
@@ -1102,6 +1117,11 @@
     # load *after* ViewpointPlacementFix (see the comment there).
     "ProximityInventory"
     "manageContainers"
+    # Bulk packing (Hoarder's Delight). No require=/loadModAfter=; it only adds
+    # items and craftRecipes and re-registers the vanilla `PlaceInBox`,
+    # `UnpackBox6` and `UnpackBox12` recipes on OnInitWorld to accept its boxes
+    # alongside the vanilla ones, so it sits with the other container tooling.
+    "OCsPacking"
     "ContainerCapacityIndicator"
     "ItemCondition_KingEJ"
     "InventoryItemPins"
@@ -1812,7 +1832,9 @@
   # destination distance the mod itself allows (25 -> 50 tiles, 50 -> 100).
   # Skill Journal declares `SkillJournal.*` (one integer percentage, twelve
   # booleans) and is the only one of these three whose values are booleans.
-  sandboxNamespaces = [ "AutoAll" "AreaTasks" "SkillJournal" ];
+  # Functional Car Lift declares `FunctionalCarLift.*` (one integer range, three
+  # booleans); see the pin below.
+  sandboxNamespaces = [ "AutoAll" "AreaTasks" "SkillJournal" "FunctionalCarLift" ];
 
   # -1 = leave the player's Mod Options choice, 0 = force off for everyone,
   # 1 = force on. One owner per niche: Rip All Clothing owns ripping (it covers
@@ -1849,5 +1871,17 @@
     "SkillJournal.RecoverRecipes" = true;
     "SkillJournal.RecoverExerciseRegularity" = false;
     "SkillJournal.RecoverFishRecords" = false;
+
+    # Functional Car Lift: convert the vanilla car-shop lift tiles into the
+    # mod's movable `car_lift_01_*` pieces as each square loads, so the lifts
+    # already in this world become pick-up-able (Mechanics 3 plus a wrench, via
+    # the mod's `Mechanic` tool definition, four heavy parts) instead of decorative. The conversion
+    # runs from `Events.LoadGridsquare`, i.e. per chunk load, so it reaches
+    # car shops in chunks that are already saved and explored: nothing needs a
+    # wipe and no map file is rewritten. `RevertVanilla` is pinned off so the
+    # two passes can never fight over the same square; `Range` (1 tile around
+    # the driver door) and `RequirePower` (true) stay at the mod's own defaults.
+    "FunctionalCarLift.ConvertVanilla" = true;
+    "FunctionalCarLift.RevertVanilla" = false;
   };
 }

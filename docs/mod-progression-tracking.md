@@ -4,7 +4,7 @@ This document tracks what each mod in the `viewpoint` pack adds in terms of prog
 
 **Pack:** `viewpoint` (Project Viewpoint Vanilla+)  
 **Last Updated:** 2026-11-24  
-**Total Mods:** 444 Workshop items, 491 Mod IDs (6 bundled in-repo)
+**Total Mods:** 445 Workshop items, 492 Mod IDs (6 bundled in-repo)
 
 ## Progression Categories
 
@@ -167,6 +167,7 @@ multiplier back.
 | Neat Building | 3536052310 | UI/Building | Building UX improvement | Better building menu navigation. |
 | Specific Loot (KI5) | 3457132019 | Loot | Affects loot tables | Changes what spawns where, affects item discovery progression. |
 | Containers! | 2625625421 | Storage/World | New containers | Additional storage options in world. |
+| Hoarder's Delight | 3626823538 | Storage/crafting | Bulk packing | Boxes/cartons hold 6-270 of a stackable item and cut the load by 1/6; boxes do not spawn in loot. |
 | Auto Mechanics | 3387539308 | Skills/Repair | Vehicle repair QoL | Helps with mechanic skill progression/vehicle maintenance. |
 | More Damaged Objects [42MP] | 3413150945 | World | More salvage opportunities | More objects to break down/salvage. |
 
@@ -201,6 +202,7 @@ repair needs, etc.
 | Real Vehicle VFX + RVV+Viewpoint | 3788393574 / 3814635273 | Vehicles/Visual | Exhaust, tire, weather and collision effects, plus the Viewpoint bridge. |
 | Visible Vehicle Coupling + Viewpoint Addon | 3807182783 / 3824354252 | Towing/Visual | Visible rope/chain between towed vehicles; addon draws it in Viewpoint. |
 | Vehicle Ground Guard | 3690308807 | Fix | Right-click unstick/resurface for clipped vehicles; load last among vehicle mods. |
+| Functional Car Lift | 3464551542 | Vehicle service | Removes the Jack requirement near a lift; the vanilla car-shop lift tiles convert to movable pieces, so a lift can be moved to a base. |
 | Essential Car Notifications | 3350173580 | QoL | Alerts when hood/gas tank/bumper break. |
 | Let Me Drive! | 3805307651 | QoL | Anti-stutter vehicle controls. |
 | Proper Vehicle Injuries for MP | 3007922923 | Difficulty/injuries | Configurable crash injuries, seatbelt/helmet support, MP-safe. |

@@ -8,6 +8,31 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Movable car lifts in the `viewpoint` pack.** Functional Car Lift
+  (`3464551542`, Mod ID `FunctionalCarLift`) was already loaded, but only its
+  "no Jack needed near a lift" half did anything: the vanilla car-shop lift
+  tiles stayed decorative world tiles, so they could not be picked up and moved
+  to a base. `modpacks/viewpoint.nix` now declares the `FunctionalCarLift`
+  sandbox namespace and pins `FunctionalCarLift.ConvertVanilla = true` (with
+  `RevertVanilla = false`), which is the switch that converts each vanilla
+  `location_business_machinery_01_*` lift tile into the mod's movable
+  `car_lift_01_*` piece. The conversion runs from `Events.LoadGridsquare`, so it
+  applies per chunk load — an already-explored car shop in this world's save is
+  converted the next time that chunk loads, with no wipe and no map-file edit.
+  `Range` (1 tile) and `RequirePower` (true) stay at the mod's own defaults.
+
+- **Hoarder's Delight in the `viewpoint` pack.** `modpacks/viewpoint.nix` adds
+  **Hoarder's Delight - Box & Carton Bulk Packing** (`3626823538`, Mod ID
+  `OCsPacking`); the pack is now 445 Workshop items / 492 mods. One box or
+  carton holds 6-270 of an already-stackable item and cuts the load by a sixth
+  (12 kg -> 10 kg), which replaces a wall of shelves with a few crates. It is
+  items and `craftRecipe`s only — no UI and no rendering hook, so nothing it
+  does overlaps what Viewpoint replaces — MP-tagged, and safe to add mid-save.
+  Its boxes do not spawn in vanilla loot, so loot balance is unchanged. The
+  only Lua re-registers the vanilla `PlaceInBox`, `UnpackBox6` and `UnpackBox12`
+  recipes on `OnInitWorld` to accept the new boxes alongside the vanilla ones;
+  nothing else in the pack touches those three recipes.
+
 - **Eat Stack Button in the `viewpoint` pack.** `modpacks/viewpoint.nix` adds
   **[42] Eat Stack Button** (`3657973935`, Mod ID `UnclearEatStackButton`); the
   pack is now 445 Workshop items / 491 mods. Eating a stack of berries,
