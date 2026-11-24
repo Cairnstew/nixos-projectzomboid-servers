@@ -399,6 +399,16 @@ All notable changes to this project. Format follows
 
 ### Removed
 
+- **Knox Network Progression (`3821300859`) from the `viewpoint` pack.** The
+  mod caps 21 occupation skills at 5/7/9/10 from the character's starting
+  profession/trait bonus and lifts each cap one step (5 → 7 → 9 → 10) only with
+  a one-use unlock manual or a mentor's training. Nothing else in the pack
+  requires it — the item ships that single Mod ID and no entry declares it in
+  `require=`/`loadModAfter=` — so dropping it removes no dependency. Strength,
+  Fitness, combat/movement skills and Maintenance were never capped by it;
+  with the mod gone, every skill uses the vanilla level-10 ceiling. Restore the
+  Workshop entry and the `mods` line to bring the profession caps back.
+
 - **Replace Dirty Bandages (`3782220648`) from the `viewpoint` pack.** Its
   replace action put the old bandage back in `perform()`, which only runs on the
   client, so the item existed locally but never on the server; using that copy

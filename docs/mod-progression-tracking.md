@@ -3,8 +3,8 @@
 This document tracks what each mod in the `viewpoint` pack adds in terms of progression avenues - skills, recipes, items, vehicles, mechanics, etc. Use this to understand the full scope of content and plan gameplay progression.
 
 **Pack:** `viewpoint` (Project Viewpoint Vanilla+)  
-**Last Updated:** 2026-11-23  
-**Total Mods:** 445 Workshop items, 491 Mod IDs (5 bundled in-repo)
+**Last Updated:** 2026-11-24  
+**Total Mods:** 444 Workshop items, 491 Mod IDs (6 bundled in-repo)
 
 ## Progression Categories
 

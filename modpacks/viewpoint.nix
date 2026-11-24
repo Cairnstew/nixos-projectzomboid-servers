@@ -304,7 +304,11 @@
     { id = "3787530735"; title = "'62 Daimler Ferret"; }
     { id = "2772575623"; title = "'59 Cadillac Miller-Meteor + ECTO-1"; }
     { id = "2900580391"; title = "'49 Dodge Power Wagon Crew Cab"; }
-    { id = "3821300859"; title = "Knox Network Progression [B42]"; }
+    # Knox Network Progression (3821300859) is deliberately absent: it caps 21
+    # occupation skills at 5/7/9/10 from the character's starting bonus and
+    # lifts the cap only with one-use manuals or a mentor's training. Restore
+    # this entry and `KnoxNetworkProgression` in `mods` to bring the profession
+    # caps back.
     # Shared UI framework required by the two Minidoracat mods below; the mod
     # page says to add both `Mods=MinidoracatUIFor42` and
     # `WorkshopItems=3789836701` on a server.
@@ -1267,7 +1271,8 @@
     "59meteor"
     "ECTO1"
     "49powerWagon"
-    "KnoxNetworkProgression"
+    # KnoxNetworkProgression is deliberately omitted with its Workshop entry
+    # above: the pack does not ship profession skill caps.
     "MinidoracatUIFor42" # required by the two Minidoracat mods below
     "MinidoracatVehicleManagerFor42"
     "AutoHideCarDash"
