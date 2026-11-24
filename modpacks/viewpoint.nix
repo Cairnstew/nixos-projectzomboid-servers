@@ -172,6 +172,18 @@
     { id = "3816442251"; title = "Viewpoint: Living Props"; }
     { id = "3815630947"; title = "Viewpoint Rolling Hills"; }
     { id = "3817555882"; title = "Rolling Hills Physics Addon (Project Viewpoint)"; }
+    # JB's Bugs In Lights (3717902500) is deliberately absent: it draws nothing
+    # under Viewpoint. Every bug is rendered from one hook,
+    #   Events.RenderOpaqueObjectsInWorld.Add(BugManager.renderAll)
+    # ("the only event that Render3DItem works with"), and that event is fired
+    # by vanilla `FBORenderCell`, which Viewpoint never runs: it patches
+    # `IsoCell.render` (Viewpoint.jar: `viewpoint/Patch_IsoCell`) and the jar
+    # never references `FBORenderCell`. Viewpoint only triggers
+    # `OnDoTileBuilding2` and calls the build cursor's `RenderOpaqueObjectsInWorld`
+    # Lua method through `LuaCaller` — which is why ViewpointPlacementFix has to
+    # replay that pass by hand and draw its ghost from `OnPostRender`. The mod
+    # would load without an error and render nothing, so re-add it only if
+    # Viewpoint ever exposes a world-draw event (or the vanilla renderer is used).
     # Surface Fix (3814398576) is deliberately absent. Its Java mod was built
     # against 42.21, and 42.22 changed `IsoGridSquare.getObjects()` from
     # `PZArrayList` to `List<IsoObject>`; on 42.22 it aborts the client while the
