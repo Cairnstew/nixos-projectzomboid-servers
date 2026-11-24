@@ -6,6 +6,26 @@ All notable changes to this project. Format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The four mods the Artel swap retired are back in `viewpoint`.** A world
+  created with them keeps their scripts in its persisted script registry (the
+  `WorldDictionary` stored in the server's save), and a client that joins
+  without a mod providing them aborts with `Missing dictionary script on
+  client: Base.PZPrimitiveCellar` / `Cannot load world due to WorldDictionary
+  error`. Clearing the client's cache does not help: the list is sent by the
+  server on every join, and the server itself only marks the entries
+  `removed = true` and boots. **Root Cellar [B42]** (`3799755212`),
+  **ShelterHold: Beehive** (`3596827035`), **Immersive Preservation: Canning
+  and Jarring** (`3560836822`) and **Wildwrought: Preserved Food**
+  (`3813109633`) are re-added at their previous load positions; the pack is
+  **447 Workshop items / 495 mods**. None of the four adds map terrain, so
+  `Map=` is unchanged; Root Cellar and ShelterHold do ship their own tile
+  definitions, which is part of why the existing world needs them. They run
+  alongside Artel until the world is replaced (two hive/cellar/preservation
+  sets in the craft menu) and must be retired together with the world, not
+  before it.
+
 ### Added
 
 - **Artel Manufactory replaces four pack systems in `viewpoint`.**
@@ -28,7 +48,9 @@ All notable changes to this project. Format follows
   run in parallel, because Artel's `Artel.*PackEnabled` switches gate world
   spawn, not content: **Immersive Preservation: Canning and Jarring**
   (`3560836822`), **Wildwrought: Preserved Food** (`3813109633`), **Root Cellar
-  [B42]** (`3799755212`) and **ShelterHold: Beehive** (`3596827035`). None of the
+  [B42]** (`3799755212`) and **ShelterHold: Beehive** (`3596827035`).
+  *(Superseded by the `### Fixed` entry above: the four are re-added until the
+  current world is migrated, because its script registry still requires them.)* None of the
   four was referenced by another pack mod (no `require=`, and the 8 `IPJarring*`
   items appear only in their own mod); `NeatUI_Framework` stays because Neat
   Building, Neat Crafting and Project Cook hard-require it. Power generation is

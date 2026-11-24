@@ -802,6 +802,12 @@
     { id = "3804094839"; title = "Wildwrought: Loose Clay"; }
     { id = "3803438416"; title = "Wildwrought: Washed Sand"; }
     { id = "3738162759"; title = "TwisTonFire - Camping QoL"; } # twistcamping
+    # Root Cellar is back (with the other three Artel-swap retirees) until the
+    # world is migrated: its `Base.PZCellar`/`PZPrimitiveCellar` scripts and
+    # `pzcellar_01` tile definitions are recorded in the existing world's script
+    # registry, so a client cannot load that world once the providing mod is
+    # gone. See the Artel note below.
+    { id = "3799755212"; title = "Root Cellar [B42]"; }
 
     # ── Livestock / animal husbandry ───────────────────────────────────────
     # Build 42 + multiplayer. Feed That Animal ships an SP mod and an
@@ -834,12 +840,17 @@
     # ── Beekeeping ─────────────────────────────────────────────────────────
     # Beekeeping belongs to Artel Manufactory's `Artel.BeekeepingEnabled`
     # branch (hives, queens, smoker, honey, wax, bee disease), added with the
-    # content overhaul below. ShelterHold: Beehive (3596827035) owned this niche
-    # before and is retired with it: two hive systems means two sets of hives,
-    # two harvest flows and two sets of bee items in the craft menu.
+    # content overhaul below. ShelterHold: Beehive (3596827035) is RE-ADDED
+    # alongside it for as long as the existing world is in use: its
+    # `Hold_Beehive` tile definitions and hive scripts are baked into that
+    # world's script registry, and a client aborts with
+    # "Missing dictionary script on client" when the mod is absent. Two hive
+    # systems do mean two craft-menu sets; drop this entry once the world is
+    # replaced.
     # NeatUI Framework stays: Neat Building, Neat Crafting and Project Cook
     # hard-require it.
     { id = "3508537032"; title = "NeatUI Framework [B42]"; }
+    { id = "3596827035"; title = "ShelterHold: Beehive"; }
 
     # ── Fishing ────────────────────────────────────────────────────────────
     # Better Fishing leaves vanilla balance untouched unless its sandbox
@@ -868,14 +879,19 @@
     # recipe packs for the vanilla gaps Project Cook leaves alone.
     # Preservation is Artel Manufactory's now (canning with seamers and a
     # pasteuriser, drying racks, an electric dryer, a sublimator, and the cellar
-    # below), so the three preservation mods that used to sit here are retired:
+    # below), so these three preservation mods stand down only when the world
+    # does. They are RE-ADDED for the current save: their jar/cellar scripts are
+    # in the world's script registry and a client cannot load the world without
+    # the providing mod (it fails with
+    # "Missing dictionary script on client: Base.PZPrimitiveCellar").
     #   Immersive Preservation (3560836822) - 8 `IPJarring*` items and jarring
     #     recipes for evolved dishes; Artel's canning covers the same loop with
     #     its own art and a machine tier.
     #   Wildwrought: Preserved Food (3813109633) - raw-produce jars plus
     #     drying/salting; Artel's drying rack and dryer own that.
     #   Root Cellar [B42] (3799755212) - off-grid finished-food storage; Artel
-    #     ships a cellar station (PMK_81) and cold bags.
+    #     ships a cellar station (PMK_81) and cold bags. Listed in the bushcraft
+    #     section above.
     # None of the three is referenced by another pack mod (no `require=`, no
     # `IPJarring*` recipe outside its own mod), so nothing else loses an input.
     # How Long To Cook declares incompatible with timeToCook and Inventory
@@ -884,6 +900,8 @@
     { id = "3490188370"; title = "Project Cook [B42]"; } # Project_Cook + Pixel Icon Pack
     { id = "3727395976"; title = "[B42] OG Cooking Expanded"; }
     { id = "3795521454"; title = "Realistic Recipes"; }
+    { id = "3560836822"; title = "[B42] Immersive Preservation: Canning and Jarring (of evolved recipes)"; }
+    { id = "3813109633"; title = "Wildwrought: Preserved Food"; }
     { id = "3804253117"; title = "Wildwrought: Cast Iron Cookware"; }
     { id = "3809670050"; title = "Cook Directly on Stoves & Campfires"; }
     { id = "3803402281"; title = "How Long To Cook (Cook Thaw & Burn Timers)"; }
@@ -1662,9 +1680,9 @@
     # activity and the Wildwrought skill mods. Prospecting/Knapping/Masonry
     # come before the mods that consume their outputs. Wildwrought:
     # Leatherworking is omitted (TFC Combine Leather already does small ->
-    # medium -> large), and Root Cellar is gone with the Artel swap (its cellar
-    # owns finished-food storage); Wilderness Progression Expanded's ice cellar
-    # stays as the bushcraft-flavoured counterpart.
+    # medium -> large). Root Cellar is re-added pending a world migration (its
+    # scripts are in the save's registry); Wilderness Progression Expanded's
+    # ice cellar stays as the bushcraft-flavoured counterpart.
     "WireToNails42"          # Wilderness Progression
     "CrudeDoorsAndShutters"  # Wilderness Progression Expanded
     "zodi_digging_pit"
@@ -1678,6 +1696,7 @@
     "WWS_LooseClay"
     "WWS_WashedSand"
     "twistcamping"           # TwisTonFire Camping QoL
+    "Cellar"                 # Root Cellar (re-added, world registry)
 
     # ── Livestock / animal husbandry ───────────────────────────────────────
     # Stability fix first; FeedThatAnimalMP replaces the incompatible SP mod;
@@ -1704,9 +1723,10 @@
     # ── UI framework (NeatUI) ──────────────────────────────────────────────
     # Not beekeeping-specific: Neat Building, Neat Crafting and Project Cook
     # all hard-require it, so it loads before all three. ShelterHold: Beehive
-    # used to live here and is retired in favour of Artel Manufactory's
-    # beekeeping branch (see the content-overhaul group below).
+    # loads here too and is re-added until the world is migrated (Artel's
+    # beekeeping branch runs alongside it; see the content-overhaul group).
     "NeatUI_Framework"
+    "ShelterHold_Beehive"
 
     # ── Fishing ────────────────────────────────────────────────────────────
     # Better Fishing's sandbox defaults are vanilla; FishingActionMPFix needs
@@ -1725,12 +1745,14 @@
     # ── Cooking ────────────────────────────────────────────────────────────
     # NeatUI_Framework is loaded in the UI-framework group above; Project Cook
     # and its pixel icon pack require it, so they follow it here. The canning /
-    # drying / cellar mods that used to sit here are retired with the Artel swap
-    # (same reasoning in the Workshop list above).
+    # drying / cellar mods follow in their original order and are re-added
+    # until the world is migrated (same reasoning in the Workshop list above).
     "Project_Cook"
     "Project_Cook_Pixel_Icon_Pack"
     "OGCookingExpanded"
     "RealisticRecipes"
+    "ImmersivePreservationCanningJarring"
+    "WWS_PreservedFood"
     "WWS_IronCookware"
     "DirectStoveCampfire"
     "CookThawBurnTimers"
@@ -2024,7 +2046,11 @@
     # bioreactor is a separate switch under `Artel.ChemPackEnabled` (left at its
     # default, because the chemistry bench itself is unique content here).
     # Every other Artel group is left at its default: it owns beekeeping,
-    # canning, drying and cold storage now that the previous owners are retired.
+    # canning, drying and cold storage. The four mods that owned those niches
+    # before it (Root Cellar, ShelterHold: Beehive, Immersive Preservation,
+    # Wildwrought: Preserved Food) are re-added for now because the existing
+    # world's script registry still requires their scripts; retire them again
+    # when that world is replaced.
     "Artel.SteamPackEnabled" = false;
 
     # Functional Car Lift: convert the vanilla car-shop lift tiles into the
