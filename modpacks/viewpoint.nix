@@ -802,7 +802,6 @@
     { id = "3804094839"; title = "Wildwrought: Loose Clay"; }
     { id = "3803438416"; title = "Wildwrought: Washed Sand"; }
     { id = "3738162759"; title = "TwisTonFire - Camping QoL"; } # twistcamping
-    { id = "3799755212"; title = "Root Cellar [B42]"; }
 
     # ── Livestock / animal husbandry ───────────────────────────────────────
     # Build 42 + multiplayer. Feed That Animal ships an SP mod and an
@@ -833,9 +832,14 @@
     { id = "3649582861"; title = "Better Trapping"; }
 
     # ── Beekeeping ─────────────────────────────────────────────────────────
-    # ShelterHold: Beehive requires NeatUI Framework; load the framework first.
+    # Beekeeping belongs to Artel Manufactory's `Artel.BeekeepingEnabled`
+    # branch (hives, queens, smoker, honey, wax, bee disease), added with the
+    # content overhaul below. ShelterHold: Beehive (3596827035) owned this niche
+    # before and is retired with it: two hive systems means two sets of hives,
+    # two harvest flows and two sets of bee items in the craft menu.
+    # NeatUI Framework stays: Neat Building, Neat Crafting and Project Cook
+    # hard-require it.
     { id = "3508537032"; title = "NeatUI Framework [B42]"; }
-    { id = "3596827035"; title = "ShelterHold: Beehive"; }
 
     # ── Fishing ────────────────────────────────────────────────────────────
     # Better Fishing leaves vanilla balance untouched unless its sandbox
@@ -859,24 +863,58 @@
 
     # ── Cooking ────────────────────────────────────────────────────────────
     # Project Cook is the dedicated cooking interface and base/evolved-recipe
-    # overhaul; it requires NeatUI Framework (beekeeping section above) and is
+    # overhaul; it requires NeatUI Framework (the framework entry above) and is
     # loaded after it. OG Cooking Expanded and Realistic Recipes are additive
-    # recipe packs for the vanilla gaps Project Cook leaves alone. Preservation
-    # is split by method: Immersive Preservation jars evolved recipes,
-    # Wildwrought Preserved Food jars raw produce and adds drying/salting, and
-    # Root Cellar in the bushcraft section stores finished food off-grid.
+    # recipe packs for the vanilla gaps Project Cook leaves alone.
+    # Preservation is Artel Manufactory's now (canning with seamers and a
+    # pasteuriser, drying racks, an electric dryer, a sublimator, and the cellar
+    # below), so the three preservation mods that used to sit here are retired:
+    #   Immersive Preservation (3560836822) - 8 `IPJarring*` items and jarring
+    #     recipes for evolved dishes; Artel's canning covers the same loop with
+    #     its own art and a machine tier.
+    #   Wildwrought: Preserved Food (3813109633) - raw-produce jars plus
+    #     drying/salting; Artel's drying rack and dryer own that.
+    #   Root Cellar [B42] (3799755212) - off-grid finished-food storage; Artel
+    #     ships a cellar station (PMK_81) and cold bags.
+    # None of the three is referenced by another pack mod (no `require=`, no
+    # `IPJarring*` recipe outside its own mod), so nothing else loses an input.
     # How Long To Cook declares incompatible with timeToCook and Inventory
     # Tetris, neither of which is in this pack. Stove shutoff joins the
     # fire-behaviour stack above.
     { id = "3490188370"; title = "Project Cook [B42]"; } # Project_Cook + Pixel Icon Pack
     { id = "3727395976"; title = "[B42] OG Cooking Expanded"; }
     { id = "3795521454"; title = "Realistic Recipes"; }
-    { id = "3560836822"; title = "[B42] Immersive Preservation: Canning and Jarring (of evolved recipes)"; }
-    { id = "3813109633"; title = "Wildwrought: Preserved Food"; }
     { id = "3804253117"; title = "Wildwrought: Cast Iron Cookware"; }
     { id = "3809670050"; title = "Cook Directly on Stoves & Campfires"; }
     { id = "3803402281"; title = "How Long To Cook (Cook Thaw & Burn Timers)"; }
     { id = "3526968739"; title = "[B42/41] Automatic Stove Shutoff"; }
+
+    # ── Content overhaul: Artel Manufactory ────────────────────────────────
+    # One large content mod replacing the pack's previous owners of five
+    # niches, because it re-implements them itself: brewery, canning (sealers +
+    # pasteuriser), rations/MRE, sports nutrition, beekeeping, dairy, drying and
+    # freeze-drying, camping gear, home automation, chemistry, steam generation,
+    # trading post and "quantum" storage. 798 items, all in its own `Artel`
+    # module (one `Base` moveable, no redefinitions) and 803 recipes with no
+    # name collision against the rest of this pack.
+    # Verified before adding: no `require=`/`incompatible=`/`loadModAfter=`, no
+    # vanilla file overrides (every script/Lua file is `PMK_*`), vanilla classes
+    # are wrapped rather than replaced (`ISMoveableSpriteProps`, `ISReadABook`,
+    # `ISLightActions`, `ISBuildIsoEntity`), item creation is server-authoritative
+    # through its own `PMK` command channel, sandbox options are all `Artel.*`
+    # (35 of them, one per content group), and its Viewpoint integration is a
+    # real model pack (`Viewpoint.ModelPacks.register`, the same call Viewpoint
+    # Workstations 3D / PSR / Proper Roofs use) that is inert without Viewpoint.
+    # No Java, so the 42.22 `IsoGridSquare.getObjects()` regression does not
+    # apply; it is a 42.21 build, Lua only.
+    # Its `Artel.*PackEnabled` switches gate WORLD SPAWN, not content: a disabled
+    # group stops its loot, books and (for steam) the station menu, but the items
+    # and recipes still exist. That is why the five overlaps were resolved by
+    # removing the other owner rather than by toggling Artel off. The one
+    # exception kept apart is power generation: the pack's LG/EPR/BADLANDS/PSR
+    # stack stays the only grid owner, so `Artel.SteamPackEnabled` is pinned off
+    # in `defaultSandbox` below.
+    { id = "3794133594"; title = "Artel Manufactory [SP/MP + Viewpoint support]"; } # ArtelManufactory
 
     # ── Reading / sleep / time control ─────────────────────────────────────
     # Read While Walking is the single-purpose B42.15 update and is preferred
@@ -1622,9 +1660,11 @@
     # ── Bushcraft / primitive survival ─────────────────────────────────────
     # Bootstrap progression first, then its expansion, then the digging
     # activity and the Wildwrought skill mods. Prospecting/Knapping/Masonry
-    # come before the mods that consume their outputs; Root Cellar stores the
-    # results. Wildwrought: Leatherworking is omitted (TFC Combine Leather
-    # already does small -> medium -> large).
+    # come before the mods that consume their outputs. Wildwrought:
+    # Leatherworking is omitted (TFC Combine Leather already does small ->
+    # medium -> large), and Root Cellar is gone with the Artel swap (its cellar
+    # owns finished-food storage); Wilderness Progression Expanded's ice cellar
+    # stays as the bushcraft-flavoured counterpart.
     "WireToNails42"          # Wilderness Progression
     "CrudeDoorsAndShutters"  # Wilderness Progression Expanded
     "zodi_digging_pit"
@@ -1638,7 +1678,6 @@
     "WWS_LooseClay"
     "WWS_WashedSand"
     "twistcamping"           # TwisTonFire Camping QoL
-    "Cellar"                 # Root Cellar
 
     # ── Livestock / animal husbandry ───────────────────────────────────────
     # Stability fix first; FeedThatAnimalMP replaces the incompatible SP mod;
@@ -1662,9 +1701,12 @@
     "VanillaTrappingFix"
     "EURY_TRAPPING"
 
-    # ── Beekeeping ─────────────────────────────────────────────────────────
+    # ── UI framework (NeatUI) ──────────────────────────────────────────────
+    # Not beekeeping-specific: Neat Building, Neat Crafting and Project Cook
+    # all hard-require it, so it loads before all three. ShelterHold: Beehive
+    # used to live here and is retired in favour of Artel Manufactory's
+    # beekeeping branch (see the content-overhaul group below).
     "NeatUI_Framework"
-    "ShelterHold_Beehive"
 
     # ── Fishing ────────────────────────────────────────────────────────────
     # Better Fishing's sandbox defaults are vanilla; FishingActionMPFix needs
@@ -1681,14 +1723,14 @@
     "WWS_ReturnFish"
 
     # ── Cooking ────────────────────────────────────────────────────────────
-    # NeatUI_Framework is loaded in the beekeeping section above; Project Cook
-    # and its pixel icon pack require it, so they follow it here.
+    # NeatUI_Framework is loaded in the UI-framework group above; Project Cook
+    # and its pixel icon pack require it, so they follow it here. The canning /
+    # drying / cellar mods that used to sit here are retired with the Artel swap
+    # (same reasoning in the Workshop list above).
     "Project_Cook"
     "Project_Cook_Pixel_Icon_Pack"
     "OGCookingExpanded"
     "RealisticRecipes"
-    "ImmersivePreservationCanningJarring"
-    "WWS_PreservedFood"
     "WWS_IronCookware"
     "DirectStoveCampfire"
     "CookThawBurnTimers"
@@ -1764,6 +1806,19 @@
     # mods/viewpoint-level15/.
     "PZViewpointLevel15"
 
+    # ── Content overhaul: Artel Manufactory ────────────────────────────────
+    # Loaded late on purpose: it wraps `ISMoveableSpriteProps` canPlace/
+    # canPickUp/pickUp/canScrap, `ISMoveableCursor.create` and
+    # `ISLightActions` battery methods, so it should wrap the final state those
+    # classes have after RebalancedPropMoving, FurniturePushPull and the light
+    # mods above. It also wraps `ISReadABook:complete/perform/isValid`, which
+    # composes with Read While Walking either way.
+    # No `require=`/`loadModAfter=`, so this position is the only ordering that
+    # applies. Its sandbox namespace is `Artel`; only `Artel.SteamPackEnabled`
+    # is pinned (see `defaultSandbox`). See the Workshop entry for what it
+    # replaced.
+    "ArtelManufactory"
+
     # ── Difficulty / threat escalation ─────────────────────────────────────
     # Loaded last so their Lua hooks see the full mod set. DEZ and The Horde Is
     # Coming scale with days survived; mdrc_b42 and RangedMaintenance are in
@@ -1799,7 +1854,7 @@
     "Erikas_Tiles"
 
     # ── Construction / carpentry ───────────────────────────────────────────
-    # Placed after NeatUI_Framework (Beekeeping) and the Community Tile Pack
+    # Placed after NeatUI_Framework (UI framework group) and the Community Tile Pack
     # (Map tile packs) because Neat_Building and BarricadesRebuilt require
     # them. Neat_Building is the full variant; its UIOnly/SESCompat/Railings
     # siblings declare it incompatible, so only this one is enabled. Neat
@@ -1920,7 +1975,9 @@
   # booleans) and is the only one of these three whose values are booleans.
   # Functional Car Lift declares `FunctionalCarLift.*` (one integer range, three
   # booleans); see the pin below.
-  sandboxNamespaces = [ "AutoAll" "AreaTasks" "SkillJournal" "FunctionalCarLift" ];
+  # Artel Manufactory declares `Artel.*` (35 options, one toggle per content
+  # group plus loot/speed knobs); only its steam generator is pinned.
+  sandboxNamespaces = [ "AutoAll" "AreaTasks" "SkillJournal" "FunctionalCarLift" "Artel" ];
 
   # -1 = leave the player's Mod Options choice, 0 = force off for everyone,
   # 1 = force on. One owner per niche: Rip All Clothing owns ripping (it covers
@@ -1957,6 +2014,18 @@
     "SkillJournal.RecoverRecipes" = true;
     "SkillJournal.RecoverExerciseRegularity" = false;
     "SkillJournal.RecoverFishRecords" = false;
+
+    # Artel Manufactory: power generation stays the pack's LG/EPR/BADLANDS/PSR
+    # stack's job. Its four-stage steam generator is a second off-grid source
+    # built from scratch (wood + charcoal + water -> four build stages, welding
+    # repairs), which would become the easy answer to every power problem in
+    # every base. Off means the station menu does not appear and its manual
+    # stops spawning; stations already placed stay in the world, and the
+    # bioreactor is a separate switch under `Artel.ChemPackEnabled` (left at its
+    # default, because the chemistry bench itself is unique content here).
+    # Every other Artel group is left at its default: it owns beekeeping,
+    # canning, drying and cold storage now that the previous owners are retired.
+    "Artel.SteamPackEnabled" = false;
 
     # Functional Car Lift: convert the vanilla car-shop lift tiles into the
     # mod's movable `car_lift_01_*` pieces as each square loads, so the lifts

@@ -8,6 +8,39 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Artel Manufactory replaces four pack systems in `viewpoint`.**
+  `modpacks/viewpoint.nix` adds **Artel Manufactory** (`3794133594`, Mod ID
+  `ArtelManufactory`); the pack is now 443 Workshop items / 491 mods. It is one
+  large content mod — brewery, canning, rations, sports nutrition, beekeeping,
+  dairy, drying and freeze-drying, camping gear, home automation, chemistry,
+  steam generation, trading post and "quantum" storage; 798 items in its own
+  `Artel` module, 803 recipes. Added only after verifying it is additively safe:
+  no `require=`/`incompatible=`/`loadModAfter=`, no vanilla file overrides
+  (every script and Lua file is `PMK_*`), vanilla classes wrapped rather than
+  replaced (`ISMoveableSpriteProps`, `ISReadABook`, `ISLightActions`,
+  `ISBuildIsoEntity`), server-authoritative item creation through its own `PMK`
+  command channel, all sandbox options under `Artel.*`, no Java (so the 42.22
+  `getObjects()` regression cannot apply), and a real Viewpoint model pack via
+  `Viewpoint.ModelPacks.register` — the same call Viewpoint Workstations 3D, PSR
+  and Proper Roofs already use — that is inert without Viewpoint. It carries no
+  recipe-name collision and no tiledef collision (`Artel 6011`) against the pack.
+  Four previous owners of the niches it re-implements are **retired** rather than
+  run in parallel, because Artel's `Artel.*PackEnabled` switches gate world
+  spawn, not content: **Immersive Preservation: Canning and Jarring**
+  (`3560836822`), **Wildwrought: Preserved Food** (`3813109633`), **Root Cellar
+  [B42]** (`3799755212`) and **ShelterHold: Beehive** (`3596827035`). None of the
+  four was referenced by another pack mod (no `require=`, and the 8 `IPJarring*`
+  items appear only in their own mod); `NeatUI_Framework` stays because Neat
+  Building, Neat Crafting and Project Cook hard-require it. Power generation is
+  the one overlap kept apart: `Artel.SteamPackEnabled` is pinned `false` in
+  `defaultSandbox`, so LG/EPR/BADLANDS/PSR remain the only grid owner, and the
+  `Artel` sandbox namespace is declared for that pin. Two caveats: Artel is a
+  42.21 build (Lua only, running on 42.22), and removing four mods is
+  save-affecting — jars, preserved food, cellar storage and hives already placed
+  in this world's save will come back as missing items on the next load.
+
+### Added
+
 - **Beyond Ten (skill levels 11-15) in the `viewpoint` pack.**
   `modpacks/viewpoint.nix` adds **Beyond Ten - Level 15 Skills** (`3765241705`,
   Mod ID `BeyondTen`); the pack is now 446 Workshop items / 494 mods. The B42

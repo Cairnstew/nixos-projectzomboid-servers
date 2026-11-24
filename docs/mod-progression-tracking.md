@@ -4,7 +4,7 @@ This document tracks what each mod in the `viewpoint` pack adds in terms of prog
 
 **Pack:** `viewpoint` (Project Viewpoint Vanilla+)  
 **Last Updated:** 2026-11-24  
-**Total Mods:** 446 Workshop items, 494 Mod IDs (7 bundled in-repo)
+**Total Mods:** 443 Workshop items, 491 Mod IDs (7 bundled in-repo)
 
 ## Progression Categories
 
@@ -169,6 +169,7 @@ multiplier back.
 | Neat Building | 3536052310 | UI/Building | Building UX improvement | Better building menu navigation. |
 | Specific Loot (KI5) | 3457132019 | Loot | Affects loot tables | Changes what spawns where, affects item discovery progression. |
 | Containers! | 2625625421 | Storage/World | New containers | Additional storage options in world. |
+| Artel Manufactory | 3794133594 | Large content overhaul | Brewery, canning, rations, sports nutrition, beekeeping, dairy, drying/freeze-drying, camping gear, home automation, chemistry, trading post, quantum storage | 798 items in its own `Artel` module, server-authoritative item creation, per-group loot toggles (`Artel.*`). Owns beekeeping, canning, drying and cold storage after Immersive Preservation, Wildwrought Preserved Food, Root Cellar and ShelterHold: Beehive were retired. Steam generator pinned off (`Artel.SteamPackEnabled = false`) so the pack's LG/EPR/BADLANDS/PSR stack stays the only grid owner. Ships a Viewpoint model pack; no Java, 42.21 Lua build. |
 | Hoarder's Delight | 3626823538 | Storage/crafting | Bulk packing | Boxes/cartons hold 6-270 of a stackable item and cut the load by 1/6; boxes do not spawn in loot. |
 | Auto Mechanics | 3387539308 | Skills/Repair | Vehicle repair QoL | Helps with mechanic skill progression/vehicle maintenance. |
 | More Damaged Objects [42MP] | 3413150945 | World | More salvage opportunities | More objects to break down/salvage. |
