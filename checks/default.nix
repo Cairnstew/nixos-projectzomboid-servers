@@ -1871,6 +1871,117 @@ in
         touch "$out"
       '';
 
+  # ── viewpoint-level15: the Beyond Ten / Viewpoint skills-tab adapter ──
+  # The adapter only reruns Viewpoint's own slot formula with 15 instead of 10,
+  # so the check is: it must stay inert without both mods, never hard-require
+  # either, and its geometry must actually make 15 pips fit the row that the
+  # ten-slot formula sized. The unit test drives the wrappers with plain tables
+  # (no game), the same way the bandage-guard scan test does.
+  viewpoint-level15 =
+    pkgs.runCommand "pz-viewpoint-level15-check"
+      {
+        nativeBuildInputs = [
+          pkgs.lua5_1
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        SRC = ../mods/viewpoint-level15;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+
+        info="$SRC/42/mod.info"
+        [ -f "$info" ] || fail "no 42/mod.info (B42 layout)"
+        grep -qx 'id=PZViewpointLevel15' "$info" || fail "mod.info id is not PZViewpointLevel15"
+        grep -qx 'versionMin=42.19' "$info" || fail "wrong versionMin"
+        ! grep -q '^require=' "$info" || fail "the adapter must not hard-require a mod"
+
+        for f in "$SRC"/42/media/lua/client/PZViewpointLevel15/*.lua; do
+          lua -e "assert(loadfile('$f'))" || fail "Lua does not parse: $f"
+        done
+
+        install="$SRC/42/media/lua/client/PZViewpointLevel15/install.lua"
+        grep -q 'tab.layout' "$install" || fail "ViewpointInvTabSkills.layout is not wrapped"
+        grep -q 'BeyondTen' "$install" || fail "no Beyond Ten gate"
+        grep -q 'pcall(M.refit' "$install" || fail "the layout hook is not pcall-guarded"
+        grep -q 'if tab._pzLevel15 then return true end' "$install" \
+          || fail "the wrap is not idempotent"
+
+        test_lua="$PWD/adapter-test.lua"
+        cat > "$test_lua" <<'LUA'
+        -- 1. No Beyond Ten, no Viewpoint: loading the file must do nothing.
+        local install = assert(os.getenv("INSTALL"))
+        dofile(install)
+        local M = assert(PZViewpointLevel15, "PZViewpointLevel15 not defined")
+        assert(M.apply(15) == false, "apply wrapped a tab that does not exist")
+
+        -- 2. Geometry: the ten-slot formula sizes `room` for 10 pips; the
+        --    fifteen-slot one must fit the same room.
+        local room, row = 300, 40
+        local s10, st10 = M.fitSlots(room, row, 10)
+        assert(s10 == 24 and st10 == 30, "the ten-slot formula changed upstream")
+        assert(10 * st10 <= room, "fixture: ten pips should fit")
+        local s15, st15 = M.fitSlots(room, row, 15)
+        assert(s15 and st15, "fitSlots returned nothing")
+        assert(15 * st15 <= room, "fifteen pips do not fit the row")
+        assert(s15 >= 6, "pips became smaller than Viewpoint's floor")
+
+        -- 3. refit() on a tab laid out for ten.
+        local view = {
+          box = { w = room + 40 + 100 + 8 * 3 },
+          m = { pad = 8 },
+          nameX = 40, nameW = 100, row = row,
+          square = s10, step = st10,
+        }
+        assert(M.refit(view, 15) == true, "refit did not shrink a ten-slot row")
+        assert(view.square == s15 and view.step == st15, "refit used other geometry")
+        assert(15 * view.step <= room, "refit still overflows")
+        assert(M.refit(view, 15) == false, "refit is not idempotent")
+
+        -- 4. Anything unexpected is left alone, never an error.
+        assert(M.refit(nil, 15) == false, "refit accepted nil")
+        assert(M.refit({}, 15) == false, "refit accepted an empty tab")
+        assert(M.refit({ box = { w = 400 }, m = { pad = 8 }, row = 40 }, 15) == false,
+          "refit accepted a tab without name fields")
+        assert(M.fitSlots(0, 0, 15) == nil, "fitSlots accepted an empty row")
+        assert(M.fitSlots(-10, 40, 15) == nil, "fitSlots accepted a negative room")
+
+        -- 5. With both mods present the wrap happens once and is used.
+        BeyondTen = { MAX_LEVEL = 15 }
+        ViewpointInvTabSkills = {
+          layout = function(self, area, m)
+            self.m = m
+            self.box = { w = area.w - m.pad * 4 }
+            self.nameX, self.nameW, self.row = 40, 100, 40
+            self.square, self.step = s10, st10
+          end,
+        }
+        dofile(install)
+        local tab = ViewpointInvTabSkills
+        assert(tab._pzLevel15 == true, "the tab was not marked wrapped")
+        local called = 0
+        local wrapped = tab.layout
+        tab.layout = function(...) called = called + 1 return wrapped(...) end
+        tab:layout({ x = 0, y = 0, w = room + 40 + 100 + 8 * 3 + 8 * 4, h = 600 }, { pad = 8 })
+        assert(called == 1, "the wrapper did not delegate")
+        assert(15 * tab.step <= room, "the wrapped layout did not refit")
+        assert(tab.square >= 6, "the wrapped layout lost the pip floor")
+
+        -- 6. MAX_LEVEL <= 10 (mod disabled by its own cap) means no wrap.
+        local ViewpointInvTabSkills = {
+          layout = function() end,
+        }
+        PZViewpointLevel15.apply(10) -- must be a no-op on the old table
+        assert(ViewpointInvTabSkills._pzLevel15 == nil, "apply wrapped at level 10")
+
+        print("viewpoint-level15 adapter ok")
+        LUA
+        INSTALL="$install" lua "$test_lua" || fail "the adapter behaviour test failed"
+
+        echo "pz-viewpoint-level15 ok"
+        touch "$out"
+      '';
+
   # ── pz-pack-web: the ready-to-upload connector tree ─────────────────
   # The artefact is what a human uploads to the Workshop, so the check is
   # structural: workshop.txt fields, the B42 mod layout, no hard `require=`, a

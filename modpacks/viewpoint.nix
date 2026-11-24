@@ -18,7 +18,7 @@
   # mods/area-tasks-menu-guard/. `PZBandageGuard` stops vanilla bandaging from
   # throwing on the server and replaces Replace Dirty Bandages (removed below);
   # see mods/bandage-guard/.
-  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZAreaTasksContainerRouting" "PZAreaTasksMenuGuard" "PZBandageGuard" ];
+  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZAreaTasksContainerRouting" "PZAreaTasksMenuGuard" "PZBandageGuard" "PZViewpointLevel15" ];
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
@@ -168,6 +168,49 @@
     # deliberately not enabled: the pack already runs Gunsmith (weapongunsmith)
     # with its own weapon-parts system, and this item ships a second parts set.
     { id = "3256482412"; title = "Hephas Occupations and Traits"; } # HephasOccupationsAndTraits_WithVanillaProfessions
+    # Level cap 10 -> 15 with its own "mastery" XP for levels 11-15, a server
+    # half that sets the level (`Server.lua` uses `setXPToLevel` plus a
+    # level-9 reservoir, so a dedicated server stays authoritative), and an API
+    # (`BeyondTen.RegisterTrainablePerk`, `RegisterBonusProvider`,
+    # `RegisterActionPerk`) for other mods. B42 root is `42/` (versionMin 42.19);
+    # the root `media/` tree is the B41 build and does not load on 42.22.
+    # Interaction with this pack's own perk mods, none of them a crash:
+    #   * Efficiency - its own XP path returns at level 10
+    #     (`EfficiencyXP.lua:96`), so it stays at 10.
+    #   * Toughness - linear multipliers in `ToughnessSkillMain.lua:28-30` go
+    #     negative past 10, where the divide/multiply cancels out: the panic,
+    #     pain and discomfort bonuses simply stop.
+    #   * Gunsmith - `GSmithAction:getDuration` is `400 - 25 * level`, so a
+    #     level-15 repair is 25 ms. Fast, not broken.
+    # Do not also enable Knox Network Progression (3821300859, already absent):
+    # it caps skills at 5/7/9/10 and the two cannot both be true. Its Viewpoint
+    # Skills tab needs our bundled `PZViewpointLevel15` to draw 15 slots; see
+    # mods/viewpoint-level15/.
+    { id = "3765241705"; title = "Beyond Ten - Level 15 Skills [B41/B42]"; } # BeyondTen
+    # Scavenger Skill (3407792640, `ScavengingSkill`) is deliberately absent:
+    #   * Its default `Level0BonusLoot`/`Level1BonusLoot` are 100/110 percent, and
+    #     `ScavengerSkillMain.lua` turns that into `n = floor(count * 1.0)` for
+    #     2-4 item stacks and `floor(count * 2)` for 5+, i.e. a successful roll
+    #     doubles or triples the stack *on top of* the 5-30% per-level find
+    #     chance. That is loot inflation on a different scale to the pack's
+    #     loot-table mods, and it cannot be tuned off without also losing the
+    #     skill.
+    #   * It is client-authoritative: `container:AddItem`, `container:addItemOnServer`
+    #     and `getXp():AddXP` all run from a client inventory callback
+    #     (`Events.OnRefreshInventoryWindowContainers`) with no `isClient()`
+    #     guard. Two players opening the same container can both roll before the
+    #     container's ModData flag syncs.
+    #   * It is a B42.0 build (last updated 2025-01-17) using the B41 trait path
+    #     (`TraitFactory.addTrait`, `BaseGameCharacterDetails`,
+    #     `require('NPCs/MainCreationMethods')`, and a `SyncXp` global that no mod
+    #     here defines), while this pack's trait mods use B42's
+    #     `CharacterTrait.register`.
+    #   * Its sandbox table stops at `Level10FindChance`/`Level10BonusLoot` and
+    #     the code indexes those keys by perk level, so Beyond Ten above would
+    #     raise Scavenging past 10 and turn every container refresh into a
+    #     `Level11FindChance` nil arithmetic error.
+    # Re-add it only with those fixed upstream (server-side rolls, sane bonus
+    # defaults, a Level15 row).
 
     { id = "3816442251"; title = "Viewpoint: Living Props"; }
     { id = "3815630947"; title = "Viewpoint Rolling Hills"; }
@@ -184,6 +227,22 @@
     # replay that pass by hand and draw its ghost from `OnPostRender`. The mod
     # would load without an error and render nothing, so re-add it only if
     # Viewpoint ever exposes a world-draw event (or the vanilla renderer is used).
+    # Atmospherics (Project Viewpoint) (3843942344) is deliberately absent, and
+    # for a different reason: it is genuinely Viewpoint-native (require
+    # ZombieBuddy + Viewpoint, `versionMin`/`versionMax` 42.22, Java on
+    # Viewpoint's own API) and it does ship "Fireflies and lamp insects"
+    # ("small insects hover near selected outdoor lights"). But that is one
+    # toggle inside a whole atmosphere stack: ~230 classes covering snow cover
+    # and deformation, roof snow, icicles, blown snow, mud ruts, black ice,
+    # window shards, falling trees, ground mist, tyre dust/spray/skid smoke and
+    # soft-body vehicles, plus a server half (window-condition relay, weather
+    # policy) and `ImmersiveWeathers.{MudSlips,MudResistance,SnowResistance,
+    # Gameplay,BlackIce,SweatDampness}` sandbox options. Its effects are
+    # per-client Viewpoint settings (Delete -> Advanced -> Northwake
+    # Interactive), so the pack cannot pin "insects only", and its tyre dust,
+    # spray and engine smoke duplicate Real Vehicle VFX above. Reconsider only
+    # as a deliberate swap that retires RVV + RVV+Viewpoint; the item also
+    # carries no Multiplayer tag.
     # Surface Fix (3814398576) is deliberately absent. Its Java mod was built
     # against 42.21, and 42.22 changed `IsoGridSquare.getObjects()` from
     # `PZArrayList` to `List<IsoObject>`; on 42.22 it aborts the client while the
@@ -1689,6 +1748,21 @@
     # follows Efficiency to keep the group together.
     "efficiencySkillMod2" # only root in item 3374408921 that targets 42.13+
     "ToughnessSkill"
+
+    # ── Skill cap / mastery (levels 11-15) ─────────────────────────────────
+    # Beyond Ten patches `ISSkillProgressBar` and the perk catalog client-side
+    # and drives the level from its server half, so it must be in `Mods=` (it
+    # is) and loads after the perk definitions it enumerates. Its trainable set
+    # is derived at runtime ("no child perks, xp10 > 0"), which is why it sits
+    # after the custom-perk mods above.
+    "BeyondTen"
+    # Our bundled adapter: Viewpoint's Skills tab hard-codes ten pip slots, so
+    # levels 11-15 would overrun the row. This wraps
+    # `ViewpointInvTabSkills.layout` and re-spaces the grid for 15; inert
+    # without BeyondTen/Viewpoint. It loads after both, and `loadModAfter` is a
+    # hint only, so this position in the list is what actually orders it. See
+    # mods/viewpoint-level15/.
+    "PZViewpointLevel15"
 
     # ── Difficulty / threat escalation ─────────────────────────────────────
     # Loaded last so their Lua hooks see the full mod set. DEZ and The Horde Is

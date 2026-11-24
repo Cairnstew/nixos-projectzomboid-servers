@@ -8,6 +8,40 @@ All notable changes to this project. Format follows
 
 ### Added
 
+- **Beyond Ten (skill levels 11-15) in the `viewpoint` pack.**
+  `modpacks/viewpoint.nix` adds **Beyond Ten - Level 15 Skills** (`3765241705`,
+  Mod ID `BeyondTen`); the pack is now 446 Workshop items / 494 mods. The B42
+  root is the `42/` tree (`versionMin` 42.19); the item's root `media/` tree is
+  the B41 build and does not load on 42.22. Levelling past 10 is driven from the
+  mod's `Server.lua` (`setXPToLevel` plus a level-9 reservoir), so a dedicated
+  server stays authoritative, and it exposes an API
+  (`RegisterTrainablePerk`/`RegisterBonusProvider`/`RegisterActionPerk`) rather
+  than patching other mods. Its trainable set is derived at runtime ("no child
+  perks, `xp10 > 0`"), which picks up this pack's custom perks — none of them
+  break: Efficiency's own XP path returns at level 10, Toughness's linear
+  multipliers cancel themselves out past 10 (its panic/pain/discomfort bonus
+  simply stops), and Gunsmith's action time stays positive (a level-15 repair is
+  25 ms, fast but valid). Deliberately not stacked with Knox Network Progression
+  (which caps skills at 5/7/9/10, and remains absent).
+
+- **`PZViewpointLevel15`, a bundled adapter for that.** Viewpoint replaces the
+  inventory screen, and its Skills tab hard-codes ten pip slots
+  (`Viewpoint_InvTabSkills.lua`: `local LEVELS = 10`), sizing `square`/`step`
+  from that count. Levels 11-15 already trained correctly — Viewpoint calls the
+  vanilla `ISSkillProgressBar.getXpForLvl`, which Beyond Ten patches — but the
+  row would overrun the XP column by half its width. `LEVELS` is a file-local
+  upvalue, so `mods/viewpoint-level15/` wraps
+  `ViewpointInvTabSkills.layout` and re-runs Viewpoint's own formula with 15
+  slots, leaving every other field alone. It is inert without both mods, never
+  hard-requires either, is idempotent, and runs the hook under `pcall` so an
+  upstream change leaves Viewpoint's ten-slot render in place. Known cosmetic
+  limit: `T:squares` loops against its own upvalue, so a level 11-14 row shows
+  no in-progress square and levels 11-15 get no locked hint, exactly what
+  Viewpoint already does at level 10. **A new bundled mod means the connector
+  Workshop item (3839932016) must be re-published before any host activates this
+  pack** — `Mods=` now names `PZViewpointLevel15`, and `failOnMissingMods`
+  refuses a boot when the installed connector does not ship it.
+
 - **Movable car lifts in the `viewpoint` pack.** Functional Car Lift
   (`3464551542`, Mod ID `FunctionalCarLift`) was already loaded, but only its
   "no Jack needed near a lift" half did anything: the vanilla car-shop lift

@@ -1,0 +1,6 @@
+name=Viewpoint Level 15 Skills
+id=PZViewpointLevel15
+author=nixos-projectzomboid-servers
+modversion=1.0.0
+description=Fits Beyond Ten's levels 11-15 into Viewpoint's Skills tab by re-spacing Viewpoint's own grid. Additive hook: wraps ViewpointInvTabSkills.layout and overrides no file; inert without Beyond Ten or Viewpoint.
+versionMin=42.19

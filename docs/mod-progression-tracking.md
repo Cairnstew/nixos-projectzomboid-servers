@@ -4,7 +4,7 @@ This document tracks what each mod in the `viewpoint` pack adds in terms of prog
 
 **Pack:** `viewpoint` (Project Viewpoint Vanilla+)  
 **Last Updated:** 2026-11-24  
-**Total Mods:** 445 Workshop items, 492 Mod IDs (6 bundled in-repo)
+**Total Mods:** 446 Workshop items, 494 Mod IDs (7 bundled in-repo)
 
 ## Progression Categories
 
@@ -147,6 +147,8 @@ LiuDing_Tiles (3736154771), TryHonesty's Tiles (2844685624) and Erika's tiles
 | LG Tape XP Indicator | 3777587577 | UI/QoL | XP visibility | Shows XP gains clearly. |
 | Neat Crafting & Neat Building - XP & Mod Display | 3540503606 | UI/QoL | XP visibility for recipes | Shows XP per recipe/build and which skill. |
 | Skill Journal | 3776641628 | Skills/Death | Reading state survives death | Craft a journal, write your reading into it, read it back after death. The pack pins it to a reading ledger (`RecoveryPercentage = 0`, `RecoverSkillBookProgress = true`, `RecoverRecipes = true`): skill XP is **not** recovered, but the skill books, the XP multiplier they were worth and the learned recipes come back, so a new character does not re-read five volumes per skill or re-find a magazine gate. Kills, exercise regularity and fish records are forced off. |
+| Beyond Ten - Level 15 Skills | 3765241705 | Skills/cap | Trainable skills to 15 | Mastery XP for levels 11-15 with server-authoritative levelling (`Server.lua`), plus level-gated bonus options. Custom perks derived at runtime; Efficiency and Toughness stop at 10 by their own maths, Gunsmith's action time keeps shrinking. Needs the bundled `PZViewpointLevel15` to draw 15 slots in Viewpoint's Skills tab. Not combinable with Knox Network Progression (caps 5/7/9/10). |
+| Viewpoint Level 15 Skills (bundled) | — | UI/compat | None | `mods/viewpoint-level15/`; re-spaces Viewpoint's ten-slot Skills grid for 15. Inert without Beyond Ten; no progression content of its own. |
 
 `viewpoint` deliberately keeps one owner for cross-death progression. Skill
 Journal is the only recovery mod in the pack, and the four alternatives were
