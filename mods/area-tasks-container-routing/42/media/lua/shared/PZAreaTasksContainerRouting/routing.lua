@@ -52,13 +52,24 @@ function Routing.rule(filters, selection, index)
 end
 
 --- Does this rule accept the item?  `nil` rule means unconfigured.
---- `category` and `fullType` may be nil (items with no script); an explicit
---- include still wins in that case, and a category rule simply cannot match.
-function Routing.accepts(rule, category, fullType)
+---
+--- `categories` is one name or an array of candidate names: the item's display
+--- category (Better Sort rewrites that to ClothBody, ToolC, ...) and its base
+--- category (the ItemType category, which stays Clothing, Tool, ...).  A
+--- Manage Containers list can hold either, so any match accepts.  `fullType`
+--- may be nil; an explicit include still wins in that case, and a category rule
+--- simply cannot match.
+function Routing.accepts(rule, categories, fullType)
     if rule == nil then return true end
     if fullType and rule.include[fullType] then return true end
-    if category and rule.categories[category] then
-        return not (fullType and rule.exclude[fullType])
+    if type(categories) == "string" then categories = { categories } end
+    if type(categories) == "table" then
+        for index = 1, #categories do
+            local category = categories[index]
+            if category and rule.categories[category] then
+                return not (fullType and rule.exclude[fullType])
+            end
+        end
     end
     return false
 end

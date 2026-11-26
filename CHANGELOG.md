@@ -8,6 +8,16 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **Area Tasks routing matches both display and base item categories.** Better
+  Sort rewrites `DisplayCategory`, so the clothing in a container reads
+  `ClothBody` / `ClothLeg` / … while its ItemType category is still `Clothing`.
+  A destination configured with the vanilla `Clothing` category therefore
+  rejected every item, and the 1.1.0 adapter logged the whole selection as
+  "not accepted". The acceptance test now treats the display category and the
+  base category as candidates, so a vanilla preset keeps working (and a
+  `Cloth*`-only preset still accepts only those). `mods/area-tasks-container-routing/`
+  (1.1.1).
+
 - **Area Tasks Container Routing now filters single-container destinations and
   ground pickups, and logs its decisions.** The adapter only wrapped
   `VehicleStorage.reserve`, which Area Tasks does not call for a single

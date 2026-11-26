@@ -37,15 +37,17 @@ which Manage Containers category is missing. Nothing is dropped into an
 arbitrary container and the job does not stop with items in hand. Capacity
 failures keep upstream's own message.
 
-**Categories come from the item list, not from the script name.** Better Sort
+**Categories are matched by display *and* base category.** Better Sort
 (`BetterSortCC`) rewrites `DisplayCategory`, so vanilla `Clothing` becomes
 `ClothBody` / `ClothLeg` / `ClothFeet` / `ClothAcc` / `ClothBack` / `ClothBag`,
-and tools become `ToolC` / `ToolM`. A container configured with the vanilla
-`Clothing` category therefore accepts nothing that Better Sort has re-tagged —
-the same thing happens with Manage Containers' own "Put in assigned
-containers". If a whole family is left behind, configure the container with the
-`Cloth*` categories (Manage Containers' "Set Categories From Container" with
-one sample of each in it does this in one click) and not with `Clothing`.
+tools become `ToolC` / `ToolM`, and so on. The ItemType category behind the item
+does not change. The adapter accepts an item when **either** its display
+category **or** its base category is listed, so a container configured with the
+vanilla `Clothing` keeps accepting Better Sort clothing instead of leaving the
+whole family behind. (Manage Containers' own "Put in assigned containers" only
+compares the display category, which is why this adapter needs the extra term.)
+A container configured with only the `Cloth*` subcategories still accepts just
+those.
 
 Not touched, deliberately:
 

@@ -159,12 +159,24 @@ local function ruleFor(container, playerObj)
     return rule
 end
 
+-- An item has a DisplayCategory (Better Sort rewrites it to ClothBody, ToolC,
+-- ...) and a base category from its ItemType (Clothing, Tool, ...). A Manage
+-- Containers list can contain either, so both are candidates: a container
+-- configured with the vanilla "Clothing" keeps accepting Better Sort clothing.
 local function itemFields(item)
-    local okCategory, category = pcall(function()
-        return item:getDisplayCategory() or item:getCategory()
-    end)
+    local categories = { }
+    local okDisplay, display = pcall(function() return item:getDisplayCategory() end)
+    if okDisplay and display then categories[#categories + 1] = display end
+    local okBase, base = pcall(function() return item:getCategory() end)
+    if okBase and base and base ~= display then categories[#categories + 1] = base end
     local okType, fullType = pcall(function() return item:getFullType() end)
-    return okCategory and category or nil, okType and fullType or nil
+    return categories, okType and fullType or nil
+end
+
+local function categoriesLabel(categories)
+    if type(categories) == "string" then return categories end
+    if type(categories) ~= "table" or #categories == 0 then return "no category" end
+    return table.concat(categories, "/")
 end
 
 -- The destination containers of a job/task definition, in Area Tasks' own
@@ -281,12 +293,12 @@ local function notice(playerObj, key, text)
     end
 end
 
-local function noticeItem(playerObj, item, fullType, category)
+local function noticeItem(playerObj, item, fullType, categories)
     local okName, name = pcall(function() return item:getName() end)
     notice(playerObj, fullType or "?",
         "Area Tasks: no configured container accepts " ..
         tostring(okName and name or "that item") ..
-        " (" .. tostring(category or "no category") .. ")")
+        " (" .. categoriesLabel(categories) .. ")")
 end
 
 -- Remove items no selected destination accepts. Returns the kept records, the
@@ -296,8 +308,8 @@ local function pruneSources(playerObj, label, sources, total, rules)
     for _, source in ipairs(sources or { }) do
         local items = { }
         for _, descriptor in ipairs(source.items or { }) do
-            local category, fullType = itemFields(descriptor.item)
-            if Routing.acceptsAny(rules, category, fullType) then
+            local categories, fullType = itemFields(descriptor.item)
+            if Routing.acceptsAny(rules, categories, fullType) then
                 items[#items + 1] = descriptor
                 keptCount = keptCount + 1
             else
@@ -306,7 +318,7 @@ local function pruneSources(playerObj, label, sources, total, rules)
                 if not types[key] then
                     types[key] = true
                     log(string.format("%s: left %s (%s) in place; no destination preset accepts it",
-                        label, key, tostring(category or "no category")))
+                        label, key, categoriesLabel(categories)))
                 end
             end
         end
@@ -334,11 +346,11 @@ local function wrappedReserve(playerObj, containers, item, reservations)
         return original(playerObj, containers, item, reservations)
     end
 
-    local category, fullType = itemFields(item)
+    local categories, fullType = itemFields(item)
     local rejected = { }
     for index = 1, #containers do
         local container = containers[index]
-        if Routing.accepts(ruleFor(container, playerObj), category, fullType) then
+        if Routing.accepts(ruleFor(container, playerObj), categories, fullType) then
             local taken = original(playerObj, { container }, item, reservations)
             if taken then
                 local job = currentJobFor(playerObj)
@@ -348,7 +360,7 @@ local function wrappedReserve(playerObj, containers, item, reservations)
                     local key = fullType or "?"
                     if not seen[key] then
                         seen[key] = true
-                        log(string.format("%s (%s) -> %s", key, tostring(category or "no category"),
+                        log(string.format("%s (%s) -> %s", key, categoriesLabel(categories),
                             containerLabel(container)))
                     end
                 end
@@ -363,7 +375,7 @@ local function wrappedReserve(playerObj, containers, item, reservations)
     -- former is this adapter's doing, and only when the item would have fitted
     -- somewhere. The throwaway reservations table is not the caller's.
     if #rejected > 0 and original(playerObj, containers, item, { }) then
-        noticeItem(playerObj, item, fullType, category)
+        noticeItem(playerObj, item, fullType, categories)
     end
     return nil
 end

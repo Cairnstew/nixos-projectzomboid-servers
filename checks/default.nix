@@ -1581,6 +1581,17 @@ in
         assert(not R.accepts(incRule, "Weapon", "Base.Hammer"), "an unlisted type was accepted")
         assert(not R.accepts(incRule, nil, nil), "a typeless item matched an include-only rule")
 
+        -- Display and base categories both count. Better Sort rewrites the
+        -- display category of clothing to ClothBody while the ItemType category
+        -- stays Clothing, so a vanilla Clothing preset must still match.
+        local cloth = R.rule({ [1] = { "Clothing" } }, sel, 1)
+        assert(R.accepts(cloth, "Clothing", "Base.Jacket"), "a base category was rejected")
+        assert(R.accepts(cloth, { "ClothBody", "Clothing" }, "Base.Jacket"),
+          "a display/base category pair was not matched")
+        assert(not R.accepts(cloth, { "ClothBody", "ClothBag" }, "Base.Bag"),
+          "subcategories that are not listed were accepted")
+        assert(not R.accepts(cloth, { }, "Base.Jacket"), "an item with no categories was accepted")
+
         -- Indexes are 1-based and independent.
         local multi = R.rule({ [1] = { "Food" }, [2] = { } },
           { [1] = { Include = { }, Exclude = { } }, [2] = { Include = { }, Exclude = { } } }, 2)
@@ -1624,12 +1635,12 @@ in
         HaloTextHelper = { addText = function() end }
         MCContainerDataKey, MCContainerDataPrefix = "manageContainerData", "manageContainerData_"
 
-        local function item(name, fullType, category)
+        local function item(name, fullType, display, base)
           return {
             getName = function() return name end,
             getFullType = function() return fullType end,
-            getDisplayCategory = function() return category end,
-            getCategory = function() return category end,
+            getDisplayCategory = function() return display end,
+            getCategory = function() return base or display end,
             getUnequippedWeight = function() return 1 end,
           }
         end
@@ -1666,7 +1677,7 @@ in
           collectTargets = function()
             return { { x = 0, y = 0, z = 0, total = 2, remaining = 2,
               sources = { { next = 1, items = {
-                { item = item("Beans", "Base.Beans", "Food") },
+                { item = item("Beans", "Base.Beans", "ClothBody", "Food") },
                 { item = item("Axe", "Base.Axe", "ToolC") } } } } } }
           end,
         } }
@@ -1683,7 +1694,7 @@ in
             containers = function() return { foodCrate } end,
             records = function()
               return { { next = 1, items = {
-                { item = item("Beans", "Base.Beans", "Food") },
+                { item = item("Beans", "Base.Beans", "ClothBody", "Food") },
                 { item = item("Axe", "Base.Axe", "ToolC") } } } }, 2
             end,
           },
@@ -1710,7 +1721,7 @@ in
         -- reserve still splits an item set by preset, and the rule cache
         -- notices the slot table Manage Containers rewrites on save.
         eq(AreaTasks.VehicleStorage.reserve(player, { foodCrate },
-          item("Beans", "Base.Beans", "Food"), { }), foodCrate, "accepted item")
+          item("Beans", "Base.Beans", "ClothBody", "Food"), { }), foodCrate, "accepted item")
         eq(AreaTasks.VehicleStorage.reserve(player, { foodCrate },
           item("Axe", "Base.Axe", "ToolC"), { }), nil, "rejected item")
         foodConfig.containersFilters[1] = { "Food", "ToolC" }
