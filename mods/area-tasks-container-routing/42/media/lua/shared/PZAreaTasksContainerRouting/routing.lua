@@ -62,3 +62,39 @@ function Routing.accepts(rule, category, fullType)
     end
     return false
 end
+
+--- Does any destination accept the item?  `rules` is an array, one entry per
+--- selected destination container: a rule table, or `false` for a container
+--- with no Manage Containers filter.  `false`/an empty list accepts everything,
+--- so a single unconfigured destination never turns an area sweep into a
+--- black hole.
+function Routing.acceptsAny(rules, category, fullType)
+    if type(rules) ~= "table" or #rules == 0 then return true end
+    for index = 1, #rules do
+        local rule = rules[index]
+        if rule == false or Routing.accepts(rule, category, fullType) then return true end
+    end
+    return false
+end
+
+--- True when at least one destination has a filter.  Used to skip the whole
+--- source scan when no selected container was ever configured.
+function Routing.anyConfigured(rules)
+    if type(rules) ~= "table" then return false end
+    for index = 1, #rules do
+        if rules[index] ~= false then return true end
+    end
+    return false
+end
+
+--- Compact rule summary for a log line.
+function Routing.describe(rule)
+    if rule == nil then return "no filter" end
+    local categories, include, exclude = { }, { }, { }
+    for category in pairs(rule.categories) do categories[#categories + 1] = category end
+    for fullType in pairs(rule.include) do include[#include + 1] = fullType end
+    for fullType in pairs(rule.exclude) do exclude[#exclude + 1] = fullType end
+    table.sort(categories)
+    return string.format("categories=[%s] include=%d exclude=%d",
+        table.concat(categories, ","), #include, #exclude)
+end

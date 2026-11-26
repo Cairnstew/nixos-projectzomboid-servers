@@ -1531,7 +1531,10 @@ in
 
         hooks="$SRC/42/media/lua/client/PZAreaTasksContainerRouting/hooks.lua"
         grep -q 'VehicleStorage' "$hooks" || fail "the routing seam is not VehicleStorage"
-        grep -q 'storage.reserve = wrapped' "$hooks" || fail "reserve is not wrapped"
+        grep -q 'storage.reserve = wrappedReserve' "$hooks" || fail "reserve is not wrapped"
+        grep -q 'sources.records = wrappedRecords' "$hooks" || fail "records is not wrapped"
+        grep -q 'task.collectTargets = wrapCollect' "$hooks" || fail "ground collectTargets is not wrapped"
+        grep -q 'AreaTaskStarted' "$hooks" || fail "job tracking does not use the lifecycle event"
         grep -q "API_VERSION ~= 1" "$hooks" || fail "the API version is not checked"
         grep -q 'getContainerData' "$hooks" || fail "Manage Containers' config is never read"
         grep -q 'MCContainerDataKey' "$hooks" || fail "the shared modData key is not used"
@@ -1583,10 +1586,141 @@ in
           { [1] = { Include = { }, Exclude = { } }, [2] = { Include = { }, Exclude = { } } }, 2)
         assert(multi == nil, "the second container inherited the first one's rule")
 
+        -- A set of destinations accepts an item if ANY of them does. `false`
+        -- is an unconfigured destination and must not filter anything out.
+        local food = R.rule(cats, sel, 1)
+        assert(R.acceptsAny({ food }, "Food", "Base.Beans"), "an accepted item was filtered out")
+        assert(not R.acceptsAny({ food }, "Weapon", "Base.Axe"),
+          "an item no destination accepts was kept")
+        assert(R.acceptsAny({ food, false }, "Weapon", "Base.Axe"),
+          "an unconfigured destination stopped accepting everything")
+        assert(R.acceptsAny({ }, "Weapon", "Base.Axe"),
+          "an empty destination list must not filter")
+        assert(not R.anyConfigured({ false, false }), "unconfigured destinations counted as filters")
+        assert(R.anyConfigured({ false, food }), "a configured destination was not counted")
+        assert(R.describe(nil) == "no filter", "an unconfigured rule was described as a filter")
+        assert(R.describe(food) == "categories=[Food] include=0 exclude=0",
+          "the rule summary is not stable: " .. R.describe(food))
+
         print("routing ok")
         LUA
         ( cd "$SRC/42/media/lua" && lua "$test_lua" ) \
           || fail "the routing unit test failed"
+
+        hooks_test="$PWD/hooks-test.lua"
+        cat > "$hooks_test" <<'LUA'
+        package.path = "./shared/?.lua;./?.lua;" .. package.path
+        local function eq(a, e, what)
+          assert(a == e, what .. ": expected " .. tostring(e) .. ", got " .. tostring(a))
+        end
+
+        local events = { started = { } }
+        Events = {
+          OnGameStart = { Add = function() end },
+          AreaTaskStarted = { Add = function(fn) events.started[#events.started + 1] = fn end },
+          AreaTaskFinished = { Add = function() end },
+        }
+        getTimestampMs = function() return os.time() * 1000 end
+        HaloTextHelper = { addText = function() end }
+        MCContainerDataKey, MCContainerDataPrefix = "manageContainerData", "manageContainerData_"
+
+        local function item(name, fullType, category)
+          return {
+            getName = function() return name end,
+            getFullType = function() return fullType end,
+            getDisplayCategory = function() return category end,
+            getCategory = function() return category end,
+            getUnequippedWeight = function() return 1 end,
+          }
+        end
+        local function newContainer(cfg)
+          local container = { }
+          local parent = {
+            getModData = function() return cfg and { [MCContainerDataKey] = cfg } or { } end,
+            getContainerIndex = function(_, c) return c == container and 0 or -1 end,
+          }
+          container.getType = function() return "crate" end
+          container.getParent = function() return parent end
+          container.hasRoomFor = function() return true end
+          return container
+        end
+        local foodConfig = { containersFilters = { [1] = { "Food" } },
+          exclusiveSelection = { [1] = { Include = { }, Exclude = { } } } }
+        local foodCrate = newContainer(foodConfig)
+        local openCrate = newContainer(nil)
+        ISConfigureContainerWindow = {
+          getContainerData = function(parent, slot)
+            local data = parent:getModData()[MCContainerDataKey] or { }
+            data.containersFilters = data.containersFilters or { }
+            data.exclusiveSelection = data.exclusiveSelection or { }
+            data.containersFilters[slot] = data.containersFilters[slot] or { }
+            data.exclusiveSelection[slot] = data.exclusiveSelection[slot] or { Include = { }, Exclude = { } }
+            return data
+          end,
+          getStoredUUID = function() return "" end,
+        }
+
+        local tasks = { {
+          id = "moveItems.ground.container", sourceMode = "ground", toMode = "container",
+          destinationMode = "storage", destinationContainer = foodCrate,
+          collectTargets = function()
+            return { { x = 0, y = 0, z = 0, total = 2, remaining = 2,
+              sources = { { next = 1, items = {
+                { item = item("Beans", "Base.Beans", "Food") },
+                { item = item("Axe", "Base.Axe", "ToolC") } } } } } }
+          end,
+        } }
+        AreaTasks = {
+          API_VERSION = 1,
+          VehicleStorage = {
+            reserve = function(_, containers, value)
+              for _, c in ipairs(containers) do if c:hasRoomFor() then return c, value end end
+            end,
+            containers = function() return { foodCrate } end,
+          },
+          ItemSources = {
+            endpoints = function(s) return s.endpoints end,
+            containers = function() return { foodCrate } end,
+            records = function()
+              return { { next = 1, items = {
+                { item = item("Beans", "Base.Beans", "Food") },
+                { item = item("Axe", "Base.Axe", "ToolC") } } } }, 2
+            end,
+          },
+          GroundItemDestinations = { storageAvailable = function() return true end },
+          Registry = { getAll = function() return tasks end },
+        }
+
+        dofile("client/PZAreaTasksContainerRouting/hooks.lua")
+        local player = { getPlayerNum = function() return 0 end }
+        for _, fn in ipairs(events.started) do fn({ id = 1, playerNum = 0, task = tasks[1] }) end
+
+        -- Records (container/vehicle sources) and collectTargets (ground
+        -- sources) both lose the items the destination preset rejects, and the
+        -- progress count follows.
+        local sources, total = AreaTasks.ItemSources.records(player, nil, { })
+        eq(total, 1, "records total")
+        eq(#sources[1].items, 1, "records items")
+        eq(sources[1].items[1].item:getFullType(), "Base.Beans", "records kept the wrong item")
+        local target = tasks[1].collectTargets(player, { }, nil, tasks[1])[1]
+        eq(target.total, 1, "ground total")
+        eq(target.remaining, 1, "ground remaining")
+        eq(target.sources[1].items[1].item:getFullType(), "Base.Beans", "ground kept the wrong item")
+
+        -- reserve still splits an item set by preset, and the rule cache
+        -- notices the slot table Manage Containers rewrites on save.
+        eq(AreaTasks.VehicleStorage.reserve(player, { foodCrate },
+          item("Beans", "Base.Beans", "Food"), { }), foodCrate, "accepted item")
+        eq(AreaTasks.VehicleStorage.reserve(player, { foodCrate },
+          item("Axe", "Base.Axe", "ToolC"), { }), nil, "rejected item")
+        foodConfig.containersFilters[1] = { "Food", "ToolC" }
+        eq(AreaTasks.VehicleStorage.reserve(player, { foodCrate },
+          item("Axe", "Base.Axe", "ToolC"), { }), foodCrate, "cache did not notice the rewrite")
+
+        print("hooks ok")
+        LUA
+        ( cd "$SRC/42/media/lua" && lua "$hooks_test" ) \
+          || fail "the hooks contract test failed"
 
         echo "pz-area-tasks-container-routing ok"
         touch "$out"

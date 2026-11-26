@@ -8,6 +8,21 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **Area Tasks Container Routing now filters single-container destinations and
+  ground pickups, and logs its decisions.** The adapter only wrapped
+  `VehicleStorage.reserve`, which Area Tasks does not call for a single
+  destination container (`Move Items → Container (Single)`) or for the ground
+  source's `collectTargets`; those routes moved everything regardless of the
+  destination's Manage Containers filter. It now prunes `collectTargets` and
+  `ItemSources.records` before pickup, so only items a selected destination
+  accepts become part of the job, while `reserve` still splits an area
+  destination across the containers that accept each item. The rule cache is
+  invalidated by the slot's own config tables (Manage Containers rewrites those
+  on save but keeps the parent table), so configuring a container and using it
+  in the same session now takes effect. Installation and every job log what was
+  wrapped, each compiled container rule, and which item types were left behind
+  and why. `mods/area-tasks-container-routing/` (1.1.0).
+
 - **The four mods the Artel swap retired are back in `viewpoint`.** A world
   created with them keeps their scripts in its persisted script registry (the
   `WorldDictionary` stored in the server's save), and a client that joins

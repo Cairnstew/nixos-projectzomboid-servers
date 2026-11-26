@@ -1539,12 +1539,14 @@
     # Batches the area-container -> single-container route so it fills carried
     # inventory before walking to the destination; see mods/area-tasks-batch-move/.
     "PZAreaTasksBatchMove"
-    # Routes container destinations by Manage Containers presets: an item is
-    # only collected (or delivered) into a container configured to accept it,
-    # and an item no destination accepts is left where it is with one line
-    # naming it. Wraps VehicleStorage.reserve; inert without Manage Containers.
-    # See mods/area-tasks-container-routing/README.md. Loads after Area Tasks
-    # and after manageContainers, which is where it sits relative to both.
+    # Routes item destinations by Manage Containers presets: only items a
+    # selected destination (single container, container area or vehicle area) is
+    # configured to accept are picked up, and each item goes only into a
+    # container that accepts it. Wraps VehicleStorage.reserve,
+    # ItemSources.records and the routes' collectTargets; inert without Manage
+    # Containers. See mods/area-tasks-container-routing/README.md. Loads after
+    # Area Tasks and after manageContainers, which is where it sits relative to
+    # both.
     "PZAreaTasksContainerRouting"
     # Keeps the Area Tasks submenu whole when one task's dynamic choices throw:
     # a failing task becomes a disabled option instead of aborting the fill,
