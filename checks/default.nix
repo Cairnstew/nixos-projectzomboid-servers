@@ -1451,6 +1451,11 @@ in
           || fail "a cancelled source walk ends the whole trip instead of one endpoint"
         grep -q 'source walk cancelled' "$hooks" \
           || fail "no log line for a source walk that is skipped"
+        grep -q 'forcedDelivery' "$hooks" \
+          || fail "a trip that exhausts its endpoints while carrying items can still retire"
+        grep -q 'delivering before finishing' "$hooks" \
+          || fail "no log line when the trip hands over to delivery"
+        grep -q 'finished: %s completed=' "$hooks" || fail "no per-job outcome line"
 
         test_lua="$PWD/batching-test.lua"
         cat > "$test_lua" <<'LUA'

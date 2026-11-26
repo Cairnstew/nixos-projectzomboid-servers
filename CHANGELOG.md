@@ -8,6 +8,16 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **Area Tasks' batched container trip no longer retires with the load still
+  carried.** When the last source endpoints were empty (or held only items the
+  destination preset rejects), native discovery reported `completed`; the
+  batching patch returned that to the worker, which retired the job before the
+  built-in delivery phase ever ran. The client log showed `carried=5` at the
+  final endpoint switch and then nothing: the items stayed in inventory and the
+  target was untouched. The wrapper now enters delivery once when the endpoints
+  are exhausted with `carried > 0`, and logs one line per finished job with the
+  outcome and counters. `mods/area-tasks-batch-move/` (1.0.4).
+
 - **Area Tasks routing no longer ends a batched trip before delivery.** The
   1.1.x filter pruned container/vehicle source records at discovery. When a
   remaining source held only items the destination preset rejected, discovery

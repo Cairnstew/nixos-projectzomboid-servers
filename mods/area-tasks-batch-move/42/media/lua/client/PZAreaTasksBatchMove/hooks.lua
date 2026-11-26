@@ -54,6 +54,7 @@ local function beginEndpoint(target, endpoint)
     target.total = 1
     target.remaining = 1
     target.guardLogged = nil
+    target.forcedDelivery = nil
 end
 
 -- Why `Sources.containers` rejected a container endpoint, in the same order its
@@ -323,6 +324,21 @@ local function wrap(task, AreaTasks)
             end
         end
 
+        -- The trip can run out of source containers while it is still carrying
+        -- items: the last endpoints were empty (or only held items the
+        -- destination rejects) and native queueCollection/queueDiscovery
+        -- reported completion. Native delivery is the only place that empties
+        -- `target.carried`; retiring here left the whole load in inventory and
+        -- the destination untouched. Hand over to delivery once.
+        if status == "completed" and #target.carried > 0 and not target.forcedDelivery then
+            target.forcedDelivery = true
+            log(string.format(
+                "trip reached %s with %d item(s) carried; delivering before finishing",
+                tostring(target.phase), #target.carried))
+            target.phase = "delivery"
+            return false, "defer"
+        end
+
         -- Trip-end diagnostic. Until now this route logged only the switches, so
         -- "it stopped early" and "it finished" produced the same silent log —
         -- there was no way to tell a blocked delivery, a full destination and a
@@ -390,6 +406,20 @@ function Hooks.install()
                 names[#names + 1] = tostring(task.id)
             end
         end
+    end
+
+    -- One line per job on the client log: completion was previously silent, so
+    -- "delivered" and "gave up with the load carried" looked the same.
+    if not Hooks.finishLogged and Events and Events.AreaTaskFinished then
+        Hooks.finishLogged = true
+        Events.AreaTaskFinished.Add(function(job, outcome)
+            log(string.format(
+                "job %s finished: %s completed=%d skipped=%d blocked=%d stale=%d unreachable=%d%s",
+                tostring(job.id), tostring(outcome), job.completed or 0, job.skipped or 0,
+                job.blocked or 0, job.stale or 0, job.unreachable or 0,
+                outcome == "blocked" and job.blockedReason
+                    and (" reason=" .. tostring(job.blockedReason)) or ""))
+        end)
     end
 
     Hooks.ready = installed or Hooks.ready

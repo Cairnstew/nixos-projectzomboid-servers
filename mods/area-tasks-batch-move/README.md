@@ -36,6 +36,14 @@ areas do not.
   stranding those items.
 - If the built-in discovery completes early (an empty container), the wrapper
   starts the next endpoint and returns `defer` instead of retiring the job.
+- If the trip runs out of endpoints while items are still carried — the last
+  source containers were empty, or only held items the destination preset
+  rejects — the wrapper enters the built-in delivery phase once and only then
+  lets the job finish. Retiring at that point left the whole load in inventory
+  and the destination untouched.
+- Logs one line per finished job (outcome plus completed/skipped/blocked
+  counters), so "delivered" and "gave up with the load carried" are no longer
+  indistinguishable.
 - **A source area may contain the destination.** Upstream refuses that job
   outright (`IGUI_AreaTasks_SameItemContainer`) and hides the container in the
   destination picker. The wrapper lets it be picked and drops that one endpoint
@@ -54,10 +62,13 @@ No Area Tasks file is copied, read or overridden. The wrapper is guarded on
 [PZAreaTasksBatchMove] collectTargets moveItems.containers.container: 3 container(s)
 [PZAreaTasksBatchMove] batching 3 containers into one trip
 [PZAreaTasksBatchMove] endpoint drained: carried=4 deferred=0 weight=14.20 limit=27.00 next=3/3 switched=true
+[PZAreaTasksBatchMove] trip reached discover with 5 item(s) carried; delivering before finishing
+[PZAreaTasksBatchMove] job 7 finished: completed=5 skipped=0 blocked=0 stale=0 unreachable=0
 ```
 
-`switched=false` means the character delivered at that point: the inventory was
-within the carry buffer (`min(2, limit*0.05)`) of its limit.
+`switched=false` means no further source endpoint was taken (the inventory was
+within the carry buffer, or the area is exhausted); the trip then delivers what
+it carries.
 
 ## Scope and limits
 
