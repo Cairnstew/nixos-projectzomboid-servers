@@ -1,7 +1,7 @@
 name=Area Tasks Container Routing
 id=PZAreaTasksContainerRouting
 author=nixos-projectzomboid-servers
-modversion=1.1.1
+modversion=1.1.2
 description=Routes Area Tasks' item destinations (container areas, vehicle areas, vehicle storage and single containers) by Manage Containers presets: only items a selected destination is configured to accept are picked up, each item goes only into a container that accepts it, and the rest are left where they are with a log line naming the item and its category. Additive patch: it wraps three Area Tasks functions and overrides no file of either mod. Works with Manage Containers absent (then it does nothing).
 require=AreaTasks
 loadModAfter=AreaTasks;manageContainers

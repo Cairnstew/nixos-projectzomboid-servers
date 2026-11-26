@@ -8,6 +8,19 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **Area Tasks routing no longer ends a batched trip before delivery.** The
+  1.1.x filter pruned container/vehicle source records at discovery. When a
+  remaining source held only items the destination preset rejected, discovery
+  returned zero items, and Area Tasks treats that as `completed`; the batching
+  patch had already switched to that endpoint, so the job finished with the
+  accepted load still carried and the target untouched (`carried=10` in the
+  client log, no delivery). Container/vehicle sources are now filtered at the
+  choice seams instead — `GroundItemDestinations.canFit` for single-container
+  destinations, `VehicleStorage.reserve` for area/vehicle destinations — so the
+  phase accounting stays upstream's. Ground sources are still pruned in
+  `collectTargets`, where a zero-item result only means "no job started".
+  `mods/area-tasks-container-routing/` (1.1.2).
+
 - **Area Tasks routing matches both display and base item categories.** Better
   Sort rewrites `DisplayCategory`, so the clothing in a container reads
   `ClothBody` / `ClothLeg` / … while its ItemType category is still `Clothing`.

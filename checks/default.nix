@@ -1532,9 +1532,8 @@ in
         hooks="$SRC/42/media/lua/client/PZAreaTasksContainerRouting/hooks.lua"
         grep -q 'VehicleStorage' "$hooks" || fail "the routing seam is not VehicleStorage"
         grep -q 'storage.reserve = wrappedReserve' "$hooks" || fail "reserve is not wrapped"
-        grep -q 'sources.records = wrappedRecords' "$hooks" || fail "records is not wrapped"
+        grep -q 'destinations.canFit = wrappedCanFit' "$hooks" || fail "canFit is not wrapped"
         grep -q 'task.collectTargets = wrapCollect' "$hooks" || fail "ground collectTargets is not wrapped"
-        grep -q 'AreaTaskStarted' "$hooks" || fail "job tracking does not use the lifecycle event"
         grep -q "API_VERSION ~= 1" "$hooks" || fail "the API version is not checked"
         grep -q 'getContainerData' "$hooks" || fail "Manage Containers' config is never read"
         grep -q 'MCContainerDataKey' "$hooks" || fail "the shared modData key is not used"
@@ -1625,12 +1624,7 @@ in
           assert(a == e, what .. ": expected " .. tostring(e) .. ", got " .. tostring(a))
         end
 
-        local events = { started = { } }
-        Events = {
-          OnGameStart = { Add = function() end },
-          AreaTaskStarted = { Add = function(fn) events.started[#events.started + 1] = fn end },
-          AreaTaskFinished = { Add = function() end },
-        }
+        Events = { OnGameStart = { Add = function() end } }
         getTimestampMs = function() return os.time() * 1000 end
         HaloTextHelper = { addText = function() end }
         MCContainerDataKey, MCContainerDataPrefix = "manageContainerData", "manageContainerData_"
@@ -1692,27 +1686,28 @@ in
           ItemSources = {
             endpoints = function(s) return s.endpoints end,
             containers = function() return { foodCrate } end,
-            records = function()
-              return { { next = 1, items = {
-                { item = item("Beans", "Base.Beans", "ClothBody", "Food") },
-                { item = item("Axe", "Base.Axe", "ToolC") } } } }, 2
-            end,
           },
-          GroundItemDestinations = { storageAvailable = function() return true end },
+          GroundItemDestinations = {
+            storageAvailable = function() return true end,
+            canFit = function() return true end,
+          },
           Registry = { getAll = function() return tasks end },
         }
 
         dofile("client/PZAreaTasksContainerRouting/hooks.lua")
         local player = { getPlayerNum = function() return 0 end }
-        for _, fn in ipairs(events.started) do fn({ id = 1, playerNum = 0, task = tasks[1] }) end
 
-        -- Records (container/vehicle sources) and collectTargets (ground
-        -- sources) both lose the items the destination preset rejects, and the
-        -- progress count follows.
-        local sources, total = AreaTasks.ItemSources.records(player, nil, { })
-        eq(total, 1, "records total")
-        eq(#sources[1].items, 1, "records items")
-        eq(sources[1].items[1].item:getFullType(), "Base.Beans", "records kept the wrong item")
+        -- Single-container (and bag) destinations choose through canFit: a
+        -- preset rejection must win over capacity, and the base category must
+        -- be honoured when Better Sort retags the display category.
+        eq(AreaTasks.GroundItemDestinations.canFit(player, foodCrate,
+          item("Beans", "Base.Beans", "ClothBody", "Food"), 0), true, "accepted canFit")
+        eq(AreaTasks.GroundItemDestinations.canFit(player, foodCrate,
+          item("Axe", "Base.Axe", "ToolC"), 0), false, "rejected canFit")
+        eq(AreaTasks.GroundItemDestinations.canFit(player, openCrate,
+          item("Axe", "Base.Axe", "ToolC"), 0), true, "unconfigured canFit")
+
+        -- Ground collectTargets is pruned at job start (single destination).
         local target = tasks[1].collectTargets(player, { }, nil, tasks[1])[1]
         eq(target.total, 1, "ground total")
         eq(target.remaining, 1, "ground remaining")
@@ -1721,9 +1716,9 @@ in
         -- reserve still splits an item set by preset, and the rule cache
         -- notices the slot table Manage Containers rewrites on save.
         eq(AreaTasks.VehicleStorage.reserve(player, { foodCrate },
-          item("Beans", "Base.Beans", "ClothBody", "Food"), { }), foodCrate, "accepted item")
+          item("Beans", "Base.Beans", "ClothBody", "Food"), { }), foodCrate, "accepted reserve")
         eq(AreaTasks.VehicleStorage.reserve(player, { foodCrate },
-          item("Axe", "Base.Axe", "ToolC"), { }), nil, "rejected item")
+          item("Axe", "Base.Axe", "ToolC"), { }), nil, "rejected reserve")
         foodConfig.containersFilters[1] = { "Food", "ToolC" }
         eq(AreaTasks.VehicleStorage.reserve(player, { foodCrate },
           item("Axe", "Base.Axe", "ToolC"), { }), foodCrate, "cache did not notice the rewrite")

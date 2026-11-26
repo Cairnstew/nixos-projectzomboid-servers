@@ -21,7 +21,7 @@ container will never accept and carries them around for nothing.
 | Move Items → **Containers (Area)** | an item is picked up only if some selected destination accepts it; each item is then delivered to a container that accepts it |
 | Move Items → **Vehicles (Area)**, and vehicle storage destinations | same rule per vehicle part container |
 | Move **ground** items → any of the above | the pickup decision is the same code path; an item with no accepting destination is never picked up |
-| container/vehicle source → any of the above | same; the destination rule is applied when the source records are built |
+| container/vehicle source → any of the above | same; the destination rule is applied when each item is chosen, so the source's deferred bookkeeping stays upstream's |
 
 Every item is routed independently, so a mixed load is split cleanly: food goes
 to the pantry, axes to the tool crate, and neither ends up in the other. Items
@@ -67,20 +67,25 @@ Three seams, no Area Tasks file copied or overridden:
 
 1. `AreaTasks.Tasks.MoveItems[*][*].collectTargets` is wrapped and the ground
    source's `sources[].items` are pruned of items no destination accepts. Area
-   Tasks builds ground records there itself, not through `ItemSources`.
-2. `AreaTasks.ItemSources.records(playerObj, endpoint, containers)` is wrapped
-   the same way. It is the single construction point for every container and
-   vehicle source record, so container sources, vehicle sources and container
-   areas are covered by one function. The job is identified through the API's
-   `AreaTaskStarted` / `AreaTaskFinished` events, with a `queueTarget` fallback
-   for API 1 builds that predate them.
+   Tasks builds ground records there itself, so a ground sweep never starts with
+   items that have nowhere to go.
+2. `AreaTasks.GroundItemDestinations.canFit(playerObj, container, item,
+   reserved)` is wrapped. It is the choice seam for a **single-container** (and
+   bag) destination. Refusing an item here leaves it in the source record, which
+   Area Tasks defers, so it is never picked up.
 3. `AreaTasks.VehicleStorage.reserve(playerObj, containers, item, reservations)`
-   is wrapped. It is the one place that answers "which of these destination
-   containers takes this item?" (collection pre-check, area delivery and
-   vehicle-storage delivery). The wrapper asks each container's rule first and
-   then delegates to the original `reserve` one container at a time, so capacity
-   maths and the per-container reservation weights stay upstream's; only the
-   *choice* gains the preset test.
+   is wrapped. It is the choice seam for **area/vehicle** destinations
+   (collection pre-check, area delivery and vehicle-storage delivery). The
+   wrapper asks each container's rule first and then delegates to the original
+   `reserve` one container at a time, so capacity maths and the per-container
+   reservation weights stay upstream's; only the *choice* gains the preset test.
+
+Container and vehicle source records are deliberately **not** pruned at
+discovery. Area Tasks treats a discovery that returns zero items as
+`completed`, and the batching patch has already switched to that endpoint, so
+pruning there ended a trip with the accepted load still carried and the target
+untouched. Filtering at the choice seam keeps upstream's phase accounting
+intact.
 
 The rule itself is `Routing`
 (`shared/PZAreaTasksContainerRouting/routing.lua`), which mirrors Manage
@@ -112,30 +117,31 @@ the presets did:
 
 ```
 [PZAreaTasksContainerRouting] Manage Containers: detected, shared key 'manageContainerData'
-[PZAreaTasksContainerRouting] installed: reserve+records; collectTargets wrapped on 25 route(s)
-[PZAreaTasksContainerRouting] job tracking: AreaTaskStarted / AreaTaskFinished
+[PZAreaTasksContainerRouting] installed: reserve+canFit; collectTargets wrapped on 25 route(s)
 [PZAreaTasksContainerRouting] crate#2 slot 2: categories=[Food,Medical] include=0 exclude=0
-[PZAreaTasksContainerRouting] job 7 moveItems.ground.container: 3 destination container(s), filtered: crate#2, fridge#1
-[PZAreaTasksContainerRouting] job 7 moveItems.ground.container: left Base.Axe (ToolC) in place; no destination preset accepts it
-[PZAreaTasksContainerRouting] job 7 moveItems.ground.container: 12 of 40 source item(s) not accepted by the destination presets
+[PZAreaTasksContainerRouting] moveItems.ground.container: 3 destination container(s), filtered: crate#2, fridge#1
+[PZAreaTasksContainerRouting] moveItems.ground.container: left Base.Axe (ToolC/Weapon) in place; no destination preset accepts it
+[PZAreaTasksContainerRouting] moveItems.ground.container: 12 of 40 source item(s) not accepted by the destination presets
 [PZAreaTasksContainerRouting] Base.Bandage (Medical) -> crate#2
 ```
 
-Per-item placement is logged once per item type per job, so a 40-item sweep adds
-one line per type, not one per item. Repeated discovery passes are throttled.
+Per-item placement/rejection is throttled per item type, so a 40-item sweep adds
+one line per type, not one per item.
 
 ## Failing closed
 
 - No `AreaTasks`, no API version 1, or no `VehicleStorage.reserve` /
-  `ItemSources.records`: the adapter logs why and installs nothing.
+  `GroundItemDestinations.canFit`: the adapter logs why and installs nothing.
 - No `manageContainers` (or its config reader changed shape): every container
   reads as unconfigured, i.e. upstream behaviour; the installation line says so.
-- The destination no longer resolves while records are being built (a vehicle
-  door was closed, a container unloaded): the source is left unfiltered rather
-  than emptied.
+- The destination no longer resolves when an item is chosen (a vehicle door was
+  closed, a container unloaded): the item is left where it is rather than
+  dropped somewhere arbitrary.
 - Presets edited mid-route: area/vehicle delivery re-checks on arrival, so the
   worst case is "left behind with a message", never a wrong-container drop. A
-  single-container job applies the preset snapshot taken when it started.
+  single-container job applies the preset when it picks each item up; a load
+  accepted before the edit keeps upstream's overflow behaviour if the container
+  has since stopped accepting it.
 
 Installation is idempotent and re-runs on `OnGameStart`, because Area Tasks (and
 this file, after a Lua reload) can be rebuilt between sessions.

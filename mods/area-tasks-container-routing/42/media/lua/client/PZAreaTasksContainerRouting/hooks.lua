@@ -1,29 +1,31 @@
 -- PZAreaTasksContainerRouting/hooks.lua
 --
 -- Makes Area Tasks follow Manage Containers presets, for every destination that
--- has a filter: a container area, a vehicle (area), and now a single container
--- too.
+-- has a filter: a container area, a vehicle (area), and a single container too.
 --
 -- Why wrapping three functions is enough:
 --   * `collectTargets` for a GROUND source builds the per-square item records
---     itself (it does not go through `ItemSources.records`).
---   * `ItemSources.records` is the one place every container/vehicle source
---     record is built.
---   Both are pruned: an item no selected destination container accepts is never
---   part of the job, so the route does not pick it up, carry it to the
---   destination and leave it behind (or dump it on the floor when the
---   destination is full).
+--     itself, so it is pruned: an item no selected destination accepts is never
+--     part of the job.
+--   * `GroundItemDestinations.canFit(playerObj, container, item, reserved)` is
+--     the choice seam for a single-container (and bag) destination. Refusing an
+--     item here leaves it in the source record, so it is never picked up.
 --   * `VehicleStorage.reserve(playerObj, containers, item, reservations)` is
---     the single "which of these containers takes this item?" answer used by
---     the collection pre-check, the area delivery loop and vehicle-storage
---     delivery. Wrapping it keeps the preset *choice* per destination while
---     capacity and reservation bookkeeping stay upstream's.
+--     the choice seam for area/vehicle destinations, used by the collection
+--     pre-check and the delivery loop. Wrapping it keeps the preset *choice*
+--     per destination while capacity and reservation bookkeeping stay
+--     upstream's.
+--
+-- Container and vehicle source records are deliberately NOT pruned at
+-- discovery: Area Tasks treats a discovery that returns zero items as
+-- "completed", which would end a batched trip with the accepted load still
+-- carried. Those sources are filtered where the item is chosen instead.
 --
 -- Failure shape: filtered items are left where they are with a log line naming
--- the type and the category the preset test compared. A single-container job
--- whose whole selection is filtered reports "no targets" (Area Tasks' own
--- notice) after one summary line, rather than silently doing nothing. An item
--- that a preset rejects at delivery time (presets edited mid-route) is left in
+-- the type and the categories the preset test compared. A ground job whose
+-- whole selection is filtered reports "no targets" (Area Tasks' own notice)
+-- after one summary line, rather than silently doing nothing. An item that a
+-- preset rejects at delivery time (presets edited mid-route) is left in
 -- inventory; it is never dropped into the wrong container.
 --
 -- Everything is guarded: no Area Tasks, a different API version, a missing
@@ -36,7 +38,6 @@ local Routing = PZAreaTasksContainerRouting.Routing
 
 local Hooks = PZAreaTasksContainerRouting.Hooks or {
     installed = false, collectWrapped = setmetatable({ }, { __mode = "k" }),
-    jobWrapped = setmetatable({ }, { __mode = "k" }),
 }
 PZAreaTasksContainerRouting.Hooks = Hooks
 
@@ -239,48 +240,6 @@ local function destinationRules(task, playerObj)
     return rules
 end
 
--- Job context. `ItemSources.records` is called from inside the job's queue, but
--- has no job argument; track the per-player job with the lifecycle events, and
--- fall back to wrapping queueTarget on API 1 builds without them.
-local jobsByPlayer = { }
-local jobTracking = false
-
-local function currentJobFor(playerObj)
-    local ok, playerNum = pcall(playerObj.getPlayerNum, playerObj)
-    return ok and jobsByPlayer[playerNum] or nil
-end
-
-local function installJobTracking(AreaTasks)
-    if jobTracking then return end
-    jobTracking = true
-    if Events and Events.AreaTaskStarted and Events.AreaTaskFinished then
-        Events.AreaTaskStarted.Add(function(job)
-            if job and job.playerNum then jobsByPlayer[job.playerNum] = job end
-        end)
-        Events.AreaTaskFinished.Add(function(job)
-            if job and jobsByPlayer[job.playerNum] == job then
-                jobsByPlayer[job.playerNum] = nil
-            end
-        end)
-        log("job tracking: AreaTaskStarted / AreaTaskFinished")
-        return
-    end
-    local wrapped = 0
-    local Registry = AreaTasks.Registry
-    for _, task in ipairs(type(Registry) == "table" and Registry.getAll and Registry.getAll() or { }) do
-        if type(task.queueTarget) == "function" and not Hooks.jobWrapped[task] then
-            local native = task.queueTarget
-            task.queueTarget = function(job, target, ...)
-                if job and job.playerNum then jobsByPlayer[job.playerNum] = job end
-                return native(job, target, ...)
-            end
-            Hooks.jobWrapped[task] = true
-            wrapped = wrapped + 1
-        end
-    end
-    log("job tracking: queueTarget wrappers on " .. wrapped .. " route(s)")
-end
-
 local notices = { }
 
 local function notice(playerObj, key, text)
@@ -338,8 +297,6 @@ end
 
 -- `reserve` with presets. Shape is upstream's: returns the container that took
 -- the item and the reservation, or nil.
-local routedItems = setmetatable({ }, { __mode = "k" })
-
 local function wrappedReserve(playerObj, containers, item, reservations)
     local original = Hooks.originalReserve
     if type(containers) ~= "table" or #containers == 0 or not item or not manageContainers() then
@@ -353,17 +310,9 @@ local function wrappedReserve(playerObj, containers, item, reservations)
         if Routing.accepts(ruleFor(container, playerObj), categories, fullType) then
             local taken = original(playerObj, { container }, item, reservations)
             if taken then
-                local job = currentJobFor(playerObj)
-                if job then
-                    local seen = routedItems[job]
-                    if not seen then seen = { }; routedItems[job] = seen end
-                    local key = fullType or "?"
-                    if not seen[key] then
-                        seen[key] = true
-                        log(string.format("%s (%s) -> %s", key, categoriesLabel(categories),
-                            containerLabel(container)))
-                    end
-                end
+                logEvery("place-" .. tostring(fullType), string.format(
+                    "%s (%s) -> %s", tostring(fullType), categoriesLabel(categories),
+                    containerLabel(container)))
                 return taken
             end
         else
@@ -380,20 +329,32 @@ local function wrappedReserve(playerObj, containers, item, reservations)
     return nil
 end
 
-local function wrappedRecords(playerObj, endpoint, containers)
-    local sources, total = Hooks.originalRecords(playerObj, endpoint, containers)
-    local job = currentJobFor(playerObj)
-    if not job or type(job.task) ~= "table" or type(sources) ~= "table" then return sources, total end
-    local rules = destinationRules(job.task, playerObj)
-    if not rules then return sources, total end
-    local kept, keptCount = pruneSources(playerObj,
-        "job " .. tostring(job.id) .. " " .. tostring(job.task.id), sources, total, rules)
-    return kept, keptCount
+-- `canFit` with presets. Single-container ("storage") and bag destinations use
+-- `GroundItemDestinations.canFit` instead of `reserve`; refusing an item here
+-- leaves it in the source record (Area Tasks defers it), so it is never picked
+-- up. Bag containers have no Manage Containers config, so they still accept
+-- everything.
+local function wrappedCanFit(playerObj, container, item, reserved)
+    local original = Hooks.originalCanFit
+    if not container or not item or not manageContainers() then
+        return original(playerObj, container, item, reserved)
+    end
+    local categories, fullType = itemFields(item)
+    if not Routing.accepts(ruleFor(container, playerObj), categories, fullType) then
+        logEvery("canfit-" .. tostring(fullType), string.format(
+            "%s (%s) rejected by %s", tostring(fullType), categoriesLabel(categories),
+            containerLabel(container)))
+        return false
+    end
+    return original(playerObj, container, item, reserved)
 end
 
--- Ground sources build their item records inside `collectTargets`, not through
--- `ItemSources.records`; prune there too. Area/vehicle sources have no item
--- records at this point (those are discovered later), so they pass through.
+-- Ground sources build their item records inside `collectTargets`; prune there
+-- so the job never starts with items no destination accepts. Container and
+-- vehicle sources are NOT pruned at discovery: Area Tasks treats a discovery
+-- that returns zero items as "completed", which would end a batched trip with
+-- the accepted load still carried. Those sources are filtered at the choice
+-- seams above instead.
 local function wrapCollect(task, native)
     return function(playerObj, bounds, destinationSquare, selectedTask)
         local targets = native(playerObj, bounds, destinationSquare, selectedTask)
@@ -442,9 +403,9 @@ function Hooks.install()
         log("Area Tasks VehicleStorage.reserve is missing; adapter inert")
         return false
     end
-    local sources = AreaTasks.ItemSources
-    if type(sources) ~= "table" or type(sources.records) ~= "function" then
-        log("Area Tasks ItemSources.records is missing; adapter inert")
+    local destinations = AreaTasks.GroundItemDestinations
+    if type(destinations) ~= "table" or type(destinations.canFit) ~= "function" then
+        log("Area Tasks GroundItemDestinations.canFit is missing; adapter inert")
         return false
     end
 
@@ -454,10 +415,10 @@ function Hooks.install()
         storage.reserve = wrappedReserve
         installed[#installed + 1] = "reserve"
     end
-    if sources.records ~= wrappedRecords then
-        Hooks.originalRecords = sources.records
-        sources.records = wrappedRecords
-        installed[#installed + 1] = "records"
+    if destinations.canFit ~= wrappedCanFit then
+        Hooks.originalCanFit = destinations.canFit
+        destinations.canFit = wrappedCanFit
+        installed[#installed + 1] = "canFit"
     end
     local collected = 0
     local Registry = AreaTasks.Registry
@@ -470,8 +431,6 @@ function Hooks.install()
             end
         end
     end
-
-    installJobTracking(AreaTasks)
 
     local window = manageContainers()
     log(string.format("Manage Containers: %s", window
