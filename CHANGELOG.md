@@ -8,22 +8,29 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
-- **Filibuster Rhymes' open-bed trailer and truck beds are no longer
-  inaccessible in multiplayer.** `BaseVehicle.canAccessContainer` is Java but it
-  calls the vehicle part's container `test` from Lua, and a nil result at that
-  Lua-to-Java boundary throws `ReturnValues.put` (`Cannot assign field
-  "callFrame" because "a" is null`). Filibuster's
-  `Vehicles.ContainerAccess.FR_VisualTruckBedFiller`
+- **Filibuster Rhymes' open-bed trailer and truck beds stay listable in
+  multiplayer.** `BaseVehicle.canAccessContainer` is Java but it calls the
+  vehicle part's container `test` from Lua, and two unrelated defects break that
+  seam. Filibuster's `Vehicles.ContainerAccess.FR_VisualTruckBedFiller`
   (`42/media/lua/server/FR_Vehicles.lua:317-361`) has no final return, so
-  standing in the truck-bed area with no door object returned nil. The exception
-  aborts `ISInventoryPage:refreshBackpacks`, so the trailer/truck bed container
-  button was never created and its items could not be opened. The client log
-  showed the crash under `canAccessContainer(...MinidoracatVehicleManager_ClientGuards.lua:310)`,
-  which is only the wrapper Vehicle Manager installs around the same method — it
-  was not the cause. The new bundled `PZFRTrunkAccess` wraps the test, passes
-  booleans through, turns the nil fall-through into `true` (matching vanilla
-  `ContainerAccess.TruckBed`) and fails closed on an error; it is inert without
-  Filibuster. `mods/fr-trunk-access/` (1.0.0).
+  standing in the truck-bed area with nothing blocking the bed returned nil where
+  vanilla `ContainerAccess.TruckBed` returns `true`. Separately, Build 42.22's
+  Lua/Java bridge intermittently throws
+  `ReturnValues.put` (`Cannot assign field "callFrame" because "a" is null`):
+  `MethodArguments.put` recycles a pooled call object that a live frame still
+  uses, so `ReturnValues.put` receives null (verified against the shipped
+  `projectzomboid.jar`; the same trace hits `ISBuildIsoEntity:isValidPerSquare`,
+  Area Tasks' context menu and AutoAll, and the game's own B42 bug reports).
+  Either failure aborts `ISInventoryPage:refreshBackpacks`, so the trailer/truck
+  bed button was never created, and aborts Area Tasks' timed-action validity, so
+  a `moveItems` job from that bed stopped at `completed=0`. The log frame
+  `canAccessContainer(...MinidoracatVehicleManager_ClientGuards.lua:310)` is only
+  the wrapper Vehicle Manager installs around the same method — not the cause.
+  The bundled `PZFRTrunkAccess` now coerces the nil and guards the seam: booleans
+  pass through, a failed bridge call is answered in Lua (Vehicle Manager stays
+  authoritative; otherwise cargo fails open only for a character on foot inside
+  the part's area, while seats and the glove box stay closed). It is inert
+  without Filibuster. `mods/fr-trunk-access/` (1.1.0).
 - **Area Tasks' batched container trip no longer retires with the load still
   carried.** When the last source endpoints were empty (or held only items the
   destination preset rejects), native discovery reported `completed`; the

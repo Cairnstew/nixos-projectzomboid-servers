@@ -4772,12 +4772,17 @@ in
       '';
 
   # ── PZFRTrunkAccess: Filibuster's bed-access test must return a boolean ──
-  # BaseVehicle.canAccessContainer calls the part's container `test` from Java;
-  # a nil result throws ReturnValues.put and aborts ISInventoryPage's container
-  # loop. The wrapper is pure Lua, so the contract is provable here: boolean
-  # results pass through, the nil fall-through becomes true (vanilla
-  # ContainerAccess.TruckBed's trailing return), an error fails closed, and a
-  # missing original is left alone.
+  # BaseVehicle.canAccessContainer calls the part's container `test` from Java
+  # and is otherwise reached through the class metatable, so both wrappers are
+  # pure Lua and their contracts are provable here:
+  #
+  #  - filler: boolean results pass through, the nil fall-through becomes true
+  #    (vanilla ContainerAccess.TruckBed's trailing return), an error fails
+  #    closed, and a missing original is left alone;
+  #  - seam:   booleans pass through, a failed bridge call answers from Lua
+  #    instead of aborting refreshBackpacks, cargo fails open on foot inside the
+  #    part's area, seats and the glove box stay closed, Vehicle Manager stays
+  #    authoritative when it is loaded, and installing twice does not stack.
   fr-trunk-access =
     pkgs.runCommand "pz-fr-trunk-access-check"
       {
@@ -4863,10 +4868,112 @@ in
         assert(seen[1] == v and seen[2] == p and seen[3] == c,
             "arguments were not forwarded")
 
+        -- ---- the BaseVehicle.canAccessContainer seam ----------------------
+
+        local function makePart(o)
+            return {
+                getItemContainer = function() return o.container end,
+                getContainerSeatNumber = function() return o.seat or -1 end,
+                getId = function() return o.id end,
+                getArea = function() return o.area end,
+            }
+        end
+
+        local function makeVehicle(parts, isInArea)
+            return {
+                getPartByIndex = function(_, index) return parts[index] end,
+                isInArea = function(_, area, chr) return isInArea(area, chr) end,
+            }
+        end
+
+        local function installSeam(behaviour)
+            BaseVehicle = { class = "FakeBaseVehicle" }
+            __classmetatables = {
+                FakeBaseVehicle = { __index = { canAccessContainer = behaviour } },
+            }
+            return function()
+                return __classmetatables.FakeBaseVehicle.__index.canAccessContainer
+            end
+        end
+
+        local seamBlue = installSeam(function() return true end)
+        assert(PZFRTrunkAccess.installVehicleAccess() == true, "the seam was not wrapped")
+        assert(seamBlue()(nil, 1, nil) == true, "true must pass through the seam")
+
+        installSeam(function() return false end)
+        assert(PZFRTrunkAccess.installVehicleAccess())
+        assert(seamBlue()(nil, 1, nil) == false, "false must pass through the seam")
+
+        installSeam(function() return "yes" end)
+        assert(PZFRTrunkAccess.installVehicleAccess())
+        assert(seamBlue()(nil, 1, nil) == false,
+            "a truthy non-boolean must not open the seam")
+
+        -- The bridge defect: the Java call throws after doing its work.
+        local broke = function() error("bridge") end
+        local box = makePart({ container = {}, id = "TruckBed", area = "TruckBedOpen" })
+        local onFoot = { getVehicle = function() return nil end }
+        local nearby = makeVehicle({ box },
+            function(area, chr) return area == "TruckBedOpen" and chr == onFoot end)
+
+        installSeam(broke)
+        assert(PZFRTrunkAccess.installVehicleAccess())
+        assert(seamBlue()(nearby, 1, onFoot) == true,
+            "cargo on foot inside the part area must survive a bridge failure")
+
+        local driver = { getVehicle = function() return nearby end }
+        assert(seamBlue()(nearby, 1, driver) == false,
+            "cargo must not fail open from inside a vehicle")
+
+        local outside = makeVehicle({ box }, function() return false end)
+        assert(seamBlue()(outside, 1, onFoot) == false,
+            "cargo must not fail open outside the part area")
+
+        local seated = makeVehicle({ makePart({ container = {}, seat = 1,
+            id = "SeatFrontLeft", area = "SeatFrontLeft" }) },
+            function() return true end)
+        assert(seamBlue()(seated, 1, onFoot) == false,
+            "a seat must stay closed when the bridge fails")
+
+        local glovebox = makeVehicle({ makePart({ container = {}, id = "GloveBox",
+            area = "Engine" }) }, function() return true end)
+        assert(seamBlue()(glovebox, 1, onFoot) == false,
+            "the glove box must stay closed when the bridge fails")
+
+        local containerless = makeVehicle({ makePart({ area = "TruckBed" }) },
+            function() return true end)
+        assert(seamBlue()(containerless, 1, onFoot) == false,
+            "a part without a container grants nothing")
+
+        -- Vehicle Manager owns ownership and rental rules on this seam.
+        MVM = { storageAllowed = function() return false end }
+        assert(seamBlue()(nearby, 1, onFoot) == false,
+            "Vehicle Manager must stay authoritative")
+        MVM = { storageAllowed = function() error("mvm") end }
+        assert(seamBlue()(nearby, 1, onFoot) == true,
+            "a broken Vehicle Manager check falls back to cargo on foot")
+        MVM = nil
+
+        -- One wrapper per seam, however often installation retries.
+        installSeam(function() return true end)
+        assert(PZFRTrunkAccess.installVehicleAccess())
+        local once = PZFRTrunkAccess.vehicleAccess
+        assert(PZFRTrunkAccess.installVehicleAccess() == true)
+        assert(PZFRTrunkAccess.vehicleAccess == once,
+            "installVehicleAccess must not stack wrappers")
+
+        -- No class exposer at all: leave the game alone.
+        BaseVehicle, __classmetatables = nil, nil
+        assert(PZFRTrunkAccess.installVehicleAccess() == false,
+            "a missing class metatable must be left alone")
+        Vehicles = { ContainerAccess = {} }
+        assert(PZFRTrunkAccess.install() == false,
+            "install() must report nothing to do on both seams")
+
         print("fr-trunk-access ok")
         LUA
 
-        echo "fr-trunk-access ok: nil coerced, booleans pass through, errors fail closed"
+        echo "fr-trunk-access ok: nil coerced, booleans pass through, bridge failures answered in Lua"
         touch "$out"
       '';
 }

@@ -17,9 +17,10 @@
   # `PZAreaTasksMenuGuard` keeps one broken task from emptying that menu; see
   # mods/area-tasks-menu-guard/. `PZBandageGuard` stops vanilla bandaging from
   # throwing on the server and replaces Replace Dirty Bandages (removed below);
-  # see mods/bandage-guard/. `PZFRTrunkAccess` makes Filibuster's truck-bed
-  # access test return a boolean so the trailer/truck bed container is listed;
-  # see mods/fr-trunk-access/.
+  # see mods/bandage-guard/. `PZFRTrunkAccess` keeps Filibuster's truck-bed
+  # container listable: it coerces that test's nil fall-through and keeps a
+  # failing BaseVehicle.canAccessContainer from aborting the inventory loop and
+  # Area Tasks jobs; see mods/fr-trunk-access/.
   bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZAreaTasksContainerRouting" "PZAreaTasksMenuGuard" "PZBandageGuard" "PZFRTrunkAccess" "PZViewpointLevel15" ];
 
   workshopMods = [
@@ -1434,10 +1435,11 @@
     # absent: More Car Features says to drop vehicle replacers and use its own
     # spawn-zone settings instead.
     "B42FRUsedCarsAnimAlpha"
-    # Filibuster's FR_VisualTruckBedFiller can return nil, which throws
-    # ReturnValues.put inside BaseVehicle.canAccessContainer and hides an
-    # open-bed trailer/truck container. Loads after Filibuster; see
-    # mods/fr-trunk-access/.
+    # Filibuster's FR_VisualTruckBedFiller can return nil, and Build 42's
+    # Lua/Java bridge intermittently throws inside BaseVehicle.canAccessContainer
+    # (ReturnValues.put). Either one hides an open-bed trailer/truck container
+    # and stops Area Tasks jobs, so the seam is guarded. Loads after Filibuster;
+    # see mods/fr-trunk-access/.
     "PZFRTrunkAccess"
     "VASinked"
     "MCVKI5NEW"
