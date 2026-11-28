@@ -4770,4 +4770,103 @@ in
         echo "map ordering ok: deterministic, base map last, duplicates reported"
         touch "$out"
       '';
+
+  # ── PZFRTrunkAccess: Filibuster's bed-access test must return a boolean ──
+  # BaseVehicle.canAccessContainer calls the part's container `test` from Java;
+  # a nil result throws ReturnValues.put and aborts ISInventoryPage's container
+  # loop. The wrapper is pure Lua, so the contract is provable here: boolean
+  # results pass through, the nil fall-through becomes true (vanilla
+  # ContainerAccess.TruckBed's trailing return), an error fails closed, and a
+  # missing original is left alone.
+  fr-trunk-access =
+    pkgs.runCommand "pz-fr-trunk-access-check"
+      {
+        nativeBuildInputs = [
+          pkgs.lua5_1
+          pkgs.coreutils
+          pkgs.gnugrep
+        ];
+        SRC = ../mods/fr-trunk-access;
+      }
+      ''
+        fail() { echo "FAIL: $1" >&2; exit 1; }
+
+        info="$SRC/42/mod.info"
+        [ -f "$info" ] || fail "no 42/mod.info (B42 layout)"
+        grep -qx 'id=PZFRTrunkAccess' "$info" || fail "mod.info id is not PZFRTrunkAccess"
+        grep -qx 'loadModAfter=B42FRUsedCarsAnimAlpha' "$info" \
+          || fail "no loadModAfter hint for Filibuster"
+        grep -qx 'versionMin=42.20' "$info" || fail "wrong versionMin"
+
+        for f in "$SRC"/42/media/lua/shared/PZFRTrunkAccess/*.lua; do
+          lua -e "assert(loadfile('$f'))" || fail "Lua does not parse: $f"
+        done
+
+        cd "$SRC/42/media/lua"
+        lua - <<'LUA'
+        local function setOriginal(fn)
+            Vehicles = { ContainerAccess = { FR_VisualTruckBedFiller = fn } }
+        end
+
+        local starts = 0
+        Events = {
+            OnGameStart = { Add = function() starts = starts + 1 end },
+            OnServerStarted = { Add = function() starts = starts + 1 end },
+        }
+
+        dofile("shared/PZFRTrunkAccess/hooks.lua")
+        assert(starts == 2, "the deferred install is not registered on both sides")
+
+        local function installed()
+            return Vehicles.ContainerAccess.FR_VisualTruckBedFiller
+        end
+
+        -- The fall-through: an unblocked bed must be accessible, not nil.
+        setOriginal(function() return nil end)
+        assert(PZFRTrunkAccess.install(), "install() did not find the original")
+        assert(installed()(nil, nil, nil) == true, "nil must become true")
+
+        -- Boolean decisions pass through untouched.
+        setOriginal(function() return false end)
+        assert(PZFRTrunkAccess.install())
+        assert(installed()(nil, nil, nil) == false, "false must stay false")
+
+        setOriginal(function() return true end)
+        assert(PZFRTrunkAccess.install())
+        assert(installed()(nil, nil, nil) == true, "true must stay true")
+
+        -- Only the literal boolean true grants access.
+        setOriginal(function() return "yes" end)
+        assert(PZFRTrunkAccess.install())
+        assert(installed()(nil, nil, nil) == false, "a truthy non-boolean must not grant access")
+
+        -- A broken test fails closed.
+        setOriginal(function() error("boom") end)
+        assert(PZFRTrunkAccess.install())
+        assert(installed()(nil, nil, nil) == false, "an error must fail closed")
+
+        -- No Filibuster function: leave the table alone.
+        Vehicles = { ContainerAccess = {} }
+        assert(PZFRTrunkAccess.install() == false, "install() must not find a missing original")
+        assert(Vehicles.ContainerAccess.FR_VisualTruckBedFiller == nil,
+            "a missing original must not be created")
+
+        -- Arguments are forwarded unchanged.
+        local seen
+        setOriginal(function(vehicle, part, chr)
+            seen = { vehicle, part, chr }
+            return true
+        end)
+        assert(PZFRTrunkAccess.install())
+        local v, p, c = {}, {}, {}
+        assert(installed()(v, p, c) == true)
+        assert(seen[1] == v and seen[2] == p and seen[3] == c,
+            "arguments were not forwarded")
+
+        print("fr-trunk-access ok")
+        LUA
+
+        echo "fr-trunk-access ok: nil coerced, booleans pass through, errors fail closed"
+        touch "$out"
+      '';
 }

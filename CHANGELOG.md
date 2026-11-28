@@ -8,6 +8,22 @@ All notable changes to this project. Format follows
 
 ### Fixed
 
+- **Filibuster Rhymes' open-bed trailer and truck beds are no longer
+  inaccessible in multiplayer.** `BaseVehicle.canAccessContainer` is Java but it
+  calls the vehicle part's container `test` from Lua, and a nil result at that
+  Lua-to-Java boundary throws `ReturnValues.put` (`Cannot assign field
+  "callFrame" because "a" is null`). Filibuster's
+  `Vehicles.ContainerAccess.FR_VisualTruckBedFiller`
+  (`42/media/lua/server/FR_Vehicles.lua:317-361`) has no final return, so
+  standing in the truck-bed area with no door object returned nil. The exception
+  aborts `ISInventoryPage:refreshBackpacks`, so the trailer/truck bed container
+  button was never created and its items could not be opened. The client log
+  showed the crash under `canAccessContainer(...MinidoracatVehicleManager_ClientGuards.lua:310)`,
+  which is only the wrapper Vehicle Manager installs around the same method — it
+  was not the cause. The new bundled `PZFRTrunkAccess` wraps the test, passes
+  booleans through, turns the nil fall-through into `true` (matching vanilla
+  `ContainerAccess.TruckBed`) and fails closed on an error; it is inert without
+  Filibuster. `mods/fr-trunk-access/` (1.0.0).
 - **Area Tasks' batched container trip no longer retires with the load still
   carried.** When the last source endpoints were empty (or held only items the
   destination preset rejects), native discovery reported `completed`; the

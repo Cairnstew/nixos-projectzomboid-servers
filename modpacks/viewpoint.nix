@@ -17,8 +17,10 @@
   # `PZAreaTasksMenuGuard` keeps one broken task from emptying that menu; see
   # mods/area-tasks-menu-guard/. `PZBandageGuard` stops vanilla bandaging from
   # throwing on the server and replaces Replace Dirty Bandages (removed below);
-  # see mods/bandage-guard/.
-  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZAreaTasksContainerRouting" "PZAreaTasksMenuGuard" "PZBandageGuard" "PZViewpointLevel15" ];
+  # see mods/bandage-guard/. `PZFRTrunkAccess` makes Filibuster's truck-bed
+  # access test return a boolean so the trailer/truck bed container is listed;
+  # see mods/fr-trunk-access/.
+  bundledMods = [ "PZButcherAll" "PZAreaTasksFilter" "PZAreaTasksBatchMove" "PZAreaTasksContainerRouting" "PZAreaTasksMenuGuard" "PZBandageGuard" "PZFRTrunkAccess" "PZViewpointLevel15" ];
 
   workshopMods = [
     { id = "3619862853"; title = "ZombieBuddy"; }
@@ -1432,6 +1434,11 @@
     # absent: More Car Features says to drop vehicle replacers and use its own
     # spawn-zone settings instead.
     "B42FRUsedCarsAnimAlpha"
+    # Filibuster's FR_VisualTruckBedFiller can return nil, which throws
+    # ReturnValues.put inside BaseVehicle.canAccessContainer and hides an
+    # open-bed trailer/truck container. Loads after Filibuster; see
+    # mods/fr-trunk-access/.
+    "PZFRTrunkAccess"
     "VASinked"
     "MCVKI5NEW"
     "85clubMan"

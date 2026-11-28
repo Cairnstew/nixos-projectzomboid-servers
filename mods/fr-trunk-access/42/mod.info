@@ -1,0 +1,7 @@
+name=Filibuster Trunk Access Fix
+id=PZFRTrunkAccess
+author=nixos-projectzomboid-servers
+modversion=1.0.0
+description=Stops Filibuster Rhymes' truck-bed access test from returning nil, which throws a ReturnValues.put NullPointerException in BaseVehicle.canAccessContainer and hides the trailer/truck bed container. Additive wrapper: it overrides no file and does nothing without Filibuster.
+loadModAfter=B42FRUsedCarsAnimAlpha
+versionMin=42.20
